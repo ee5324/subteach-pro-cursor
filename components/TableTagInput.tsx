@@ -20,6 +20,8 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [imeComposing, setImeComposing] = useState(false);
+  const [imeLocalValue, setImeLocalValue] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -52,17 +54,19 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
     onChange(newTags.join(','));
   };
 
+  const displayValue = imeComposing ? imeLocalValue : inputValue;
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      addTag(inputValue);
-    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      addTag(displayValue);
+    } else if (e.key === 'Backspace' && !displayValue && tags.length > 0) {
       removeTag(tags.length - 1);
     }
   };
 
   const filteredSuggestions = suggestions.filter(s => 
-    !tags.includes(s) && s.toLowerCase().includes(inputValue.toLowerCase())
+    !tags.includes(s) && s.toLowerCase().includes(displayValue.toLowerCase())
   );
 
   const themeClasses = {
@@ -107,9 +111,19 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
           type="text"
           className="flex-1 min-w-[60px] bg-transparent outline-none text-xs text-slate-700 placeholder-slate-300 py-1"
           placeholder={tags.length === 0 ? placeholder : ""}
-          value={inputValue}
+          value={displayValue}
+          onCompositionStart={() => {
+            setImeComposing(true);
+            setImeLocalValue(inputValue);
+          }}
+          onCompositionEnd={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            setInputValue(v);
+            setImeComposing(false);
+          }}
           onChange={(e) => {
-            setInputValue(e.target.value);
+            if (imeComposing) setImeLocalValue(e.target.value);
+            else setInputValue(e.target.value);
             setIsDropdownOpen(true);
           }}
           onKeyDown={handleKeyDown}
@@ -121,7 +135,7 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
       </div>
 
       {/* Suggestions Dropdown */}
-      {isDropdownOpen && isFocused && (filteredSuggestions.length > 0 || inputValue) && (
+      {isDropdownOpen && isFocused && (filteredSuggestions.length > 0 || displayValue) && (
         <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-[150px] bg-white rounded-lg shadow-lg border border-slate-100 py-1 max-h-48 overflow-y-auto">
           {filteredSuggestions.map(suggestion => (
             <div
@@ -133,13 +147,13 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
             </div>
           ))}
           
-          {inputValue && !filteredSuggestions.includes(inputValue) && !tags.includes(inputValue) && (
+          {displayValue && !filteredSuggestions.includes(displayValue) && !tags.includes(displayValue) && (
              <div
               className="px-3 py-2 text-xs text-indigo-600 font-bold bg-indigo-50/50 hover:bg-indigo-100 cursor-pointer border-t border-slate-100 flex items-center"
-              onClick={() => addTag(inputValue)}
+              onClick={() => addTag(displayValue)}
             >
               <Plus size={12} className="mr-1"/>
-              新增 "{inputValue}"
+              新增 "{displayValue}"
             </div>
           )}
         </div>

@@ -28,6 +28,12 @@ const SubPool: React.FC = () => {
       isOpen: boolean; title: string; message: string; type: ModalType
   }>({ isOpen: false, title: '', message: '', type: 'info' });
 
+  // IME 組字期間不更新父層 state，避免中文輸入被中斷（key: teacherId_fieldName）
+  const [imeState, setImeState] = useState<{ composingKey: string; localValue: string } | null>(null);
+  const imeKey = (teacherId: string, field: string) => `${teacherId}_${field}`;
+  const isComposing = (key: string) => imeState?.composingKey === key;
+  const imeValue = (key: string) => imeState?.composingKey === key ? imeState.localValue : undefined;
+
   // --- Left Panel Logic (Source) ---
   const sourceTeachers = useMemo(() => {
       // 1. Exclude already in pool
@@ -309,8 +315,18 @@ const SubPool: React.FC = () => {
                                               type="text" 
                                               className="w-full pl-4 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none text-slate-700 transition-colors placeholder-slate-300 text-xs py-1"
                                               placeholder="例:週一"
-                                              value={item.availableTime || ''}
-                                              onChange={(e) => updateSubPoolItem({ ...item, availableTime: e.target.value })}
+                                              value={isComposing(imeKey(item.teacherId, 'availableTime')) ? imeValue(imeKey(item.teacherId, 'availableTime'))! : (item.availableTime || '')}
+                                              onCompositionStart={() => setImeState({ composingKey: imeKey(item.teacherId, 'availableTime'), localValue: item.availableTime || '' })}
+                                              onCompositionEnd={(e) => {
+                                                  const v = (e.target as HTMLInputElement).value;
+                                                  updateSubPoolItem({ ...item, availableTime: v });
+                                                  setImeState(null);
+                                              }}
+                                              onChange={(e) => {
+                                                  const key = imeKey(item.teacherId, 'availableTime');
+                                                  if (isComposing(key)) setImeState(s => s ? { ...s, localValue: e.target.value } : null);
+                                                  else updateSubPoolItem({ ...item, availableTime: e.target.value });
+                                              }}
                                           />
                                       </div>
                                   </td>
@@ -322,8 +338,18 @@ const SubPool: React.FC = () => {
                                               type="text" 
                                               className="w-full pl-4 bg-transparent border-b border-transparent hover:border-rose-300 focus:border-rose-500 outline-none text-rose-700 transition-colors placeholder-slate-300 text-xs py-1"
                                               placeholder="不接時段"
-                                              value={item.unavailableTime || ''}
-                                              onChange={(e) => updateSubPoolItem({ ...item, unavailableTime: e.target.value })}
+                                              value={isComposing(imeKey(item.teacherId, 'unavailableTime')) ? imeValue(imeKey(item.teacherId, 'unavailableTime'))! : (item.unavailableTime || '')}
+                                              onCompositionStart={() => setImeState({ composingKey: imeKey(item.teacherId, 'unavailableTime'), localValue: item.unavailableTime || '' })}
+                                              onCompositionEnd={(e) => {
+                                                  const v = (e.target as HTMLInputElement).value;
+                                                  updateSubPoolItem({ ...item, unavailableTime: v });
+                                                  setImeState(null);
+                                              }}
+                                              onChange={(e) => {
+                                                  const key = imeKey(item.teacherId, 'unavailableTime');
+                                                  if (isComposing(key)) setImeState(s => s ? { ...s, localValue: e.target.value } : null);
+                                                  else updateSubPoolItem({ ...item, unavailableTime: e.target.value });
+                                              }}
                                           />
                                       </div>
                                   </td>
@@ -358,8 +384,18 @@ const SubPool: React.FC = () => {
                                       <textarea 
                                           className="w-full bg-transparent border border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none text-slate-700 transition-colors placeholder-slate-300 text-xs py-1 rounded resize-none h-16"
                                           placeholder="備註..."
-                                          value={item.note}
-                                          onChange={(e) => updateSubPoolItem({ ...item, note: e.target.value })}
+                                          value={isComposing(imeKey(item.teacherId, 'note')) ? imeValue(imeKey(item.teacherId, 'note'))! : (item.note ?? '')}
+                                          onCompositionStart={() => setImeState({ composingKey: imeKey(item.teacherId, 'note'), localValue: item.note ?? '' })}
+                                          onCompositionEnd={(e) => {
+                                              const v = (e.target as HTMLTextAreaElement).value;
+                                              updateSubPoolItem({ ...item, note: v });
+                                              setImeState(null);
+                                          }}
+                                          onChange={(e) => {
+                                              const key = imeKey(item.teacherId, 'note');
+                                              if (isComposing(key)) setImeState(s => s ? { ...s, localValue: e.target.value } : null);
+                                              else updateSubPoolItem({ ...item, note: e.target.value });
+                                          }}
                                       />
                                   </td>
 
