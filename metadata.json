@@ -1,0 +1,5 @@
+{
+  "name": "代課管理系統(firebase測試)",
+  "description": "A comprehensive substitute teaching management system for Taiwanese schools. Handles hourly/daily salary calculations, teacher databases, and document preparation.",
+  "requestFramePermissions": []
+}

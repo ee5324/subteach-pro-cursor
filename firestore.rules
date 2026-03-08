@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 輔助函式：檢查使用者是否已登入 (包含 Email 登入與匿名登入)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // =========================================================
+    // 應用程式資料集合 (Collections)
+    // =========================================================
+
+    // 1. 教師資料 (Teachers)
+    match /teachers/{teacherId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 2. 請假紀錄 (Records)
+    match /records/{recordId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 3. 超鐘點紀錄 (Overtime Records)
+    match /overtimeRecords/{recordId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 4. 專案活動 (Special Activities)
+    match /specialActivities/{activityId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 5. 薪級表 (Salary Grades)
+    match /salaryGrades/{gradeId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 6. 固定兼課設定 (Fixed Overtime Config)
+    match /fixedOvertimeConfig/{configId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 7. 年級活動設定 (Grade Events)
+    match /gradeEvents/{eventId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 8. 學期設定 (Semesters)
+    match /semesters/{semesterId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 9. 代課人力庫 (Sub Pool)
+    match /subPool/{teacherId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 10. 語言教師薪資 (Language Payrolls)
+    match /languagePayrolls/{payrollId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 11. 系統設定 (System Settings)
+    // 包含 settings, holidays, metadata 等文件
+    match /system/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // =========================================================
+    // 預設規則
+    // =========================================================
+    
+    // 為了安全起見，拒絕所有未明確定義的路徑存取
+    // 如果未來新增了集合但忘記加規則，會導致權限錯誤，提醒您更新規則
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

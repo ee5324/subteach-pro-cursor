@@ -1,0 +1,523 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { Teacher, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll } from '../types';
+import { GAS_WEB_APP_URL } from '../config';
+import { callGasApi } from '../utils/api';
+import { convertSlotsToDetails } from '../utils/calculations';
+import { db, auth } from '../src/lib/firebase';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, updateDoc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, User } from 'firebase/auth';
+
+export interface AppSettings {
+  gasWebAppUrl: string;
+  semesterStart?: string; // YYYY-MM-DD
+  semesterEnd?: string;   // YYYY-MM-DD
+  graduationDate?: string; // YYYY-MM-DD
+}
+
+const INITIAL_SETTINGS: AppSettings = {
+  gasWebAppUrl: GAS_WEB_APP_URL || '',
+  semesterStart: '',
+  semesterEnd: '',
+  graduationDate: ''
+};
+
+interface AppContextType {
+  currentUser: User | null;
+  teachers: Teacher[];
+  records: LeaveRecord[];
+  overtimeRecords: OvertimeRecord[];
+  specialActivities: SpecialActivity[];
+  salaryGrades: SalaryGrade[];
+  settings: AppSettings;
+  holidays: string[];
+  fixedOvertimeConfig: FixedOvertimeConfig[];
+  gradeEvents: GradeEvent[];
+  semesters: SemesterDefinition[];
+  activeSemesterId: string | null;
+  subPool: SubPoolItem[];
+  languagePayrolls: LanguagePayroll[];
+  loading: boolean;
+
+  addTeacher: (teacher: Teacher) => Promise<void>;
+  updateTeacher: (updatedTeacher: Teacher) => Promise<void>;
+  setAllTeachers: (newTeachers: Teacher[]) => Promise<void>;
+  deleteTeacher: (id: string) => Promise<void>;
+  renameTeacher: (oldId: string, newTeacher: Teacher) => Promise<void>;
+
+  addRecord: (record: LeaveRecord) => Promise<void>;
+  updateRecord: (updatedRecord: LeaveRecord) => Promise<void>;
+  deleteRecord: (id: string) => Promise<void>;
+
+  updateOvertimeRecord: (record: OvertimeRecord) => Promise<void>;
+  addActivity: (activity: SpecialActivity) => Promise<void>;
+  updateActivity: (updatedActivity: SpecialActivity) => Promise<void>;
+  deleteActivity: (id: string) => Promise<void>;
+
+  updateFixedOvertimeConfig: (config: FixedOvertimeConfig) => Promise<void>;
+  removeFixedOvertimeConfig: (teacherId: string) => Promise<void>;
+
+  addGradeEvent: (event: GradeEvent) => Promise<void>;
+  removeGradeEvent: (id: string) => Promise<void>;
+
+  addSemester: (sem: SemesterDefinition) => Promise<void>;
+  updateSemester: (sem: SemesterDefinition) => Promise<void>;
+  removeSemester: (id: string) => Promise<void>;
+  setSemesterActive: (id: string) => Promise<void>;
+
+  updateSettings: (newSettings: AppSettings) => Promise<void>;
+  addHoliday: (date: string) => Promise<void>;
+  removeHoliday: (date: string) => Promise<void>;
+
+  addToSubPool: (teacherId: string) => Promise<void>;
+  removeFromSubPool: (teacherId: string) => Promise<void>;
+  updateSubPoolItem: (item: SubPoolItem) => Promise<void>;
+
+  addLanguagePayroll: (payroll: LanguagePayroll) => Promise<void>;
+  updateLanguagePayroll: (updatedPayroll: LanguagePayroll) => Promise<void>;
+  deleteLanguagePayroll: (id: string) => Promise<void>;
+
+  loadFromGas: () => Promise<{ teacherCount: number; recordCount: number }>;
+  migrateToFirebase: () => Promise<void>;
+  syncToPublicBoard: (vacancies: any[]) => Promise<any>;
+  checkGasConnection: () => Promise<boolean>;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [records, setRecords] = useState<LeaveRecord[]>([]);
+  const [overtimeRecords, setOvertimeRecords] = useState<OvertimeRecord[]>([]); 
+  const [specialActivities, setSpecialActivities] = useState<SpecialActivity[]>([]); 
+  const [salaryGrades, setSalaryGrades] = useState<SalaryGrade[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(INITIAL_SETTINGS);
+  const [holidays, setHolidays] = useState<string[]>([]); 
+  const [fixedOvertimeConfig, setFixedOvertimeConfig] = useState<FixedOvertimeConfig[]>([]); 
+  const [gradeEvents, setGradeEvents] = useState<GradeEvent[]>([]); 
+  
+  const [semesters, setSemesters] = useState<SemesterDefinition[]>([]);
+  const [activeSemesterId, setActiveSemesterId] = useState<string | null>(null);
+  
+  const [subPool, setSubPool] = useState<SubPoolItem[]>([]);
+  const [languagePayrolls, setLanguagePayrolls] = useState<LanguagePayroll[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
+  // --- Auth Listener ---
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (!user) {
+        // If logged out, stop loading but don't fetch data
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- Firebase Subscriptions ---
+  useEffect(() => {
+    if (!db) {
+      console.warn("Firebase not initialized. Real-time sync disabled.");
+      setLoading(false);
+      return;
+    }
+
+    // Only subscribe if user is logged in
+    if (!currentUser) return;
+
+    const unsubs: (() => void)[] = [];
+
+    // Teachers
+    unsubs.push(onSnapshot(collection(db, 'teachers'), (snap) => {
+      setTeachers(snap.docs.map(d => d.data() as Teacher));
+    }));
+
+    // Records
+    unsubs.push(onSnapshot(collection(db, 'records'), (snap) => {
+      const fetchedRecords = snap.docs.map(d => d.data() as LeaveRecord);
+      fetchedRecords.sort((a, b) => b.createdAt - a.createdAt);
+      setRecords(fetchedRecords);
+    }));
+
+    // Overtime Records
+    unsubs.push(onSnapshot(collection(db, 'overtimeRecords'), (snap) => {
+      setOvertimeRecords(snap.docs.map(d => d.data() as OvertimeRecord));
+    }));
+
+    // Special Activities
+    unsubs.push(onSnapshot(collection(db, 'specialActivities'), (snap) => {
+      setSpecialActivities(snap.docs.map(d => d.data() as SpecialActivity));
+    }));
+
+    // Salary Grades
+    unsubs.push(onSnapshot(collection(db, 'salaryGrades'), (snap) => {
+      setSalaryGrades(snap.docs.map(d => d.data() as SalaryGrade));
+    }));
+
+    // Fixed Overtime Config
+    unsubs.push(onSnapshot(collection(db, 'fixedOvertimeConfig'), (snap) => {
+      setFixedOvertimeConfig(snap.docs.map(d => d.data() as FixedOvertimeConfig));
+    }));
+
+    // Grade Events
+    unsubs.push(onSnapshot(collection(db, 'gradeEvents'), (snap) => {
+      setGradeEvents(snap.docs.map(d => d.data() as GradeEvent));
+    }));
+
+    // Semesters
+    unsubs.push(onSnapshot(collection(db, 'semesters'), (snap) => {
+      setSemesters(snap.docs.map(d => d.data() as SemesterDefinition));
+    }));
+
+    // Sub Pool
+    unsubs.push(onSnapshot(collection(db, 'subPool'), (snap) => {
+      setSubPool(snap.docs.map(d => d.data() as SubPoolItem));
+    }));
+
+    // Language Payrolls
+    unsubs.push(onSnapshot(collection(db, 'languagePayrolls'), (snap) => {
+      setLanguagePayrolls(snap.docs.map(d => d.data() as LanguagePayroll));
+    }));
+
+    // System Settings & Holidays (Stored in 'system' collection)
+    unsubs.push(onSnapshot(doc(db, 'system', 'settings'), (snap) => {
+      if (snap.exists()) {
+        setSettings(snap.data() as AppSettings);
+      }
+    }));
+
+    unsubs.push(onSnapshot(doc(db, 'system', 'holidays'), (snap) => {
+      if (snap.exists()) {
+        setHolidays(snap.data().dates || []);
+      }
+    }));
+
+    unsubs.push(onSnapshot(doc(db, 'system', 'metadata'), (snap) => {
+      if (snap.exists()) {
+        setActiveSemesterId(snap.data().activeSemesterId || null);
+      }
+    }));
+
+    setLoading(false);
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [currentUser]);
+
+  // --- Actions (Write to Firebase) ---
+
+  const addLanguagePayroll = async (payroll: LanguagePayroll) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'languagePayrolls', payroll.id), payroll);
+  };
+  const updateLanguagePayroll = async (updatedPayroll: LanguagePayroll) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, 'languagePayrolls', updatedPayroll.id), updatedPayroll as any);
+  };
+  const deleteLanguagePayroll = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'languagePayrolls', id));
+  };
+
+  const addTeacher = async (teacher: Teacher) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'teachers', teacher.id), teacher);
+  };
+  const updateTeacher = async (updatedTeacher: Teacher) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, 'teachers', updatedTeacher.id), updatedTeacher as any);
+  };
+  const setAllTeachers = async (newTeachers: Teacher[]) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    const batch = writeBatch(db);
+    // This is dangerous if list is large, but for now:
+    // First, delete all? No, that's too aggressive.
+    // Just overwrite/add.
+    newTeachers.forEach(t => {
+      batch.set(doc(db, 'teachers', t.id), t);
+    });
+    await batch.commit();
+  };
+  const deleteTeacher = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'teachers', id));
+  };
+  
+  const renameTeacher = async (oldId: string, newTeacher: Teacher) => {
+      if (!db) throw new Error("Firebase not initialized");
+      const batch = writeBatch(db);
+      // 1. Add new teacher
+      batch.set(doc(db, 'teachers', newTeacher.id), newTeacher);
+      // 2. Delete old teacher
+      batch.delete(doc(db, 'teachers', oldId));
+      
+      // 3. Update related records (This is heavy in Firestore, ideally done via Cloud Function, but client-side for now)
+      // We need to query all records where this teacher is involved. 
+      // For simplicity in this migration phase, we might skip deep updates or do them iteratively.
+      // Given the complexity, let's just update the teacher doc for now and warn user.
+      // Or, since we have the `records` in state, we can iterate and update.
+      records.forEach(record => {
+          let isModified = false; 
+          let newRecord = { ...record };
+          if (newRecord.originalTeacherId === oldId) { newRecord.originalTeacherId = newTeacher.id; isModified = true; }
+          if (newRecord.slots) {
+              const newSlots = newRecord.slots.map(s => {
+                  if (s.substituteTeacherId === oldId) { isModified = true; return { ...s, substituteTeacherId: newTeacher.id }; }
+                  return s;
+              });
+              if (isModified) newRecord.slots = newSlots;
+          }
+          if (newRecord.details) {
+              const newDetails = newRecord.details.map(d => {
+                  if (d.substituteTeacherId === oldId) { isModified = true; return { ...d, substituteTeacherId: newTeacher.id }; }
+                  return d;
+              });
+              if (isModified) newRecord.details = newDetails;
+          }
+          if (isModified) {
+             batch.set(doc(db, 'records', record.id), newRecord);
+          }
+      });
+
+      await batch.commit();
+  };
+
+  const addRecord = async (record: LeaveRecord) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'records', record.id), record);
+  };
+  
+  const updateRecord = async (updatedRecord: LeaveRecord) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, 'records', updatedRecord.id), updatedRecord as any);
+  };
+  
+  const deleteRecord = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'records', id));
+  };
+
+  const updateOvertimeRecord = async (record: OvertimeRecord) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'overtimeRecords', record.id), record);
+  };
+  const addActivity = async (activity: SpecialActivity) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'specialActivities', activity.id), activity);
+  };
+  const updateActivity = async (updatedActivity: SpecialActivity) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, 'specialActivities', updatedActivity.id), updatedActivity as any);
+  };
+  const deleteActivity = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'specialActivities', id));
+  };
+  const updateFixedOvertimeConfig = async (config: FixedOvertimeConfig) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    // We use teacherId as ID for this config? Or generate a UUID?
+    // The type has `id`? Let's check type. FixedOvertimeConfig usually just has teacherId.
+    // If it doesn't have an ID, we use teacherId as key.
+    // Assuming config has teacherId.
+    await setDoc(doc(db, 'fixedOvertimeConfig', config.teacherId), config);
+  };
+  const removeFixedOvertimeConfig = async (teacherId: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'fixedOvertimeConfig', teacherId));
+  };
+  const addGradeEvent = async (event: GradeEvent) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'gradeEvents', event.id), event);
+  };
+  const removeGradeEvent = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'gradeEvents', id));
+  };
+  
+  const addSemester = async (sem: SemesterDefinition) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'semesters', sem.id), sem);
+    await setSemesterActive(sem.id);
+  };
+  const updateSemester = async (sem: SemesterDefinition) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, 'semesters', sem.id), sem as any);
+  };
+  const removeSemester = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'semesters', id));
+    if (activeSemesterId === id) await setSemesterActive('');
+  };
+  const setSemesterActive = async (id: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'system', 'metadata'), { activeSemesterId: id }, { merge: true });
+  };
+  
+  const updateSettings = async (newSettings: AppSettings) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    await setDoc(doc(db, 'system', 'settings'), newSettings);
+  };
+  const addHoliday = async (date: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    const newHolidays = [...holidays, date].sort();
+    await setDoc(doc(db, 'system', 'holidays'), { dates: newHolidays });
+  };
+  const removeHoliday = async (date: string) => { 
+    if (!db) throw new Error("Firebase not initialized");
+    const newHolidays = holidays.filter(d => d !== date);
+    await setDoc(doc(db, 'system', 'holidays'), { dates: newHolidays });
+  };
+
+  const addToSubPool = async (teacherId: string) => {
+      if (!db) throw new Error("Firebase not initialized");
+      if (!subPool.some(i => i.teacherId === teacherId)) {
+          const newItem: SubPoolItem = { teacherId, status: 'available', note: '', updatedAt: Date.now() };
+          // Use teacherId as doc ID for subPool to ensure uniqueness
+          await setDoc(doc(db, 'subPool', teacherId), newItem);
+      }
+  };
+  const removeFromSubPool = async (teacherId: string) => {
+      if (!db) throw new Error("Firebase not initialized");
+      await deleteDoc(doc(db, 'subPool', teacherId));
+  };
+  const updateSubPoolItem = async (item: SubPoolItem) => {
+      if (!db) throw new Error("Firebase not initialized");
+      await setDoc(doc(db, 'subPool', item.teacherId), { ...item, updatedAt: Date.now() });
+  };
+
+  const checkGasConnection = async (): Promise<boolean> => {
+    const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
+    if (!targetUrl) return false;
+    try { await callGasApi(targetUrl, 'TEST_CONNECTION', {}); return true; } catch (e) { return false; }
+  };
+
+  // --- Migration & Load Logic ---
+
+  const loadFromGas = async () => {
+    const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
+    if (!targetUrl) { throw new Error("請先在「代課清冊」頁面設定 Web App URL。"); }
+    try {
+        const result = await callGasApi(targetUrl, 'LOAD_DATA', {});
+        const remoteTeachers = result.data.teachers || [];
+        const rawRecords = result.data.records || [];
+        const systemSettings = result.data.systemSettings || {};
+        
+        const rehydratedRecords = rawRecords.map((record: any) => {
+            if (record.slots && record.slots.length > 0) {
+                return { ...record, details: convertSlotsToDetails(record.slots, remoteTeachers, result.data.salaryGrades || []) };
+            }
+            return record;
+        });
+        
+        const uniqueRemoteTeachers = Array.from(new Map(remoteTeachers.map((t: Teacher) => [t.id, t])).values()) as Teacher[];
+
+        // Update Local State (Visual only, until Migrate is clicked)
+        setTeachers(uniqueRemoteTeachers);
+        setRecords(rehydratedRecords);
+        setSalaryGrades((result.data.salaryGrades || []).map((g: any) => ({ ...g, id: String(g.points) })));
+        setSpecialActivities(result.data.specialActivities || []);
+        setFixedOvertimeConfig(result.data.fixedOvertimeConfig || []);
+        setGradeEvents(result.data.gradeEvents || []);
+        setHolidays(result.data.holidays || []);
+        setSubPool(result.data.subPool || []);
+        setOvertimeRecords(result.data.overtimeRecords || []); 
+        setLanguagePayrolls(result.data.languagePayrolls || []); 
+        
+        setSettings(prev => ({
+            ...prev,
+            semesterStart: systemSettings.semesterStart || prev.semesterStart,
+            semesterEnd: systemSettings.semesterEnd || prev.semesterEnd,
+            graduationDate: systemSettings.graduationDate || prev.graduationDate 
+        }));
+        
+        return { teacherCount: uniqueRemoteTeachers.length, recordCount: rehydratedRecords.length };
+    } catch (e: any) { console.error("Load Data Error", e); throw e; }
+  };
+
+  const migrateToFirebase = async () => {
+      if (!db) throw new Error("Firebase not initialized");
+      const batchLimit = 500;
+      let batch = writeBatch(db);
+      let count = 0;
+
+      const commitBatch = async () => {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+      };
+
+      const addToBatch = async (ref: any, data: any) => {
+          batch.set(ref, data);
+          count++;
+          if (count >= batchLimit) await commitBatch();
+      };
+
+      // Teachers
+      for (const t of teachers) await addToBatch(doc(db, 'teachers', t.id), t);
+      // Records
+      for (const r of records) await addToBatch(doc(db, 'records', r.id), r);
+      // Overtime
+      for (const o of overtimeRecords) await addToBatch(doc(db, 'overtimeRecords', o.id), o);
+      // Activities
+      for (const a of specialActivities) await addToBatch(doc(db, 'specialActivities', a.id), a);
+      // Salary Grades
+      for (const s of salaryGrades) await addToBatch(doc(db, 'salaryGrades', s.id), s);
+      // Fixed Overtime
+      for (const f of fixedOvertimeConfig) await addToBatch(doc(db, 'fixedOvertimeConfig', f.teacherId), f);
+      // Grade Events
+      for (const g of gradeEvents) await addToBatch(doc(db, 'gradeEvents', g.id), g);
+      // Semesters
+      for (const s of semesters) await addToBatch(doc(db, 'semesters', s.id), s);
+      // Sub Pool
+      for (const s of subPool) await addToBatch(doc(db, 'subPool', s.teacherId), s);
+      // Language Payrolls
+      for (const l of languagePayrolls) await addToBatch(doc(db, 'languagePayrolls', l.id), l);
+
+      // System
+      await addToBatch(doc(db, 'system', 'settings'), settings);
+      await addToBatch(doc(db, 'system', 'holidays'), { dates: holidays });
+      if (activeSemesterId) await addToBatch(doc(db, 'system', 'metadata'), { activeSemesterId });
+
+      await commitBatch();
+      alert("資料已成功遷移至 Firebase！");
+  };
+
+  const syncToPublicBoard = async (vacancies: any[]) => {
+      const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
+      if (!targetUrl) throw new Error("未設定 Google Apps Script URL。");
+      return await callGasApi(targetUrl, 'SYNC_PUBLIC_VACANCIES', { vacancies });
+  };
+
+  const value = {
+    currentUser,
+    teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
+    semesters, activeSemesterId, subPool, languagePayrolls,
+    loading, 
+    addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, 
+    addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
+    updateFixedOvertimeConfig, removeFixedOvertimeConfig, 
+    addGradeEvent, removeGradeEvent,
+    addSemester, updateSemester, removeSemester, setSemesterActive,
+    updateSettings, addHoliday, removeHoliday, 
+    addToSubPool, removeFromSubPool, updateSubPoolItem,
+    addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,
+    loadFromGas, migrateToFirebase, syncToPublicBoard, checkGasConnection,
+  };
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+};
+
+export const useAppStore = () => {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useAppStore must be used within an AppProvider');
+  }
+  return context;
+};
