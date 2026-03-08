@@ -50,6 +50,16 @@ var OvertimeManager = {
         // --- 填寫資料 ---
         this._fillOvertimeReport(sheet, reportData, weeklyStructure);
 
+        // --- 黏貼憑證（與代課清冊相同邏輯）---
+        SpreadsheetApp.flush();
+        var totalRow = sheet.getLastRow();
+        var sumTotal = sheet.getRange(totalRow, 14).getValue() || 0; // N 欄為金額合計
+        var title = "加昌國小" + rocDateStr + "超鐘點印領清冊";
+        if (typeof SheetManager === 'undefined') {
+            throw new Error('SheetManager 未定義。請在 GAS 專案中確認已加入「SheetManager.gs」檔案並重新部署。');
+        }
+        SheetManager.addVoucherSheetToSpreadsheet(newSS, sumTotal, title, rocYear, month, year);
+
         SpreadsheetApp.flush();
         return { url: newSS.getUrl(), success: true };
 

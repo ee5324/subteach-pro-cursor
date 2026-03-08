@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FilePlus, FileText, Settings, Wifi, WifiOff, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, CalendarDays, X, Languages, LogOut, User as UserIcon } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, CalendarDays, X, Languages, FileOutput } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -64,12 +64,6 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
       <nav className="flex-1 px-3 py-2 space-y-1 mt-4">
         <NavLink to="/" className={linkClass} onClick={onClose}>
-          <LayoutDashboard size={18} />
-          <span>儀表板</span>
-        </NavLink>
-        
-        {/* ... rest of the navigation links ... */}
-        <NavLink to="/overview" className={linkClass} onClick={onClose}>
           <CalendarDays size={18} />
           <span>代課總表</span>
         </NavLink>
@@ -121,6 +115,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/records" className={linkClass} onClick={onClose}>
           <FileText size={18} />
           <span>代課清冊/憑證</span>
+        </NavLink>
+
+        <NavLink to="/extra-voucher" className={linkClass} onClick={onClose}>
+          <FileOutput size={18} />
+          <span>額外憑證</span>
         </NavLink>
         
         <NavLink to="/fixed-overtime" className={linkClass} onClick={onClose}>

@@ -1079,6 +1079,58 @@ var SheetManager = {
       if (start === end) return s;
       var e = end.substring(5).replace('-', '/');
       return s + '-' + e;
+  },
+
+  /**
+   * 在既有試算表中加入「黏貼憑證」工作表（複製憑證範本並填入金額、標題、日期）
+   */
+  addVoucherSheetToSpreadsheet: function(newSS, sumTotal, title, rocYear, month, year) {
+    var ss = getSpreadsheet();
+    var voucherTemplate = ss.getSheetByName(CONFIG.VOUCHER_TEMPLATE_SHEET_NAME || '憑證範本');
+    if (!voucherTemplate) return;
+    var voucherSheet = voucherTemplate.copyTo(newSS);
+    voucherSheet.setName("黏貼憑證");
+    var moneyStr = Math.round(Number(sumTotal) || 0).toString();
+    var len = moneyStr.length;
+    voucherSheet.getRange("J6:O6").clearContent();
+    for (var i = 0; i < 6; i++) {
+      var colIndex = 15 - i;
+      var charIndex = len - 1 - i;
+      if (charIndex >= 0) voucherSheet.getRange(6, colIndex).setValue(moneyStr.charAt(charIndex));
+      else voucherSheet.getRange(6, colIndex).setValue("-");
+    }
+    voucherSheet.getRange("C6").setValue(title);
+    voucherSheet.getRange("P6").setValue(title);
+    voucherSheet.getRange("A22").setValue(title);
+    voucherSheet.getRange("P22").setValue(title);
+    voucherSheet.getRange("M22").setValue(Number(sumTotal) || 0);
+    voucherSheet.getRange("H19").setValue(rocYear);
+    voucherSheet.getRange("J19").setValue(month);
+    var lastDay = new Date(year, month, 0).getDate();
+    voucherSheet.getRange("L19").setValue(lastDay);
+  },
+
+  /**
+   * 產生「額外憑證」：僅含黏貼憑證工作表的試算表（用於未預期的其他憑證）
+   */
+  generateExtraVoucher: function(title, amount, year, month) {
+    year = year || new Date().getFullYear();
+    month = month || new Date().getMonth() + 1;
+    var rocYear = year - 1911;
+    var rocStr = rocYear + "年" + month + "月";
+    var fileName = "額外憑證_" + rocStr + "_" + (title || "未命名").substring(0, 20);
+    var rootId = CONFIG.OUTPUT_FOLDER_ID;
+    var rootFolder = rootId ? DriveApp.getFolderById(rootId) : DriveApp.getRootFolder();
+    var yearFolder = getOrCreateSubFolder(rootFolder, year + '年');
+    var monthFolder = getOrCreateSubFolder(yearFolder, month + '月');
+    var newSS = SpreadsheetApp.create(fileName);
+    var newFile = DriveApp.getFileById(newSS.getId());
+    newFile.moveTo(monthFolder);
+    var defaultSheet = newSS.getSheets()[0];
+    SheetManager.addVoucherSheetToSpreadsheet(newSS, amount, title || rocStr + " 額外憑證", rocYear, month, year);
+    newSS.deleteSheet(defaultSheet);
+    SpreadsheetApp.flush();
+    return { url: newSS.getUrl() };
   }
 };
 

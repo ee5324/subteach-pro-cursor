@@ -67,8 +67,8 @@ var FixedOvertimeManager = {
     });
   },
 
-  // 3. 產生固定兼課報表 (Daily Based)
-  generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays) {
+  // 3. 產生固定兼課報表 (Daily Based)，含固定兼課教師與當月協助代課教師
+  generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays, substituteTeachers) {
     var rocYear = year - 1911;
     var rocDateStr = rocYear + "年" + month + "月";
     var fileName = rocDateStr + "_固定兼課印領清冊";
@@ -131,8 +131,21 @@ var FixedOvertimeManager = {
         // 必須傳入 semesterStart/End 以過濾非學期日
         var dayCounts = this._getMonthlyWeekdayCounts(year, month, semesterStart, semesterEnd, holidays);
         
-        // --- 填寫資料 ---
-        this._fillFixedOvertimeReport(sheet, reportData, dayCounts);
+        // --- 填寫資料（固定兼課教師 + 協助代課教師）---
+        this._fillFixedOvertimeReport(sheet, reportData, dayCounts, substituteTeachers || []);
+
+        // --- 黏貼憑證（總額含固定兼課與協助代課）---
+        var sumTotal = 0;
+        if (reportData && reportData.length > 0) {
+            reportData.forEach(function(item) { sumTotal += Number(item.pay) || 0; });
+        }
+        if (substituteTeachers && substituteTeachers.length > 0) {
+            substituteTeachers.forEach(function(item) { sumTotal += Number(item.pay) || 0; });
+        }
+        if (typeof SheetManager === 'undefined') {
+            throw new Error('SheetManager 未定義。請在 GAS 專案中確認已加入「SheetManager.gs」檔案並重新部署。');
+        }
+        SheetManager.addVoucherSheetToSpreadsheet(newSS, sumTotal, title, rocYear, month, year);
 
         SpreadsheetApp.flush();
         return { url: newSS.getUrl(), success: true };
@@ -142,12 +155,11 @@ var FixedOvertimeManager = {
     }
   },
 
-  // 內部函式：填寫資料
-  _fillFixedOvertimeReport: function(sheet, reportData, dayCounts) {
-      // 需求: C5為週一、G5為週五、H5為小計
+  // 內部函式：填寫資料（reportData = 固定兼課教師，substituteTeachers = 當月協助代課教師）
+  _fillFixedOvertimeReport: function(sheet, reportData, dayCounts, substituteTeachers) {
+      substituteTeachers = substituteTeachers || [];
       var weekDays = ['一', '二', '三', '四', '五'];
       
-      // 更新表頭 C5~G5 (對應 Column 3~7)
       for (var i = 0; i < 5; i++) {
           sheet.getRange(5, 3 + i).setValue(weekDays[i] + "\n(" + dayCounts[i] + "次)");
       }
@@ -159,43 +171,55 @@ var FixedOvertimeManager = {
       reportData.forEach(function(item) {
           var periods = item.overtimePattern || [0,0,0,0,0];
           var r = startRow + rowsData.length;
-          
-          // I欄: 本次應上節數 (Gross) = C*MonCount + D*TueCount ...
           var calcParts = [];
           var cols = ['C', 'D', 'E', 'F', 'G'];
           for(var i=0; i<5; i++) {
               calcParts.push(cols[i] + r + "*" + dayCounts[i]);
           }
           var grossFormula = "=" + calcParts.join("+");
-          
-          // K欄: 本次實際 (Net) = I + J
           var netFormula = "=I" + r + "+J" + r;
-          
-          // M欄: 本次金額 = ROUND(K * 405, 0)
           var amountFormula = "=ROUND(K" + r + "*405, 0)";
 
-          // B欄: 職別強制為 "固定兼課教師"
-          var fixedJobTitle = "固定兼課教師";
+          // J 欄「本次增減」須含活動扣除、請假扣除（與憑證一致），前端傳入 item.adjustment = 手動 - 活動扣除 - 請假扣除
+          var netAdjustment = (item.adjustment != null && item.adjustment !== '') ? Number(item.adjustment) : (item.manualAdjustment || 0);
 
           var row = [
-              item.teacherName,    // A: 姓名
-              fixedJobTitle,       // B: 職別
-              periods[0],          // C: Mon
-              periods[1],          // D: Tue
-              periods[2],          // E: Wed
-              periods[3],          // F: Thu
-              periods[4],          // G: Fri
-              "=SUM(C"+r+":G"+r+")", // H: 小計
-              grossFormula,        // I: 本次應上節數
-              item.manualAdjustment || 0, // J: 本次增減
-              netFormula,          // K: 本次實際
-              405,                 // L: 鐘點費
-              amountFormula,       // M: 本次金額
-              '', '', '', '',      // N,O,P,Q (勞健保等留白)
-              item.adjustmentReason, // R: 備註
-              ''                   // S: 簽名
+              item.teacherName,
+              "固定兼課教師",
+              periods[0], periods[1], periods[2], periods[3], periods[4],
+              "=SUM(C"+r+":G"+r+")",
+              grossFormula,
+              netAdjustment,
+              netFormula,
+              405,
+              amountFormula,
+              '', '', '', '',
+              item.adjustmentReason,
+              ''
           ];
-          
+          rowsData.push(row);
+      });
+
+      // 協助代課教師列（職別「代課」、節數與金額）
+      substituteTeachers.forEach(function(item) {
+          var r = startRow + rowsData.length;
+          var sessions = Number(item.substituteSessions) || 0;
+          var pay = Number(item.pay) || 0;
+          var detailStr = (item.substituteDetails && item.substituteDetails.length) ? item.substituteDetails.join('；') : '';
+          var row = [
+              item.teacherName,    // A: 姓名
+              "代課",              // B: 職別
+              0, 0, 0, 0, 0,      // C~G: 週一～五留 0
+              sessions,            // H: 小計（代課節數）
+              0,                  // I: 本次應上節數
+              0,                  // J: 本次增減
+              sessions,            // K: 本次實際
+              405,                 // L: 鐘點費
+              pay,                 // M: 本次金額（數字，納入合計）
+              '', '', '', '',
+              detailStr,           // R: 備註（代課明細）
+              ''
+          ];
           rowsData.push(row);
       });
 

@@ -588,11 +588,12 @@ const FixedOvertimePage: React.FC = () => {
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_FIXED_OVERTIME_REPORT', { 
               year, 
               month, 
-              reportData: payload, // Send compatible payload
+              reportData: payload,
+              substituteTeachers: substituteTeachersList,
               semesterStart: semesterStart,
               semesterEnd: semesterEnd,
               docNumber: docNumber,
-              holidays: holidays // New: Pass holidays from store
+              holidays: holidays
           });
           
           // ... (existing result handling)

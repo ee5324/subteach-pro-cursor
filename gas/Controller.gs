@@ -238,8 +238,7 @@ function doPost(e) {
       result = { status: 'success', message: '紀錄已還原' };
 
     } else if (action === 'GENERATE_FIXED_OVERTIME_REPORT') {
-      // 呼叫 FixedOvertimeManager
-      var res = FixedOvertimeManager.generateReport(data.year, data.month, data.reportData, data.semesterStart, data.semesterEnd, data.docNumber, null, data.holidays);
+      var res = FixedOvertimeManager.generateReport(data.year, data.month, data.reportData, data.semesterStart, data.semesterEnd, data.docNumber, null, data.holidays, data.substituteTeachers);
       result = { status: 'success', data: { url: res.url }, message: '固定兼課報表產生成功' };
 
     } else if (action === 'GENERATE_OVERTIME_REPORT') {
@@ -269,6 +268,10 @@ function doPost(e) {
     } else if (action === 'GENERATE_INDIGENOUS_RECEIPT') {
       var resultObj = LanguagePayroll.generateIndigenousReceipt(data);
       result = { status: 'success', data: { url: resultObj.url }, message: '族語專職教師領據產生成功' };
+
+    } else if (action === 'GENERATE_EXTRA_VOUCHER') {
+      var res = SheetManager.generateExtraVoucher(data.title, data.amount, data.year, data.month);
+      result = { status: 'success', data: { url: res.url }, message: '額外憑證已產生' };
 
     } else if (action === 'UPLOAD_TEACHER_DOCUMENT') {
       var url = DriveManager.saveTeacherDocument(data.fileData.base64, data.fileData.mimeType, data.fileData.name);

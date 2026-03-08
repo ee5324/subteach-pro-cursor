@@ -35,7 +35,6 @@ class PageErrorBoundary extends Component<{ children: ReactNode; fallbackTitle?:
   }
 }
 import Layout from './Layout';
-import Dashboard from './pages/Dashboard';
 import EntryForm from './pages/EntryForm';
 import TeacherManagement from './pages/TeacherManagement';
 import Records from './pages/Records';
@@ -46,7 +45,8 @@ import Settings from './pages/Settings';
 import IncomingRequests from './pages/IncomingRequests';
 import FixedOvertimePage from './pages/FixedOvertimePage'; 
 import SubPool from './pages/SubPool';
-import SubstituteOverview from './pages/SubstituteOverview'; // New Import
+import SubstituteOverview from './pages/SubstituteOverview';
+import ExtraVoucher from './pages/ExtraVoucher';
 import LanguageTeachers from './pages/LanguageTeachers';
 import LanguageSalary from './pages/LanguageSalary';
 import Login from './pages/Login';
@@ -85,8 +85,8 @@ const App: React.FC = () => {
             <Layout />
           </ProtectedRoute>
         }>
-          <Route index element={<Dashboard />} />
-          <Route path="overview" element={<SubstituteOverview />} /> {/* New Route */}
+          <Route index element={<SubstituteOverview />} />
+          <Route path="overview" element={<SubstituteOverview />} />
           <Route path="pending" element={<PendingItems />} />
           <Route path="requests" element={<IncomingRequests />} />
           <Route path="sub-pool" element={<SubPool />} />
@@ -96,6 +96,7 @@ const App: React.FC = () => {
           <Route path="teachers" element={<TeacherManagement />} />
           <Route path="language-teachers" element={<LanguageTeachers />} />
           <Route path="records" element={<Records />} />
+          <Route path="extra-voucher" element={<ExtraVoucher />} />
           <Route path="overtime" element={<PageErrorBoundary fallbackTitle="超鐘點頁面錯誤"><Overtime /></PageErrorBoundary>} /> 
           <Route path="fixed-overtime" element={<FixedOvertimePage />} />
           <Route path="hakka-salary" element={<LanguageSalary />} />
