@@ -70,26 +70,6 @@ var OvertimeManager = {
 
   // 內部函式：填寫「超鐘點」報表
   _fillOvertimeReport: function(sheet, reportData, weeklyStructure) {
-      
-      // --- 1. 職稱排序 (主任 > 組長 > 導師 > 科任) ---
-      reportData.sort(function(a, b) {
-          function getRank(title) {
-              if (!title) return 5;
-              // 簡單關鍵字判斷職等
-              if (title.indexOf('主任') > -1) return 1;
-              if (title.indexOf('組長') > -1) return 2;
-              if (title.indexOf('導師') > -1) return 3;
-              if (title.indexOf('科任') > -1 || title.indexOf('教師') > -1 || title.indexOf('專任') > -1) return 4;
-              return 5; // 其他
-          }
-          var rankA = getRank(a.jobTitle);
-          var rankB = getRank(b.jobTitle);
-          if (rankA !== rankB) return rankA - rankB;
-          
-          // 若職等相同，依姓名排序 (中文排序可能不準確，僅做輔助)
-          return (a.teacherName || '').localeCompare(b.teacherName || '');
-      });
-
       // H4-L4: 週次區間
       sheet.getRange("H4:L4").clearContent(); 
       weeklyStructure.slice(0, 5).forEach(function(week, idx) {
@@ -121,18 +101,38 @@ var OvertimeManager = {
               weeklyCounts.push(count);
           }
 
+          var substituteSessionsByDate = item.substituteSessionsByDate || [];
+          substituteSessionsByDate.forEach(function(entry) {
+              if (!entry || !entry.date) return;
+              var dayStr = String(entry.date).split('-')[2];
+              var dayNum = Number(dayStr);
+              if (!dayNum) return;
+              for (var weekIndex = 0; weekIndex < weeklyStructure.length; weekIndex++) {
+                  var targetWeek = weeklyStructure[weekIndex];
+                  if (dayNum >= targetWeek.startDay && dayNum <= targetWeek.endDay) {
+                      weeklyCounts[weekIndex] = (weeklyCounts[weekIndex] || 0) + (Number(entry.count) || 0);
+                      break;
+                  }
+              }
+          });
+
           var adjustment = item.adjustment || 0;
-          // 將調整值加到最後一個有效週次
-          for(var i = weeklyCounts.length-1; i>=0; i--) {
-              if (weeklyCounts[i] !== null) {
-                  weeklyCounts[i] += adjustment;
-                  break;
+          if (!item.isSubstituteOnly) {
+              // 將調整值加到最後一個有效週次
+              for(var i = weeklyCounts.length-1; i>=0; i--) {
+                  if (weeklyCounts[i] !== null) {
+                      weeklyCounts[i] += adjustment;
+                      break;
+                  }
               }
           }
 
           var currentRowNum = startRow + rowsData.length; 
-          var totalColFormula = "=SUM(H" + currentRowNum + ":L" + currentRowNum + ")";
+          var payablePeriods = Number(item.payablePeriods || 0);
+          var totalColValue = payablePeriods > 0 ? payablePeriods : "=SUM(H" + currentRowNum + ":L" + currentRowNum + ")";
           var amountFormula = "=ROUND(M" + currentRowNum + "*405, 0)";
+
+          var combinedDetail = [item.slotDetail, item.remarks].filter(Boolean).join('；');
 
           var row = [
               item.jobTitle,       // A
@@ -144,9 +144,9 @@ var OvertimeManager = {
               ''                   // G
           ];
           row = row.concat(weeklyCounts); // H-L
-          row.push(totalColFormula); // M
+          row.push(totalColValue);   // M
           row.push(amountFormula);   // N
-          row.push(item.slotDetail); // O
+          row.push(combinedDetail);  // O
           row.push(item.reductionDetail); // P
 
           rowsData.push(row);
@@ -241,6 +241,8 @@ var OvertimeManager = {
                   var label = (Number(month)) + "/" + rangeStart + "-" + (Number(month)) + "/" + rangeEnd;
                   weeks.push({ 
                       label: label, 
+                      startDay: rangeStart,
+                      endDay: rangeEnd,
                       days: currentWeekDays, 
                       hasDays: hasDaysInWeek 
                   });

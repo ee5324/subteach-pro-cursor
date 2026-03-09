@@ -407,12 +407,13 @@ const Overtime: React.FC = () => {
       return { grossCount, netCount, details: log };
   };
 
-  const calculateSubstituteAdditions = (teacherId: string): { count: number, details: string[], relatedOriginalTeacherIds: string[] } => {
+  const calculateSubstituteAdditions = (teacherId: string): { count: number, details: string[], relatedOriginalTeacherIds: string[], sessionsByDate: { date: string; count: number }[] } => {
       const [year, month] = selectedMonth.split('-').map(Number);
       const monthPrefix = `${year}-${String(month).padStart(2,'0')}`;
       const seenDatePeriod = new Set<string>();
       const groupByDateOriginal = new Map<string, { date: string; originalName: string; periods: Set<string> }>();
       const relatedOriginalTeacherIds = new Set<string>();
+      const countByDate = new Map<string, number>();
 
       (leaveRecords || []).forEach(record => {
           const normStart = normalizeDateString(record.startDate);
@@ -440,6 +441,7 @@ const Overtime: React.FC = () => {
                           if (!seenDatePeriod.has(key)) {
                               seenDatePeriod.add(key);
                               relatedOriginalTeacherIds.add(record.originalTeacherId);
+                              countByDate.set(normDate, (countByDate.get(normDate) || 0) + 1);
                               const dateKey = normDate.substring(5);
                               const groupKey = `${dateKey}|${originalName}`;
                               if (!groupByDateOriginal.has(groupKey)) {
@@ -476,6 +478,7 @@ const Overtime: React.FC = () => {
                       if (!seenDatePeriod.has(key)) {
                           seenDatePeriod.add(key);
                           relatedOriginalTeacherIds.add(record.originalTeacherId);
+                          countByDate.set(normDate, (countByDate.get(normDate) || 0) + 1);
                           handledPeriodsByDate[normDate].add(pStr);
                           newPeriodsForThisDetail.push(pStr);
                           if (!groupByDateOriginal.has(groupKey)) {
@@ -493,6 +496,7 @@ const Overtime: React.FC = () => {
                               if (!seenDatePeriod.has(key)) {
                                   seenDatePeriod.add(key);
                                   relatedOriginalTeacherIds.add(record.originalTeacherId);
+                                  countByDate.set(normDate, (countByDate.get(normDate) || 0) + 1);
                                   if (!groupByDateOriginal.has(groupKey)) {
                                       groupByDateOriginal.set(groupKey, { date: dateKey, originalName, periods: new Set() });
                                   }
@@ -509,7 +513,10 @@ const Overtime: React.FC = () => {
           const sorted = Array.from(periods).sort((a, b) => periodOrderOvertime.indexOf(a) - periodOrderOvertime.indexOf(b));
           details.push(`${date}(${sorted.join('、')}節)代${originalName}`);
       });
-      return { count: seenDatePeriod.size, details, relatedOriginalTeacherIds: Array.from(relatedOriginalTeacherIds) };
+      const sessionsByDate = Array.from(countByDate.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([date, count]) => ({ date, count }));
+      return { count: seenDatePeriod.size, details, relatedOriginalTeacherIds: Array.from(relatedOriginalTeacherIds), sessionsByDate };
   };
 
   const calculateLeaveDeductionsFromRecords = (teacherId: string): { count: number, details: string[] } => {
@@ -894,7 +901,7 @@ const Overtime: React.FC = () => {
 
   const formatExportJobTitle = (teacher: Teacher) => {
       const baseTitle = teacher.jobTitle || teacher.teacherRole || '';
-      const classLabel = (teacher.teachingClasses || '').trim();
+      const classLabel = String(teacher.teachingClasses ?? '').trim();
       const isHomeroomTitle = baseTitle.includes('導師');
       if (!isHomeroomTitle || !classLabel) return baseTitle;
       return classLabel;
@@ -934,10 +941,20 @@ const Overtime: React.FC = () => {
                   return `週${dayName}${s.period}`;
               }).join('、') : '';
 
+              const remarks = [
+                  row.adjustmentReason,
+                  ...(row.leaveDeductions || []),
+                  ...((row.subAdditions && row.subAdditions.details) || [])
+              ].filter(Boolean).join('；');
+
               return {
                   teacherId: row.teacher.id,
                   teacherName: row.teacher.name,
                   jobTitle: formatExportJobTitle(row.teacher),
+                  payablePeriods: row.displayCount,
+                  remarks,
+                  isSubstituteOnly: row.isSubstituteOnly,
+                  substituteSessionsByDate: row.subAdditions?.sessionsByDate || [],
                   
                   // Columns C, D, E, F
                   standard: row.standardBase,
