@@ -68,6 +68,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           <span>代課總表</span>
         </NavLink>
 
+        <NavLink to="/leave-rules" className={linkClass} onClick={onClose}>
+          <BookOpenText size={18} />
+          <span>請假規則</span>
+        </NavLink>
+
         {/* Group 1: 日常作業 */}
         <div className={groupTitleClass}>日常作業</div>
         
@@ -115,11 +120,6 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/records" className={linkClass} onClick={onClose}>
           <FileText size={18} />
           <span>代課清冊/憑證</span>
-        </NavLink>
-
-        <NavLink to="/leave-rules" className={linkClass} onClick={onClose}>
-          <BookOpenText size={18} />
-          <span>請假規則</span>
         </NavLink>
 
         <NavLink to="/extra-voucher" className={linkClass} onClick={onClose}>
