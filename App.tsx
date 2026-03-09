@@ -49,6 +49,7 @@ import SubstituteOverview from './pages/SubstituteOverview';
 import ExtraVoucher from './pages/ExtraVoucher';
 import LanguageTeachers from './pages/LanguageTeachers';
 import LanguageSalary from './pages/LanguageSalary';
+import LeaveRules from './pages/LeaveRules';
 import Login from './pages/Login';
 import { useAppStore } from './store/useAppStore';
 
@@ -96,6 +97,7 @@ const App: React.FC = () => {
           <Route path="teachers" element={<TeacherManagement />} />
           <Route path="language-teachers" element={<LanguageTeachers />} />
           <Route path="records" element={<Records />} />
+          <Route path="leave-rules" element={<LeaveRules />} />
           <Route path="extra-voucher" element={<ExtraVoucher />} />
           <Route path="overtime" element={<PageErrorBoundary fallbackTitle="超鐘點頁面錯誤"><Overtime /></PageErrorBoundary>} /> 
           <Route path="fixed-overtime" element={<FixedOvertimePage />} />
