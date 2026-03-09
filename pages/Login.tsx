@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../src/lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../src/lib/firebase';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, UserPlus, Mail, Lock, Loader2 } from 'lucide-react';
 
@@ -38,6 +38,32 @@ const Login: React.FC = () => {
       if (err.code === 'auth/wrong-password') msg = "密碼錯誤";
       if (err.code === 'auth/email-already-in-use') msg = "此 Email 已被註冊";
       if (err.code === 'auth/weak-password') msg = "密碼強度不足 (至少 6 字元)";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    if (!auth) {
+      setError("Firebase 未初始化，無法登入。");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await signInWithPopup(auth, googleProvider);
+      navigate('/');
+    } catch (err: any) {
+      console.error("Google auth failed", err);
+      let msg = err.message;
+      if (err.code === 'auth/popup-closed-by-user') msg = "Google 登入視窗已關閉。";
+      if (err.code === 'auth/popup-blocked') msg = "瀏覽器阻擋了登入視窗，請允許彈出視窗後重試。";
+      if (err.code === 'auth/cancelled-popup-request') msg = "登入流程已取消，請再試一次。";
+      if (err.code === 'auth/operation-not-allowed') msg = "Firebase 尚未啟用 Google 登入，請先到 Firebase Console 開啟。";
       setError(msg);
     } finally {
       setLoading(false);
@@ -108,6 +134,35 @@ const Login: React.FC = () => {
             {loading ? '處理中...' : isRegistering ? '註冊帳號' : '登入'}
           </button>
         </form>
+
+        {!isRegistering && (
+          <>
+            <div className="my-6 flex items-center">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="px-3 text-xs text-slate-400">或</span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full border border-slate-300 bg-white text-slate-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin mr-2" size={20} />
+              ) : (
+                <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M21.6 12.23c0-.68-.06-1.34-.17-1.97H12v3.73h5.39a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.9-1.75 2.98-4.33 2.98-7.28z"/>
+                  <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.44l-3.23-2.5c-.9.6-2.05.96-3.39.96-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22z"/>
+                  <path fill="#FBBC05" d="M6.41 13.9A6 6 0 0 1 6.1 12c0-.66.11-1.3.31-1.9V7.5H3.07A10 10 0 0 0 2 12c0 1.61.39 3.14 1.07 4.5l3.34-2.6z"/>
+                  <path fill="#EA4335" d="M12 5.98c1.47 0 2.8.5 3.84 1.5l2.88-2.88C16.95 2.98 14.7 2 12 2A10 10 0 0 0 3.07 7.5l3.34 2.6C7.2 7.74 9.4 5.98 12 5.98z"/>
+                </svg>
+              )}
+              使用 Google 登入
+            </button>
+          </>
+        )}
 
         <div className="mt-6 text-center">
           <button

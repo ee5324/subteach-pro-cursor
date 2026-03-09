@@ -30,5 +30,6 @@ try {
 export const db = app ? getFirestore(app) : null as any;
 export const auth = app ? getAuth(app) : null as any;
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export default app;

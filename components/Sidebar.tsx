@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, CalendarDays, X, Languages, FileOutput } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, CalendarDays, X, Languages, FileOutput, LogOut } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -172,6 +172,25 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
                 <span>系統設定</span>
             </NavLink>
         </div>
+
+        {currentUser && (
+          <div className="px-1">
+            <div className="px-3 py-2 text-[11px] text-slate-500 truncate">
+              目前登入：{currentUser.displayName || currentUser.email || '已登入使用者'}
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await handleLogout();
+                onClose?.();
+              }}
+              className="flex items-center space-x-2 text-slate-400 text-sm hover:text-rose-400 transition-colors w-full p-2 rounded-lg hover:bg-slate-800"
+            >
+              <LogOut size={18} />
+              <span>登出</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
