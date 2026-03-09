@@ -188,6 +188,9 @@ var OvertimeManager = {
       
       // 設定字體樣式
       sheet.getRange(signRow, 1, 4, 15).setFontWeight("bold").setFontSize(11);
+
+      // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
+      this._scaleRowHeights(sheet, 4, nextSignRow, 1.25);
   },
 
   /**
@@ -258,5 +261,12 @@ var OvertimeManager = {
       colIndex = (colIndex - temp - 1) / 26;
     }
     return letter;
+  },
+
+  _scaleRowHeights: function(sheet, startRow, endRow, factor) {
+    for (var row = startRow; row <= endRow; row++) {
+      var currentHeight = sheet.getRowHeight(row);
+      sheet.setRowHeight(row, Math.round(currentHeight * factor));
+    }
   }
 };

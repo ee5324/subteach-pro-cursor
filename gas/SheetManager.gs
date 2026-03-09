@@ -1019,6 +1019,12 @@ var SheetManager = {
             var row5 = footerStartRow + 6;
             summarySheet.getRange(row5, 8).setValue("會計主任：");
             summarySheet.getRange(footerStartRow, 1, 10, 19).setFontWeight("bold").setFontSize(11);
+
+            // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
+            for (var rowIndex = startRow; rowIndex <= footerStartRow + 9; rowIndex++) {
+                var currentHeight = summarySheet.getRowHeight(rowIndex);
+                summarySheet.setRowHeight(rowIndex, Math.round(currentHeight * 1.25));
+            }
         }
         if (voucherTemplate) {
             var voucherSheet = voucherTemplate.copyTo(newSS);

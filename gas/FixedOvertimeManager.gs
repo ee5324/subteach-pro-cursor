@@ -256,6 +256,9 @@ var FixedOvertimeManager = {
       sheet.getRange(signRow, 13).setValue("人事主任：");
       sheet.getRange(signRow, 16).setValue("會計主任：");
       sheet.getRange(signRow + 2, 16).setValue("校長：");
+
+      // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
+      this._scaleRowHeights(sheet, 5, signRow + 2, 1.25);
   },
 
   // 計算該月份 週一~週五 各有幾天 (扣除假日 & 學期外)
@@ -293,5 +296,12 @@ var FixedOvertimeManager = {
           }
       }
       return counts;
+  },
+
+  _scaleRowHeights: function(sheet, startRow, endRow, factor) {
+      for (var row = startRow; row <= endRow; row++) {
+          var currentHeight = sheet.getRowHeight(row);
+          sheet.setRowHeight(row, Math.round(currentHeight * factor));
+      }
   }
 };
