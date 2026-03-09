@@ -98,6 +98,30 @@ const Records: React.FC = () => {
       });
   };
 
+  const openPendingTab = () => {
+    const tab = window.open('', '_blank');
+    if (tab) {
+      tab.document.write(`
+        <html>
+          <head><title>載入中...</title></head>
+          <body style="font-family: sans-serif; padding: 24px; color: #334155;">
+            正在產生文件，請稍候...
+          </body>
+        </html>
+      `);
+      tab.document.close();
+    }
+    return tab;
+  };
+
+  const navigateOpenedTab = (tab: Window | null, url: string) => {
+    if (tab) {
+      tab.location.href = url;
+      return true;
+    }
+    return false;
+  };
+
   // --- Helpers ---
 
   // 格式化簡短日期 (M/D)
@@ -389,6 +413,7 @@ const Records: React.FC = () => {
       }
 
       setIsGeneratingReport(true);
+      const pendingTabs = [openPendingTab(), openPendingTab()];
       try {
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_REPORTS', {
               records: filteredRecords,
@@ -396,13 +421,19 @@ const Records: React.FC = () => {
           });
           
           if (result.data && result.data.urls && result.data.urls.length > 0) {
-              result.data.urls.forEach((url: any) => window.open(String(url), '_blank'));
+              result.data.urls.forEach((url: any, index: number) => {
+                  const opened = navigateOpenedTab(pendingTabs[index] || null, String(url));
+                  if (!opened) window.open(String(url), '_blank');
+              });
+              pendingTabs.slice(result.data.urls.length).forEach(tab => tab?.close());
               showModal({ title: '產生成功', message: "印領清冊與黏貼憑證已產生並自動開啟。", type: 'success' });
           } else {
+              pendingTabs.forEach(tab => tab?.close());
               showModal({ title: '產生成功', message: "已產生至指定資料夾，但未回傳網址。", type: 'success' });
           }
 
       } catch (e: any) {
+          pendingTabs.forEach(tab => tab?.close());
           const msg = e instanceof Error ? e.message : String(e);
           showModal({ title: '產生失敗', message: String(msg), type: 'error' });
       } finally {

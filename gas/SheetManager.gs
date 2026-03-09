@@ -1000,6 +1000,9 @@ var SheetManager = {
             summarySheet.getRange(startRow, 1, dataCount, 2).setWrap(true);
             summarySheet.getRange(startRow, 8, dataCount, 4).setWrap(true);
             var totalRowIndex = startRow + dataCount;
+            // 清冊數字欄位放大為 14 號字：D:G、L:N（含合計列）
+            summarySheet.getRange(startRow, 4, dataCount + 1, 4).setFontSize(14);
+            summarySheet.getRange(startRow, 12, dataCount + 1, 3).setFontSize(14);
             summarySheet.getRange(totalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
             summarySheet.getRange(totalRowIndex, 1, 1, 2).merge().setValue("合計").setHorizontalAlignment("center");
             summarySheet.getRange(totalRowIndex, 5).setValue(sumDays);
