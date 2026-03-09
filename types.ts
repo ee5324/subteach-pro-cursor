@@ -144,6 +144,7 @@ export interface SpecialActivity {
 export interface FixedOvertimeConfig {
   teacherId: string;
   periods: number[]; // [Mon, Tue, Wed, Thu, Fri] (0-4) - 自動由 scheduleSlots 計算
+  sortOrder?: number; // 手動排序用
   adjustment?: number; // 增減節數 (手動調整)
   adjustmentReason?: string; // 調整原因
   ignoredEventIds?: string[]; // 新增：被標記為「已調課/忽略」的活動 ID 列表
@@ -213,6 +214,7 @@ export interface OvertimeRecord {
   id: string; // Format: YYYY-MM_TeacherID
   teacherId: string;
   yearMonth: string; // YYYY-MM
+  sortOrder?: number; // 手動排序用
   
   weeklyBasic: number; // 基本授課節數 (扣除減授後)
   weeklyActual: number; // 實際排課節數

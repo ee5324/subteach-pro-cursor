@@ -6,7 +6,7 @@ import { useAppStore } from '../store/useAppStore';
 import { FixedOvertimeConfig, Teacher, HOURLY_RATE, GradeEvent, PayType } from '../types';
 import { callGasApi } from '../utils/api';
 import SearchableSelect from '../components/SearchableSelect';
-import { Plus, Trash2, Calendar, FileText, Loader2, Calculator, AlertCircle, X, CloudUpload, Flag, Clock, FileOutput, Settings, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Calendar, FileText, Loader2, Calculator, AlertCircle, X, CloudUpload, Flag, Clock, FileOutput, Settings, BookOpen, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
 import Modal, { ModalType } from '../components/Modal';
 import { Link } from 'react-router-dom';
 import { getStandardBase, parseLocalDate, getEffectiveFixedOvertimeSlots, getEffectiveFixedOvertimePeriods } from '../utils/calculations';
@@ -268,8 +268,22 @@ const FixedOvertimePage: React.FC = () => {
       return affectedEvents;
   };
 
+  const compareFixedConfigOrder = (a: FixedOvertimeConfig, b: FixedOvertimeConfig) => {
+      const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const bSort = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      if (aSort !== bSort) return aSort - bSort;
+      const aTeacher = teachers.find(t => t.id === a.teacherId);
+      const bTeacher = teachers.find(t => t.id === b.teacherId);
+      return (aTeacher?.name || '').localeCompare((bTeacher?.name || ''), 'zh-Hant', { numeric: true });
+  };
+
+  const orderedFixedConfigs = useMemo(
+      () => [...fixedOvertimeConfig].sort(compareFixedConfigOrder),
+      [fixedOvertimeConfig, teachers]
+  );
+
   const reportData = useMemo(() => {
-      return fixedOvertimeConfig.map(config => {
+      return orderedFixedConfigs.map(config => {
           const teacher = teachers.find(t => t.id === config.teacherId);
           if (!teacher) return null;
 
@@ -375,7 +389,7 @@ const FixedOvertimePage: React.FC = () => {
               usesTeacherSchedule: usesTeacherSchedule
           };
       }).filter(item => item !== null) as any[]; 
-  }, [fixedOvertimeConfig, teachers, records, weekdayCounts, gradeEvents, selectedMonth, semesterStart, semesterEnd]);
+  }, [orderedFixedConfigs, teachers, records, weekdayCounts, gradeEvents, selectedMonth, semesterStart, semesterEnd]);
 
   // 當月協助代固定兼課教師代課者：加入清冊並顯示應領金額（僅鐘點費代課，日薪不計）；同日、同被代課者合併為一行
   const periodOrderSub = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
@@ -499,7 +513,7 @@ const FixedOvertimePage: React.FC = () => {
           setModal({ isOpen: true, title: '重複', message: '該教師已在清單中', type: 'warning' }); return;
       }
       const teacher = teachers.find(t => t.id === addTeacherId);
-      const emptyConfig = { teacherId: addTeacherId, periods: [0, 0, 0, 0, 0], adjustment: 0, adjustmentReason: '', ignoredEventIds: [], scheduleSlots: [] };
+      const emptyConfig = { teacherId: addTeacherId, periods: [0, 0, 0, 0, 0], sortOrder: fixedOvertimeConfig.length, adjustment: 0, adjustmentReason: '', ignoredEventIds: [], scheduleSlots: [] };
       const initialPeriods = getEffectiveFixedOvertimePeriods(teacher, emptyConfig);
       updateFixedOvertimeConfig({ ...emptyConfig, periods: initialPeriods });
       setAddTeacherId('');
@@ -518,6 +532,8 @@ const FixedOvertimePage: React.FC = () => {
   };
   
   const [selectedTeachers, setSelectedTeachers] = useState<Set<string>>(new Set());
+  const [draggingTeacherId, setDraggingTeacherId] = useState<string | null>(null);
+  const [dragOverTeacherId, setDragOverTeacherId] = useState<string | null>(null);
 
   // ... (existing code)
 
@@ -537,6 +553,45 @@ const FixedOvertimePage: React.FC = () => {
           newSet.add(teacherId);
       }
       setSelectedTeachers(newSet);
+  };
+
+  const handleDropTeacher = async (targetTeacherId: string) => {
+      if (isSaving || reportData.length <= 1 || !draggingTeacherId || draggingTeacherId === targetTeacherId) {
+          setDraggingTeacherId(null);
+          setDragOverTeacherId(null);
+          return;
+      }
+
+      const draggedId = draggingTeacherId;
+      const reorderedIds = reportData
+          .map(row => row.teacherId)
+          .filter(id => id !== draggedId);
+      const targetIndex = reorderedIds.indexOf(targetTeacherId);
+      if (targetIndex === -1) {
+          setDraggingTeacherId(null);
+          setDragOverTeacherId(null);
+          return;
+      }
+      reorderedIds.splice(targetIndex, 0, draggedId);
+
+      setIsSaving(true);
+      try {
+          await Promise.all(reorderedIds.map((id, index) => {
+              const config = fixedOvertimeConfig.find(item => item.teacherId === id);
+              if (!config) return Promise.resolve();
+              return updateFixedOvertimeConfig({
+                  ...config,
+                  sortOrder: index
+              });
+          }));
+      } catch (error) {
+          console.error('Failed to save fixed overtime order', error);
+          setModal({ isOpen: true, title: '排序失敗', message: '無法儲存固定兼課排序，請稍後再試。', type: 'error' });
+      } finally {
+          setIsSaving(false);
+          setDraggingTeacherId(null);
+          setDragOverTeacherId(null);
+      }
   };
 
   const handleGenerate = async () => {
@@ -753,6 +808,9 @@ const FixedOvertimePage: React.FC = () => {
                     <button onClick={handleAddTeacher} disabled={!addTeacherId} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50"><Plus size={20} /></button>
                 </div>
             </div>
+            <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-100 bg-slate-50/50">
+                拖曳每列右側把手即可調整固定兼課清冊順序，排序會自動儲存。
+            </div>
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left whitespace-nowrap">
@@ -774,12 +832,24 @@ const FixedOvertimePage: React.FC = () => {
                             </th>
                             <th className="px-4 py-3 w-48">調整原因</th>
                             <th className="px-4 py-3 text-right w-24 bg-green-50/50">實發金額</th>
-                            <th className="px-2 py-3 w-12"></th>
+                            <th className="px-2 py-3 w-24 text-center">拖曳 / 刪除</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                         {reportData.map((row) => (
-                            <tr key={row.teacherId} className={`hover:bg-slate-50 ${selectedTeachers.has(row.teacherId) ? 'bg-indigo-50/30' : ''}`}>
+                            <tr
+                                key={row.teacherId}
+                                onDragOver={(e) => {
+                                    if (!draggingTeacherId || draggingTeacherId === row.teacherId) return;
+                                    e.preventDefault();
+                                    setDragOverTeacherId(row.teacherId);
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    handleDropTeacher(row.teacherId);
+                                }}
+                                className={`${draggingTeacherId === row.teacherId ? 'opacity-50 bg-indigo-50' : dragOverTeacherId === row.teacherId ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-300' : selectedTeachers.has(row.teacherId) ? 'bg-indigo-50/30 hover:bg-indigo-50/40' : 'hover:bg-slate-50'}`}
+                            >
                                 <td className="px-4 py-3 text-center">
                                     <input 
                                         type="checkbox" 
@@ -882,7 +952,28 @@ const FixedOvertimePage: React.FC = () => {
                                 <td className="px-4 py-3 text-right font-bold text-green-700 bg-green-50/10">${row.pay.toLocaleString()}</td>
 
                                 <td className="px-2 py-3 text-center">
-                                    <button onClick={() => removeFixedOvertimeConfig(row.teacherId)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                                    <div className="flex items-center justify-center gap-1">
+                                        <button
+                                            type="button"
+                                            draggable={!isSaving}
+                                            onDragStart={(e) => {
+                                                setDraggingTeacherId(row.teacherId);
+                                                setDragOverTeacherId(row.teacherId);
+                                                e.dataTransfer.effectAllowed = 'move';
+                                                e.dataTransfer.setData('text/plain', row.teacherId);
+                                            }}
+                                            onDragEnd={() => {
+                                                setDraggingTeacherId(null);
+                                                setDragOverTeacherId(null);
+                                            }}
+                                            disabled={isSaving || reportData.length <= 1}
+                                            className="text-slate-400 hover:text-indigo-600 p-1 cursor-grab active:cursor-grabbing disabled:text-slate-200 disabled:cursor-not-allowed"
+                                            title="拖曳排序"
+                                        >
+                                            <GripVertical size={16} />
+                                        </button>
+                                        <button onClick={() => removeFixedOvertimeConfig(row.teacherId)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="移除"><Trash2 size={16} /></button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}

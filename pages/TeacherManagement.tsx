@@ -486,7 +486,22 @@ export default function TeacherManagement() {
       }
 
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = t.name.toLowerCase().includes(searchLower) || t.expertise?.some(e => e.includes(searchTerm));
+      const scheduleClassNames = (t.defaultSchedule || []).map(slot => slot.className || '').join(' ');
+      const searchableText = [
+          t.name,
+          t.type,
+          t.jobTitle,
+          t.teacherRole,
+          t.teachingClasses,
+          t.subjects,
+          scheduleClassNames,
+          ...(t.expertise || [])
+      ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+      const matchesSearch = searchableText.includes(searchLower);
       if (!matchesSearch) return false;
 
       if (filterOvertimeOnly) {
@@ -629,7 +644,7 @@ export default function TeacherManagement() {
       {/* Search */}
       <div className="mb-6 relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-        <input type="text" placeholder="搜尋姓名、類別或專長..." className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+        <input type="text" placeholder="搜尋姓名、班級、職別、科目或專長..." className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
       </div>
 
       {/* Table */}

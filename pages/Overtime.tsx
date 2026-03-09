@@ -7,7 +7,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { TeacherType, OvertimeRecord, HOURLY_RATE, Teacher, ReductionItem, PayType } from '../types';
-import { Calendar, Calculator, Coins, Save, AlertCircle, ChevronLeft, ChevronRight, GraduationCap, X, Clock, Info, RefreshCcw, RefreshCw, Flag, CloudUpload, Loader2, Search, Filter, MinusCircle, Plus, Trash2, Edit2, Settings, AlertTriangle, ArrowDownToLine, Printer, FileText, FileOutput, Users, Copy, BarChart3, RotateCcw } from 'lucide-react';
+import { Calendar, Calculator, Coins, Save, AlertCircle, ChevronLeft, ChevronRight, GraduationCap, X, Clock, Info, RefreshCcw, RefreshCw, Flag, CloudUpload, Loader2, Search, Filter, MinusCircle, Plus, Trash2, Edit2, Settings, AlertTriangle, ArrowDownToLine, Printer, FileText, FileOutput, Users, Copy, BarChart3, RotateCcw, GripVertical } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import { getStandardBase, parseLocalDate, normalizeDateString, getEffectiveFixedOvertimeSlots } from '../utils/calculations';
 import { callGasApi } from '../utils/api';
@@ -276,6 +276,8 @@ const Overtime: React.FC = () => {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false); 
+  const [draggingTeacherId, setDraggingTeacherId] = useState<string | null>(null);
+  const [dragOverTeacherId, setDragOverTeacherId] = useState<string | null>(null);
 
   const showModal = (title: string, message: React.ReactNode, type: ModalType = 'info', onConfirm?: () => void) => { 
       setModal({ 
@@ -405,11 +407,12 @@ const Overtime: React.FC = () => {
       return { grossCount, netCount, details: log };
   };
 
-  const calculateSubstituteAdditions = (teacherId: string): { count: number, details: string[] } => {
+  const calculateSubstituteAdditions = (teacherId: string): { count: number, details: string[], relatedOriginalTeacherIds: string[] } => {
       const [year, month] = selectedMonth.split('-').map(Number);
       const monthPrefix = `${year}-${String(month).padStart(2,'0')}`;
       const seenDatePeriod = new Set<string>();
       const groupByDateOriginal = new Map<string, { date: string; originalName: string; periods: Set<string> }>();
+      const relatedOriginalTeacherIds = new Set<string>();
 
       (leaveRecords || []).forEach(record => {
           const normStart = normalizeDateString(record.startDate);
@@ -436,6 +439,7 @@ const Overtime: React.FC = () => {
                           const key = `${normDate}|${String(slot.period)}`;
                           if (!seenDatePeriod.has(key)) {
                               seenDatePeriod.add(key);
+                              relatedOriginalTeacherIds.add(record.originalTeacherId);
                               const dateKey = normDate.substring(5);
                               const groupKey = `${dateKey}|${originalName}`;
                               if (!groupByDateOriginal.has(groupKey)) {
@@ -471,6 +475,7 @@ const Overtime: React.FC = () => {
                       const key = `${normDate}|${pStr}`;
                       if (!seenDatePeriod.has(key)) {
                           seenDatePeriod.add(key);
+                          relatedOriginalTeacherIds.add(record.originalTeacherId);
                           handledPeriodsByDate[normDate].add(pStr);
                           newPeriodsForThisDetail.push(pStr);
                           if (!groupByDateOriginal.has(groupKey)) {
@@ -487,6 +492,7 @@ const Overtime: React.FC = () => {
                               const key = `${legacyKeyBase}|${i}`;
                               if (!seenDatePeriod.has(key)) {
                                   seenDatePeriod.add(key);
+                                  relatedOriginalTeacherIds.add(record.originalTeacherId);
                                   if (!groupByDateOriginal.has(groupKey)) {
                                       groupByDateOriginal.set(groupKey, { date: dateKey, originalName, periods: new Set() });
                                   }
@@ -503,7 +509,7 @@ const Overtime: React.FC = () => {
           const sorted = Array.from(periods).sort((a, b) => periodOrderOvertime.indexOf(a) - periodOrderOvertime.indexOf(b));
           details.push(`${date}(${sorted.join('、')}節)代${originalName}`);
       });
-      return { count: seenDatePeriod.size, details };
+      return { count: seenDatePeriod.size, details, relatedOriginalTeacherIds: Array.from(relatedOriginalTeacherIds) };
   };
 
   const calculateLeaveDeductionsFromRecords = (teacherId: string): { count: number, details: string[] } => {
@@ -612,10 +618,12 @@ const Overtime: React.FC = () => {
             : Math.max(0, Math.ceil(Math.max(0, finalWeeklyActual - (existing?.weeklyBasic ?? defaultBasic)) * (existing?.weeksCount ?? calculatedWeeks)) - leaveDeductionsData.count + subData.count + (existing?.adjustment || 0));
 
         const finalLeaveDeductions = hasPreciseConfig ? preciseData.details : leaveDeductionsData.details;
+        const isSubstituteOnly = !hasPreciseConfig && subData.count > 0 && finalOvertimeCount === 0;
 
         return {
             teacher: t,
             recordId,
+            sortOrder: existing?.sortOrder ?? null,
             standardBase, 
             reduction: totalReduction,
             reductionDetails,
@@ -635,9 +643,17 @@ const Overtime: React.FC = () => {
             validationBalance,
             finalOvertimeCount,
             displayCount,
+            isSubstituteOnly,
         };
     });
   }, [internalTeachers, overtimeRecords, selectedMonth, calculatedWeeks, leaveRecords, holidays, settings?.semesterStart, settings?.semesterEnd, graduationDate, fixedOvertimeConfig]);
+
+  const compareRowsBySortOrder = (a: typeof rowData[number], b: typeof rowData[number]) => {
+      const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const bSort = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      if (aSort !== bSort) return aSort - bSort;
+      return (a.teacher.name || '').localeCompare((b.teacher.name || ''), 'zh-Hant', { numeric: true });
+  };
 
   const filteredRowData = useMemo(() => {
       let data = rowData;
@@ -652,7 +668,47 @@ const Overtime: React.FC = () => {
           const lower = searchTerm.toLowerCase();
           data = data.filter(row => (row.teacher.name || '').toLowerCase().includes(lower) || (row.teacher.jobTitle || '').toLowerCase().includes(lower) || (row.teacher.teacherRole || '').toLowerCase().includes(lower));
       }
-      return data;
+      const baseSorted = [...data].sort(compareRowsBySortOrder);
+      const anchoredSubstituteIds = new Set(
+          baseSorted
+              .filter(row => row.isSubstituteOnly && row.subAdditions.relatedOriginalTeacherIds.length > 0)
+              .map(row => row.teacher.id)
+      );
+      const substituteRowsByOriginal = new Map<string, typeof baseSorted>();
+
+      baseSorted.forEach(row => {
+          if (!row.isSubstituteOnly) return;
+          row.subAdditions.relatedOriginalTeacherIds.forEach(originalTeacherId => {
+              if (!substituteRowsByOriginal.has(originalTeacherId)) {
+                  substituteRowsByOriginal.set(originalTeacherId, []);
+              }
+              substituteRowsByOriginal.get(originalTeacherId)!.push(row);
+          });
+      });
+
+      const placedIds = new Set<string>();
+      const orderedRows: typeof baseSorted = [];
+
+      baseSorted.forEach(row => {
+          if (placedIds.has(row.teacher.id) || anchoredSubstituteIds.has(row.teacher.id)) return;
+          orderedRows.push(row);
+          placedIds.add(row.teacher.id);
+
+          const linkedSubstituteRows = substituteRowsByOriginal.get(row.teacher.id) || [];
+          linkedSubstituteRows.forEach(substituteRow => {
+              if (placedIds.has(substituteRow.teacher.id)) return;
+              orderedRows.push(substituteRow);
+              placedIds.add(substituteRow.teacher.id);
+          });
+      });
+
+      baseSorted.forEach(row => {
+          if (placedIds.has(row.teacher.id)) return;
+          orderedRows.push(row);
+          placedIds.add(row.teacher.id);
+      });
+
+      return orderedRows;
   }, [rowData, searchTerm, showConfiguredOnly]);
 
   const handleCellChange = (teacherId: string, field: keyof OvertimeRecord, value: any) => {
@@ -665,6 +721,7 @@ const Overtime: React.FC = () => {
           id: recordId, 
           teacherId, 
           yearMonth: selectedMonth, 
+          sortOrder: existing?.sortOrder,
           weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0, 
           weeklyActual: teacher?.defaultSchedule?.length || 0, 
           weeksCount: calculatedWeeks, 
@@ -676,6 +733,76 @@ const Overtime: React.FC = () => {
       };
       const updatedRecord = { ...baseRecord, [field]: numVal, updatedAt: Date.now() };
       updateOvertimeRecord(updatedRecord);
+  };
+
+  const persistRowOrder = async (orderedRows: typeof rowData) => {
+      await Promise.all(orderedRows.map((row, index) => {
+          const existing = (overtimeRecords || []).find(r => r.id === row.recordId);
+          const teacher = (teachers || []).find(t => t.id === row.teacher.id);
+          const record: OvertimeRecord = existing || {
+              id: row.recordId,
+              teacherId: row.teacher.id,
+              yearMonth: selectedMonth,
+              sortOrder: index,
+              weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0,
+              weeklyActual: teacher?.defaultSchedule?.length || 0,
+              weeksCount: calculatedWeeks,
+              adjustment: 0,
+              adjustmentReason: '',
+              note: '',
+              updatedAt: Date.now(),
+              overtimeSlots: []
+          };
+          return updateOvertimeRecord({
+              ...record,
+              sortOrder: index,
+              updatedAt: Date.now()
+          });
+      }));
+  };
+
+  const buildReorderedRows = (draggedTeacherId: string, targetTeacherId: string) => {
+      const fullOrderedRows = [...rowData].sort(compareRowsBySortOrder);
+      const visibleIds = new Set(filteredRowData.map(row => row.teacher.id));
+      const visibleRows = fullOrderedRows.filter(row => visibleIds.has(row.teacher.id));
+      const draggedRow = visibleRows.find(row => row.teacher.id === draggedTeacherId);
+      const targetIndex = visibleRows.findIndex(row => row.teacher.id === targetTeacherId);
+      if (!draggedRow || targetIndex === -1) return null;
+
+      const reorderedVisibleRows = visibleRows.filter(row => row.teacher.id !== draggedTeacherId);
+      reorderedVisibleRows.splice(targetIndex, 0, draggedRow);
+
+      let visiblePointer = 0;
+      return fullOrderedRows.map(row => (
+          visibleIds.has(row.teacher.id) ? reorderedVisibleRows[visiblePointer++] : row
+      ));
+  };
+
+  const handleDropRow = async (targetTeacherId: string) => {
+      if (isSaving || filteredRowData.length <= 1 || !draggingTeacherId || draggingTeacherId === targetTeacherId) {
+          setDraggingTeacherId(null);
+          setDragOverTeacherId(null);
+          return;
+      }
+
+      const mergedRows = buildReorderedRows(draggingTeacherId, targetTeacherId);
+      if (!mergedRows) {
+          setDraggingTeacherId(null);
+          setDragOverTeacherId(null);
+          return;
+      }
+
+      setIsSaving(true);
+      try {
+          await persistRowOrder(mergedRows);
+      } catch (error) {
+          console.error('Failed to save overtime row order', error);
+          showModal('排序失敗', '無法儲存超鐘點清冊排序，請稍後再試。', 'error');
+      } finally {
+          setIsSaving(false);
+          setDraggingTeacherId(null);
+          setDragOverTeacherId(null);
+      }
   };
 
   const handleSaveSchedule = (slots: { day: number; period: string }[]) => { if (!scheduleModal.teacherId) return; handleCellChange(scheduleModal.teacherId, 'overtimeSlots', slots); };
@@ -698,6 +825,7 @@ const Overtime: React.FC = () => {
                         id: newRecordId,
                         teacherId: teacher.id,
                         yearMonth: selectedMonth,
+                        sortOrder: existing?.sortOrder,
                         weeklyBasic: existing?.weeklyBasic ?? calculateDefaultBasic(teacher),
                         weeklyActual: existing?.weeklyActual ?? (teacher.defaultSchedule?.length || 0),
                         weeksCount: existing?.weeksCount ?? calculatedWeeks,
@@ -746,6 +874,7 @@ const Overtime: React.FC = () => {
             ...prev,
             id: newRecordId,
             yearMonth: selectedMonth,
+            sortOrder: existing?.sortOrder ?? prev.sortOrder,
             updatedAt: Date.now(),
             // 保留目前的調整與備註
             adjustment: existing?.adjustment ?? 0,
@@ -761,6 +890,14 @@ const Overtime: React.FC = () => {
     });
     
     showModal('成功', `已從 ${prevMonthStr} 複製 ${count} 位教師的設定。`, 'success');
+  };
+
+  const formatExportJobTitle = (teacher: Teacher) => {
+      const baseTitle = teacher.jobTitle || teacher.teacherRole || '';
+      const classLabel = (teacher.teachingClasses || '').trim();
+      const isHomeroomTitle = baseTitle.includes('導師');
+      if (!isHomeroomTitle || !classLabel) return baseTitle;
+      return classLabel;
   };
 
   // Fixed Export Function with Fallback Link and Filter logic
@@ -800,7 +937,7 @@ const Overtime: React.FC = () => {
               return {
                   teacherId: row.teacher.id,
                   teacherName: row.teacher.name,
-                  jobTitle: row.teacher.jobTitle || row.teacher.teacherRole,
+                  jobTitle: formatExportJobTitle(row.teacher),
                   
                   // Columns C, D, E, F
                   standard: row.standardBase,
@@ -872,7 +1009,7 @@ const Overtime: React.FC = () => {
   }, 0);
 
   const activeTeacher = useMemo(() => (teachers || []).find(t => t.id === scheduleModal.teacherId), [teachers, scheduleModal.teacherId]);
-  const activeRecord = useMemo(() => (overtimeRecords || []).find(r => r.id === `${selectedMonth}_${scheduleModal.teacherId}`) || { id: '', teacherId: '', yearMonth: selectedMonth, weeklyBasic: 0, weeklyActual: 0, weeksCount: 0, adjustment: 0, adjustmentReason: '', note: '', updatedAt: 0, overtimeSlots: [] }, [overtimeRecords, selectedMonth, scheduleModal.teacherId]);
+  const activeRecord = useMemo(() => (overtimeRecords || []).find(r => r.id === `${selectedMonth}_${scheduleModal.teacherId}`) || { id: '', teacherId: '', yearMonth: selectedMonth, sortOrder: undefined, weeklyBasic: 0, weeklyActual: 0, weeksCount: 0, adjustment: 0, adjustmentReason: '', note: '', updatedAt: 0, overtimeSlots: [] }, [overtimeRecords, selectedMonth, scheduleModal.teacherId]);
 
   return (
     <div className="p-8 pb-20">
@@ -1013,6 +1150,9 @@ const Overtime: React.FC = () => {
               <button onClick={() => setShowConfiguredOnly(!showConfiguredOnly)} className={`px-3 py-2.5 rounded-lg border font-bold flex items-center transition-colors whitespace-nowrap ${showConfiguredOnly ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}><Filter size={18} className="mr-2"/>{showConfiguredOnly ? '僅顯示超鐘點' : '顯示全部'}</button>
           </div>
       </div>
+      <div className="mb-3 text-xs text-slate-500">
+          拖曳每列右側把手即可調整清冊順序，排序會自動儲存。
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
          <div className="overflow-x-auto">
@@ -1028,11 +1168,11 @@ const Overtime: React.FC = () => {
                          <th className="px-2 py-3 font-semibold text-slate-700 text-center w-32 bg-amber-50/50">特殊調整<br/><span className="text-[10px] font-normal">(總節數)</span></th>
                          <th className="px-4 py-3 font-semibold text-slate-700 w-48">備註 / 扣除紀錄</th>
                          <th className="px-4 py-3 font-semibold text-slate-700 text-right w-32">金額</th>
-                         <th className="px-4 py-3 font-semibold text-slate-700 text-center w-20">操作</th>
+                         <th className="px-4 py-3 font-semibold text-slate-700 text-center w-28">拖曳 / 操作</th>
                      </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
-                     {filteredRowData.map((row) => {
+                     {filteredRowData.map((row, index) => {
                          const onlySubstitute = !row.hasPreciseConfig && row.subAdditions.count > 0 && row.finalOvertimeCount === 0;
                          let calcMethod = ''; 
                          if (row.hasPreciseConfig) { calcMethod = 'precise'; } 
@@ -1042,7 +1182,19 @@ const Overtime: React.FC = () => {
                          const isHomeroom = row.teacher.isHomeroom || (row.teacher.teacherRole && row.teacher.teacherRole.includes('導師')) || (row.teacher.jobTitle && row.teacher.jobTitle.includes('導師'));
 
                          return (
-                             <tr key={row.teacher.id} className="hover:bg-slate-50 transition-colors">
+                            <tr
+                                key={row.teacher.id}
+                                onDragOver={(e) => {
+                                    if (!draggingTeacherId || draggingTeacherId === row.teacher.id) return;
+                                    e.preventDefault();
+                                    setDragOverTeacherId(row.teacher.id);
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    handleDropRow(row.teacher.id);
+                                }}
+                                className={`transition-colors ${draggingTeacherId === row.teacher.id ? 'opacity-50 bg-indigo-50' : dragOverTeacherId === row.teacher.id ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-300' : 'hover:bg-slate-50'}`}
+                            >
                                  <td className="px-4 py-3 group cursor-pointer" onClick={() => !onlySubstitute && setScheduleModal({ isOpen: true, teacherId: row.teacher.id })}>
                                      <div className="font-bold text-indigo-700 group-hover:text-indigo-900 flex items-center underline decoration-dotted decoration-indigo-300 underline-offset-4">{row.teacher.name}{isGraduating && <span title="畢業班導師" className="flex items-center ml-2 text-blue-500"><GraduationCap size={14} /></span>}{!onlySubstitute && <Clock size={14} className="ml-2 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"/>}</div>
                                      <div className="text-xs text-slate-500 mt-1 flex items-center"><span>{row.teacher.teacherRole || row.teacher.jobTitle || '一般教師'}</span>{isHomeroom && row.teacher.teachingClasses && (<span className="ml-2 bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">{row.teacher.teachingClasses}</span>)}</div>
@@ -1069,15 +1221,38 @@ const Overtime: React.FC = () => {
                                  <td className="px-4 py-3"><div className="flex flex-col space-y-1"><input type="text" className="w-full text-xs border border-slate-200 rounded px-2 py-1 placeholder-slate-300" placeholder="手動調整原因..." value={row.adjustmentReason} onChange={(e) => handleCellChange(row.teacher.id, 'adjustmentReason', e.target.value)} />{row.leaveDeductions && row.leaveDeductions.length > 0 && (<div className="text-[10px] text-rose-500 bg-rose-50 p-1 rounded mt-1">{row.leaveDeductions.map((d, i) => (<div key={i}>- {d}</div>))}</div>)}{row.subAdditions && row.subAdditions.details.length > 0 && (<div className="text-[10px] text-emerald-600 bg-emerald-50 p-1 rounded mt-1">{row.subAdditions.details.map((d, i) => (<div key={i}>+ {d}</div>))}</div>)}</div></td>
                                  <td className="px-4 py-3 text-right"><div className="font-bold text-slate-800">${totalPay.toLocaleString()}</div></td>
                                  <td className="px-4 py-3 text-center">
-                                     {onlySubstitute ? (<span className="text-slate-300">—</span>) : (
-                                     <button 
-                                         onClick={() => handleResetToSchedule(row.teacher.id)} 
-                                         className="text-slate-400 hover:text-indigo-600 p-1"
-                                         title="重設為預設課表"
-                                     >
-                                         <RefreshCw size={16} />
-                                     </button>
-                                     )}
+                                     <div className="flex items-center justify-center gap-1">
+                                         <button
+                                             type="button"
+                                             draggable={!isSaving}
+                                             onDragStart={(e) => {
+                                                 setDraggingTeacherId(row.teacher.id);
+                                                 setDragOverTeacherId(row.teacher.id);
+                                                 e.dataTransfer.effectAllowed = 'move';
+                                                 e.dataTransfer.setData('text/plain', row.teacher.id);
+                                             }}
+                                             onDragEnd={() => {
+                                                 setDraggingTeacherId(null);
+                                                 setDragOverTeacherId(null);
+                                             }}
+                                             disabled={isSaving || filteredRowData.length <= 1}
+                                             className="text-slate-400 hover:text-indigo-600 p-1 cursor-grab active:cursor-grabbing disabled:text-slate-200 disabled:cursor-not-allowed"
+                                             title="拖曳排序"
+                                         >
+                                             <GripVertical size={16} />
+                                         </button>
+                                         {onlySubstitute ? (
+                                             <span className="text-slate-300 px-1">—</span>
+                                         ) : (
+                                             <button 
+                                                 onClick={() => handleResetToSchedule(row.teacher.id)} 
+                                                 className="text-slate-400 hover:text-indigo-600 p-1"
+                                                 title="重設為預設課表"
+                                             >
+                                                 <RefreshCw size={16} />
+                                             </button>
+                                         )}
+                                     </div>
                                  </td>
                              </tr>
                          );
