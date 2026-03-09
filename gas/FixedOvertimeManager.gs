@@ -159,6 +159,7 @@ var FixedOvertimeManager = {
   _fillFixedOvertimeReport: function(sheet, reportData, dayCounts, substituteTeachers) {
       substituteTeachers = substituteTeachers || [];
       var weekDays = ['一', '二', '三', '四', '五'];
+      var substituteMap = {};
       
       for (var i = 0; i < 5; i++) {
           sheet.getRange(5, 3 + i).setValue(weekDays[i] + "\n(" + dayCounts[i] + "次)");
@@ -167,6 +168,14 @@ var FixedOvertimeManager = {
 
       var startRow = 6;
       var rowsData = [];
+
+      substituteTeachers.forEach(function(item) {
+          var originalTeacherId = item.originalTeacherId || '';
+          if (!substituteMap[originalTeacherId]) {
+              substituteMap[originalTeacherId] = [];
+          }
+          substituteMap[originalTeacherId].push(item);
+      });
 
       reportData.forEach(function(item) {
           var periods = item.overtimePattern || [0,0,0,0,0];
@@ -198,29 +207,28 @@ var FixedOvertimeManager = {
               ''
           ];
           rowsData.push(row);
-      });
 
-      // 協助代課教師列（職別「代課」、節數與金額）
-      substituteTeachers.forEach(function(item) {
-          var r = startRow + rowsData.length;
-          var sessions = Number(item.substituteSessions) || 0;
-          var pay = Number(item.pay) || 0;
-          var detailStr = (item.substituteDetails && item.substituteDetails.length) ? item.substituteDetails.join('；') : '';
-          var row = [
-              item.teacherName,    // A: 姓名
-              "代課",              // B: 職別
-              0, 0, 0, 0, 0,      // C~G: 週一～五留 0
-              sessions,            // H: 小計（代課節數）
-              0,                  // I: 本次應上節數
-              0,                  // J: 本次增減
-              sessions,            // K: 本次實際
-              405,                 // L: 鐘點費
-              pay,                 // M: 本次金額（數字，納入合計）
-              '', '', '', '',
-              detailStr,           // R: 備註（代課明細）
-              ''
-          ];
-          rowsData.push(row);
+          // 代課教師依前端頁面順序，直接接在對應固定兼課教師下方
+          var relatedSubs = substituteMap[item.teacherId] || [];
+          relatedSubs.forEach(function(subItem) {
+              var subSessions = Number(subItem.substituteSessions) || 0;
+              var subPay = Number(subItem.pay) || 0;
+              var subDetailStr = (subItem.substituteDetails && subItem.substituteDetails.length) ? subItem.substituteDetails.join('；') : '';
+              rowsData.push([
+                  subItem.teacherName,
+                  "代課",
+                  0, 0, 0, 0, 0,
+                  subSessions,
+                  0,
+                  0,
+                  subSessions,
+                  405,
+                  subPay,
+                  '', '', '', '',
+                  subDetailStr,
+                  ''
+              ]);
+          });
       });
 
       if (rowsData.length > 0) {

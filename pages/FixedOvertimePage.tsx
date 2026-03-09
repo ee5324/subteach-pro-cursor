@@ -391,62 +391,108 @@ const FixedOvertimePage: React.FC = () => {
       }).filter(item => item !== null) as any[]; 
   }, [orderedFixedConfigs, teachers, records, weekdayCounts, gradeEvents, selectedMonth, semesterStart, semesterEnd]);
 
-  // 當月協助代固定兼課教師代課者：加入清冊並顯示應領金額（僅鐘點費代課，日薪不計）；同日、同被代課者合併為一行
+  // 當月協助代固定兼課教師代課者：依頁面固定兼課教師順序，直接列在對應教師下方
   const periodOrderSub = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
   const substituteTeachersList = useMemo(() => {
-    const fixedIds = new Set((fixedOvertimeConfig || []).map(c => c.teacherId));
     const monthPrefix = selectedMonth;
-    const list: { teacherId: string; teacherName: string; jobTitle: string; substituteSessions: number; substituteDetails: string[]; pay: number }[] = [];
-    (teachers || []).forEach(teacher => {
-      if (fixedIds.has(teacher.id)) return;
-      const seen = new Set<string>();
-      const groupByDateOriginal = new Map<string, { date: string; originalName: string; periods: Set<string> }>();
+    const list: {
+      teacherId: string;
+      teacherName: string;
+      jobTitle: string;
+      originalTeacherId: string;
+      originalTeacherName: string;
+      substituteSessions: number;
+      substituteDetails: string[];
+      pay: number;
+    }[] = [];
+
+    reportData.forEach(originalRow => {
+      const groupBySubTeacher = new Map<string, {
+        teacherId: string;
+        teacherName: string;
+        jobTitle: string;
+        originalTeacherId: string;
+        originalTeacherName: string;
+        seen: Set<string>;
+        detailGroups: Map<string, { date: string; periods: Set<string> }>;
+      }>();
+
       (records || []).forEach(record => {
-        const config = (fixedOvertimeConfig || []).find(c => c.teacherId === record.originalTeacherId);
-        if (!config) return;
-        const originalTeacher = (teachers || []).find(t => t.id === record.originalTeacherId);
-        const effectiveSlots = getEffectiveFixedOvertimeSlots(originalTeacher, config);
-        if (!effectiveSlots.length) return;
-        if (!record.slots) return;
-        const originalName = originalTeacher?.name || '老師';
+        if (record.originalTeacherId !== originalRow.teacherId || !record.slots) return;
+
         record.slots.forEach(slot => {
-          if (slot.substituteTeacherId !== teacher.id || !slot.date.startsWith(monthPrefix)) return;
+          if (!slot.substituteTeacherId || !slot.date.startsWith(monthPrefix)) return;
           const isDailyPay = slot.payType === PayType.DAILY || (slot as any).payType === '日薪';
           if (isDailyPay) return;
+
           const slotDate = parseLocalDate(slot.date);
           const dayOfWeek = slotDate.getDay();
-          const isFixedSlot = effectiveSlots.some(s => s.day === dayOfWeek && String(s.period) === String(slot.period));
+          const isFixedSlot = (originalRow.scheduleSlots || []).some(
+            s => s.day === dayOfWeek && String(s.period) === String(slot.period)
+          );
           if (!isFixedSlot) return;
-          const key = `${slot.date}|${String(slot.period)}`;
-          if (seen.has(key)) return;
-          seen.add(key);
-          const dateKey = slot.date.slice(5);
-          const groupKey = `${dateKey}|${originalName}`;
-          if (!groupByDateOriginal.has(groupKey)) {
-            groupByDateOriginal.set(groupKey, { date: dateKey, originalName, periods: new Set() });
+
+          const substituteTeacher = (teachers || []).find(t => t.id === slot.substituteTeacherId);
+          if (!groupBySubTeacher.has(slot.substituteTeacherId)) {
+            groupBySubTeacher.set(slot.substituteTeacherId, {
+              teacherId: slot.substituteTeacherId,
+              teacherName: substituteTeacher?.name || slot.substituteTeacherId,
+              jobTitle: substituteTeacher?.jobTitle || substituteTeacher?.teacherRole || '',
+              originalTeacherId: originalRow.teacherId,
+              originalTeacherName: originalRow.teacherName,
+              seen: new Set<string>(),
+              detailGroups: new Map<string, { date: string; periods: Set<string> }>()
+            });
           }
-          groupByDateOriginal.get(groupKey)!.periods.add(String(slot.period));
+
+          const subRow = groupBySubTeacher.get(slot.substituteTeacherId)!;
+          const key = `${slot.date}|${String(slot.period)}|${slot.substituteTeacherId}`;
+          if (subRow.seen.has(key)) return;
+          subRow.seen.add(key);
+
+          const dateKey = slot.date.slice(5);
+          if (!subRow.detailGroups.has(dateKey)) {
+            subRow.detailGroups.set(dateKey, { date: dateKey, periods: new Set() });
+          }
+          subRow.detailGroups.get(dateKey)!.periods.add(String(slot.period));
         });
       });
-      const substituteSessions = seen.size;
-      if (substituteSessions > 0) {
+
+      groupBySubTeacher.forEach(subRow => {
+        const substituteSessions = subRow.seen.size;
+        if (substituteSessions <= 0) return;
+
         const details: string[] = [];
-        groupByDateOriginal.forEach(({ date, originalName, periods }) => {
+        subRow.detailGroups.forEach(({ date, periods }) => {
           const sorted = Array.from(periods).sort((a, b) => periodOrderSub.indexOf(a) - periodOrderSub.indexOf(b));
-          details.push(`${date} 第${sorted.join('、')}節 代${originalName}`);
+          details.push(`${date} 第${sorted.join('、')}節 代${subRow.originalTeacherName}`);
         });
+
         list.push({
-          teacherId: teacher.id,
-          teacherName: teacher.name,
-          jobTitle: teacher.jobTitle || teacher.teacherRole || '',
+          teacherId: subRow.teacherId,
+          teacherName: subRow.teacherName,
+          jobTitle: subRow.jobTitle,
+          originalTeacherId: subRow.originalTeacherId,
+          originalTeacherName: subRow.originalTeacherName,
           substituteSessions,
           substituteDetails: details,
           pay: Math.round(substituteSessions * HOURLY_RATE),
         });
-      }
+      });
     });
     return list;
-  }, [fixedOvertimeConfig, teachers, records, selectedMonth]);
+  }, [reportData, teachers, records, selectedMonth]);
+
+  const substituteTeachersByOriginal = useMemo(() => {
+    const map = new Map<string, typeof substituteTeachersList>();
+    substituteTeachersList.forEach(item => {
+      if (!map.has(item.originalTeacherId)) {
+        map.set(item.originalTeacherId, []);
+      }
+      map.get(item.originalTeacherId)!.push(item);
+    });
+    return map;
+  }, [substituteTeachersList]);
 
   const totalPay = reportData.reduce((sum, item) => sum + item.pay, 0) + substituteTeachersList.reduce((sum, item) => sum + item.pay, 0);
 
@@ -611,6 +657,7 @@ const FixedOvertimePage: React.FC = () => {
           
           // Filter reportData based on selection
           const selectedReportData = reportData.filter(item => selectedTeachers.has(item.teacherId));
+          const selectedSubstituteTeachers = substituteTeachersList.filter(item => selectedTeachers.has(item.originalTeacherId));
 
           // Map local reportData to what GAS expects (Precise Mode Format)
           const payload = selectedReportData.map(item => {
@@ -644,7 +691,7 @@ const FixedOvertimePage: React.FC = () => {
               year, 
               month, 
               reportData: payload,
-              substituteTeachers: substituteTeachersList,
+              substituteTeachers: selectedSubstituteTeachers,
               semesterStart: semesterStart,
               semesterEnd: semesterEnd,
               docNumber: docNumber,
@@ -837,6 +884,7 @@ const FixedOvertimePage: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                         {reportData.map((row) => (
+                            <React.Fragment key={`group-${row.teacherId}`}>
                             <tr
                                 key={row.teacherId}
                                 onDragOver={(e) => {
@@ -976,34 +1024,35 @@ const FixedOvertimePage: React.FC = () => {
                                     </div>
                                 </td>
                             </tr>
-                        ))}
-                        {substituteTeachersList.map((row) => (
-                            <tr key={`sub-${row.teacherId}`} className="hover:bg-slate-50 bg-emerald-50/30">
+                            {(substituteTeachersByOriginal.get(row.teacherId) || []).map((subRow) => (
+                            <tr key={`sub-${row.teacherId}-${subRow.teacherId}`} className="hover:bg-slate-50 bg-emerald-50/30">
                                 <td className="px-4 py-3 text-center"><span className="text-slate-300">-</span></td>
                                 <td className="px-4 py-3">
                                     <div className="font-bold text-emerald-700 flex items-center">
-                                        {row.teacherName}
+                                        {subRow.teacherName}
                                         <span className="ml-2 text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-normal">代課</span>
                                     </div>
-                                    <div className="text-xs text-slate-500 mt-1">{row.jobTitle}</div>
+                                    <div className="text-xs text-slate-500 mt-1">{subRow.jobTitle}</div>
                                 </td>
                                 {[0, 1, 2, 3, 4].map(dayIdx => (<td key={dayIdx} className="px-2 py-3 text-center bg-blue-50/10 text-slate-300">-</td>))}
                                 <td className="px-4 py-3 text-right text-slate-500 border-l">0</td>
                                 <td className="px-2 py-3">
                                     <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] p-1 rounded font-bold">
-                                        代課 +{row.substituteSessions} 節
+                                        代課 +{subRow.substituteSessions} 節
                                     </div>
-                                    {row.substituteDetails && row.substituteDetails.length > 0 && (
+                                    {subRow.substituteDetails && subRow.substituteDetails.length > 0 && (
                                         <ul className="text-[9px] text-emerald-600 list-disc list-inside mt-0.5 pl-0.5">
-                                            {row.substituteDetails.slice(0, 5).map((d: string, i: number) => (<li key={i}>{d}</li>))}
-                                            {row.substituteDetails.length > 5 && <li className="text-slate-400">…共 {row.substituteDetails.length} 筆</li>}
+                                            {subRow.substituteDetails.slice(0, 5).map((d: string, i: number) => (<li key={i}>{d}</li>))}
+                                            {subRow.substituteDetails.length > 5 && <li className="text-slate-400">…共 {subRow.substituteDetails.length} 筆</li>}
                                         </ul>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-xs text-slate-500">當月代固定兼課教師之節數</td>
-                                <td className="px-4 py-3 text-right font-bold text-green-700 bg-green-50/10">${row.pay.toLocaleString()}</td>
+                                <td className="px-4 py-3 text-right font-bold text-green-700 bg-green-50/10">${subRow.pay.toLocaleString()}</td>
                                 <td className="px-2 py-3"></td>
                             </tr>
+                            ))}
+                            </React.Fragment>
                         ))}
                         {reportData.length === 0 && substituteTeachersList.length === 0 && (<tr><td colSpan={11} className="py-8 text-center text-slate-400">請從上方選擇並新增教師以開始設定</td></tr>)}
                     </tbody>
