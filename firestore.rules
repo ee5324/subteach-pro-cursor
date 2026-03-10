@@ -7,6 +7,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isEduTrackAllowedUser() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.enabled == true;
+    }
+
+    function isEduTrackAdmin() {
+      return isEduTrackAllowedUser()
+        && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.role == 'admin';
+    }
+
     // =========================================================
     // 應用程式資料集合 (Collections)
     // =========================================================
@@ -71,6 +83,32 @@ service cloud.firestore {
     match /substituteApplications/{appId} {
       allow create: if true;
       allow read, update, delete: if isSignedIn();
+    }
+
+    // =========================================================
+    // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
+    // =========================================================
+    match /edutrack_courses/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_students/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_awards/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_vendors/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_archive/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_todos/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_allowed_users/{email} {
+      allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
+      allow create, update, delete: if isEduTrackAdmin();
     }
 
     // =========================================================

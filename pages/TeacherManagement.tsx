@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Teacher, TeacherType, COMMON_SUBJECTS, TeacherScheduleSlot, ReductionItem, TeacherDocument } from '../types';
+import { Teacher, TeacherType, COMMON_SUBJECTS, APPLY_TEACHING_ITEMS, TeacherScheduleSlot, ReductionItem, TeacherDocument } from '../types';
 import { Plus, Edit2, Trash2, Search, X, CloudUpload, Loader2, HelpCircle, GraduationCap, Award, Briefcase, Book, RefreshCw, Star, FileSpreadsheet, AlertTriangle, ArrowRight, CheckCircle, Calendar, Info, Clock, Eraser, MousePointerClick, MinusCircle, FileText, ExternalLink, Paperclip } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
@@ -919,9 +919,9 @@ export default function TeacherManagement() {
                   
                   {formData.type === TeacherType.EXTERNAL ? (
                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                          <label className="block text-xs font-bold text-slate-500 mb-2">點選專長科目 (可多選)</label>
+                          <label className="block text-xs font-bold text-slate-500 mb-2">點選專長科目／可任教項目 (可多選，含報名表選項)</label>
                           <div className="flex flex-wrap gap-2">
-                              {COMMON_SUBJECTS.map(subject => {
+                              {Array.from(new Set([...COMMON_SUBJECTS, ...APPLY_TEACHING_ITEMS])).sort((a, b) => a.localeCompare(b, 'zh-TW')).map(subject => {
                                   const isSelected = formData.expertise?.includes(subject);
                                   return (
                                       <button key={subject} type="button" onClick={() => toggleExpertise(subject)} className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${isSelected ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>

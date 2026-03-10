@@ -440,7 +440,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await setDoc(doc(db, 'teachers', teacherId), newTeacher);
     if (addToSubPoolFlag) {
       if (!subPool.some(i => i.teacherId === teacherId)) {
-        await setDoc(doc(db, 'subPool', teacherId), { teacherId, status: 'available', note: '', updatedAt: Date.now() });
+        const poolNote = [app.unavailableTime ? `無法：${app.unavailableTime}` : '', app.availableTime ? `可代課：${app.availableTime}` : ''].filter(Boolean).join('；');
+        const teachingSubjectStr = (app.teachingItems && app.teachingItems.length > 0) ? app.teachingItems.join(',') : '';
+        await setDoc(doc(db, 'subPool', teacherId), {
+          teacherId,
+          status: 'available',
+          note: poolNote,
+          updatedAt: Date.now(),
+          teachingSubject: teachingSubjectStr,
+        });
       }
     }
     await setDoc(doc(db, 'substituteApplications', id), {
