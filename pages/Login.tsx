@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signInAnonymously,
+} from 'firebase/auth';
 import { auth, googleProvider } from '../src/lib/firebase';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, Mail, Lock, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, Loader2, KeyRound } from 'lucide-react';
+import { isQuickLoginActive, verifyQuickLoginPin } from '../utils/quickLoginStorage';
 
 const Login: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
@@ -10,7 +16,35 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [quickPin, setQuickPin] = useState('');
   const navigate = useNavigate();
+
+  const handleQuickAnonymousLogin = async () => {
+    if (!isQuickLoginActive()) return;
+    setError('');
+    if (!verifyQuickLoginPin(quickPin)) {
+      setError('PIN 錯誤');
+      return;
+    }
+    if (!auth) {
+      setError('Firebase 未初始化，無法登入。');
+      return;
+    }
+    setLoading(true);
+    try {
+      await signInAnonymously(auth);
+      navigate('/');
+    } catch (err: any) {
+      console.error('Anonymous auth failed', err);
+      let msg = err.message || '匿名登入失敗';
+      if (err.code === 'auth/operation-not-allowed') {
+        msg = 'Firebase 尚未啟用匿名登入，請到 Firebase Console → Authentication → Sign-in method 開啟「匿名」。';
+      }
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +168,35 @@ const Login: React.FC = () => {
             {loading ? '處理中...' : isRegistering ? '註冊帳號' : '登入'}
           </button>
         </form>
+
+        {!isRegistering && isQuickLoginActive() && (
+          <div className="mb-6 p-4 rounded-lg border border-amber-200 bg-amber-50">
+            <p className="text-xs font-medium text-amber-800 mb-2 flex items-center gap-1">
+              <KeyRound size={14} />
+              測試用快速進入（PIN 正確後以匿名身分登入）
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={8}
+                value={quickPin}
+                onChange={(e) => setQuickPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="輸入 PIN"
+                className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+              <button
+                type="button"
+                disabled={loading || !quickPin}
+                onClick={handleQuickAnonymousLogin}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                快速進入
+              </button>
+            </div>
+          </div>
+        )}
 
         {!isRegistering && (
           <>

@@ -181,18 +181,25 @@ const FixedOvertimePage: React.FC = () => {
       return '';
   };
 
+  /** 從班級字串解析年級（與 getTeacherGrades 規則一致：301→3、3年級→3 等） */
+  const parseGradesFromString = (str: string): number[] => {
+      const grades: Set<number> = new Set();
+      if (!str || !str.trim()) return [];
+      let s = str.trim().replace(/[０-９]/g, (c: string) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+      s = s.replace(/[，、;；\s]+/g, ' ');
+      const threeDigit = s.match(/([1-6])\d{2}/g);
+      if (threeDigit) threeDigit.forEach((m: string) => grades.add(parseInt(m.charAt(0))));
+      const yearLevel = s.match(/([1-6])年級/g);
+      if (yearLevel) yearLevel.forEach((m: string) => grades.add(parseInt(m.charAt(0))));
+      const yearOnly = s.match(/([1-6])年/g);
+      if (yearOnly) yearOnly.forEach((m: string) => grades.add(parseInt(m.charAt(0))));
+      return Array.from(grades);
+  };
+
   const getTeacherGrades = (teacher: Teacher): number[] => {
       const grades: Set<number> = new Set();
       const addFromStr = (str: string) => {
-          if (!str || !str.trim()) return;
-          let s = str.trim().replace(/[０-９]/g, (c: string) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-          s = s.replace(/[，、;；\s]+/g, ' ');
-          const threeDigit = s.match(/([1-6])\d{2}/g);
-          if (threeDigit) threeDigit.forEach((m: string) => grades.add(parseInt(m.charAt(0))));
-          const yearLevel = s.match(/([1-6])年級/g);
-          if (yearLevel) yearLevel.forEach((m: string) => grades.add(parseInt(m.charAt(0))));
-          const yearOnly = s.match(/([1-6])年/g);
-          if (yearOnly) yearOnly.forEach((m: string) => grades.add(parseInt(m.charAt(0))));
+          parseGradesFromString(str).forEach(g => grades.add(g));
       };
       addFromStr(teacher.teachingClasses || '');
       // 若任課班級未填，改從預設課表之班級名稱解析（如 203、201 → 2年級）
@@ -236,33 +243,70 @@ const FixedOvertimePage: React.FC = () => {
       ];
   }, [weekdayDates]);
 
+  /**
+   * 活動扣除：須依「當天、當節」是否為受影響年級，不可再整週同一天全部扣除。
+   * 有預設課表且格子有班級時，只扣該節班級年級落在 targetGrades 的節數。
+   * 無預設課表（僅固定兼課格子）或課表無班級可辨識時，維持舊邏輯：教師任課年級與活動交集則扣當日總節數。
+   */
   const getEventDeductionDetails = (teacher: Teacher, periodsOverride: number[]) => {
       const teacherGrades = getTeacherGrades(teacher);
-      if (teacherGrades.length === 0) return [];
+      const targetGradesForEvent = (event: GradeEvent) =>
+          (event.targetGrades || []).map((g: number | string) => Number(g));
 
       const affectedEvents: { id: string, title: string, date: string, deduction: number }[] = [];
       const monthPrefix = selectedMonth;
       const activeEvents = gradeEvents.filter(e => eventDateStr(e).startsWith(monthPrefix));
+      const schedule = teacher.defaultSchedule;
 
       activeEvents.forEach(event => {
           const dateStr = eventDateStr(event);
           if (!dateStr) return;
           const eventDate = parseLocalDate(dateStr);
-          const isRelevant = (event.targetGrades || []).some((g: number | string) => teacherGrades.includes(Number(g)));
-          if (!isRelevant) return;
-
           const dayOfWeek = eventDate.getDay();
-          if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-              if (holidays.includes(dateStr)) return;
-              const dailyPeriods = periodsOverride[dayOfWeek - 1] || 0;
-              if (dailyPeriods > 0) {
-                  affectedEvents.push({
-                      id: event.id,
-                      title: event.title,
-                      date: dateStr,
-                      deduction: dailyPeriods
-                  });
+          if (dayOfWeek < 1 || dayOfWeek > 5) return;
+          if (holidays.includes(dateStr)) return;
+
+          const targets = targetGradesForEvent(event);
+
+          let deduction = 0;
+
+          if (schedule && schedule.length > 0) {
+              // 僅統計「活動當天星期幾」且「該節班級年級」落在 targetGrades 的節數
+              const slotsThatWeekday = schedule.filter(s => s.day === dayOfWeek);
+              if (slotsThatWeekday.length === 0) return;
+
+              let matchedByClassName = 0;
+              let hasAnyClassName = false;
+              for (const slot of slotsThatWeekday) {
+                  const className = (slot.className || '').trim();
+                  if (className) hasAnyClassName = true;
+                  const slotGrades = parseGradesFromString(className);
+                  if (slotGrades.length === 0) continue;
+                  if (slotGrades.some(g => targets.includes(g))) matchedByClassName++;
               }
+
+              if (matchedByClassName > 0) {
+                  deduction = matchedByClassName;
+              } else if (!hasAnyClassName && teacherGrades.length > 0) {
+                  // 當天有排課但班級欄皆空：無法分辨年級，沿用舊行為（與教師整體年任課年級比對）
+                  const isRelevant = targets.some(g => teacherGrades.includes(g));
+                  if (isRelevant) deduction = periodsOverride[dayOfWeek - 1] || 0;
+              }
+              // 有班級欄但無任何一格解析出年級、或解析出的年級皆不屬 target → 不扣
+          } else {
+              // 無預設課表（只用固定兼課設定的 day/period，無班級）→ 舊邏輯
+              if (teacherGrades.length === 0) return;
+              const isRelevant = targets.some(g => teacherGrades.includes(g));
+              if (isRelevant) deduction = periodsOverride[dayOfWeek - 1] || 0;
+          }
+
+          if (deduction > 0) {
+              affectedEvents.push({
+                  id: event.id,
+                  title: event.title,
+                  date: dateStr,
+                  deduction
+              });
           }
       });
       return affectedEvents;
@@ -798,7 +842,7 @@ const FixedOvertimePage: React.FC = () => {
             </li>
             <li><strong>活動扣除：</strong>
                <ul className="list-circle pl-5 mt-1 text-slate-500">
-                 <li>固定兼課目前僅能設定「週幾第幾節有課」，<strong>無法在每堂課標註年級班級</strong>。活動扣除是依<strong>「教師管理」裡該教師的任課班級</strong>（如 301、3年級）與本月活動的受影響年級比對；若教師未填任課班級，就不會出現活動扣除警示。</li>
+                 <li>活動扣除會依<strong>教師管理預設課表每一格的班級</strong>（如 301、501）解析年級，只扣「活動當天、且該節班級屬受影響年級」的節數；不同天不同年級不會被整批扣掉。若課表格子未填班級，該節不會依年級扣分；若當天所有格子都沒班級且教師有填任課班級，則仍會依舊邏輯扣當日全部固定節數（與受影響年級有交集時）。僅使用固定兼課格子、未套用教師課表時，維持以任課班級與活動年級比對後扣當日總節數。</li>
                  <li>請先在頁面上方<strong>「本月活動 (校外教學/畢旅)」</strong>區塊點擊<strong>「新增活動」</strong>，輸入活動日期、名稱與受影響年級（如 3、6）。</li>
                  <li>教師的<strong>任課班級</strong>需在「教師管理」中有填寫，活動扣除才會顯示在該教師的<strong>「增減節數」</strong>欄位中（手動輸入框下方）；若任課年級與活動相符且活動當天有排課，會列出建議扣除節數與勾選方塊。</li>
                  <li>若教師已調課（有上課），請<strong>勾選該活動旁的方塊</strong>，系統將忽略該筆扣除。</li>

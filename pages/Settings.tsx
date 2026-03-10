@@ -1,9 +1,11 @@
 
 // pages/Settings.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download } from 'lucide-react';
+import { GAS_WEB_APP_URL } from '../config';
+import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
+import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound } from 'lucide-react';
 import Modal, { ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
@@ -13,6 +15,11 @@ const Settings: React.FC = () => {
   const [tempUrl, setTempUrl] = useState(settings.gasWebAppUrl);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'loading' | 'migrating' | 'success' | 'error'>('idle');
+
+  // PIN 測試登入（本機 localStorage，登入頁讀取）
+  const [quickLoginEnabled, setQuickLoginEnabled] = useState(() => getQuickLoginConfig().enabled);
+  const [quickLoginPin, setQuickLoginPin] = useState(() => getQuickLoginConfig().pin);
+  const [quickLoginSaved, setQuickLoginSaved] = useState(false);
 
   // Modal State
   const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: ModalType }>({
@@ -65,6 +72,20 @@ const Settings: React.FC = () => {
 
   const sortedHolidays = [...holidays].sort((a, b) => b.localeCompare(a));
 
+  /** 與 store 內 loadFromGas 一致：設定有值用設定，否則用 config 預設 */
+  const effectiveGasUrl = useMemo(
+    () => (settings.gasWebAppUrl && settings.gasWebAppUrl.trim()) || GAS_WEB_APP_URL || '',
+    [settings.gasWebAppUrl]
+  );
+
+  const copyToClipboard = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(
+      () => setModal({ isOpen: true, title: '已複製', message: '網址已複製到剪貼簿。', type: 'success' }),
+      () => setModal({ isOpen: true, title: '複製失敗', message: '無法寫入剪貼簿，請手動選取複製。', type: 'error' })
+    );
+  };
+
   return (
     <div className="p-8 pb-32 max-w-4xl mx-auto">
       <Modal 
@@ -90,6 +111,9 @@ const Settings: React.FC = () => {
           </CollapsibleItem>
           <CollapsibleItem title="國定假日管理">
             <p>新增或移除國定假日與補假。系統在「精確模式計算」或「自動產生代課單」時會自動跳過這些日期，避免誤算代課費。</p>
+          </CollapsibleItem>
+          <CollapsibleItem title="PIN 測試登入">
+            <p>在設定頁可開啟「PIN 測試登入」並設定 PIN；登入頁會顯示快速進入（匿名）。不需要時取消勾選即可關閉。設定存在本機瀏覽器，不會同步到其他電腦。</p>
           </CollapsibleItem>
           <CollapsibleItem title="Google Apps Script (GAS) 連線">
             <p>設定 GAS 的 Web App URL。此連線用於：1. 產生 Excel/Word 報表 2. 存取 Google Drive 檔案 3. 從舊版試算表匯入資料。</p>
@@ -217,6 +241,72 @@ const Settings: React.FC = () => {
             </div>
         </section>
 
+        {/* PIN 測試登入：僅本機；關閉後登入頁不再顯示 */}
+        <section className="bg-white rounded-xl shadow-sm border border-amber-200 p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                <KeyRound size={20} className="mr-2 text-amber-600"/>
+                PIN 測試登入（匿名快速進入）
+            </h2>
+            <p className="text-sm text-slate-600 mb-4">
+                測試時可開啟：登入頁會出現 PIN 輸入，正確後以<strong>匿名</strong>身分進入（需 Firebase 已啟用匿名登入）。
+                不需要時請關閉，登入頁將不再顯示此區塊。設定僅存在<strong>本瀏覽器</strong>（localStorage），不寫入雲端。
+            </p>
+            <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer w-fit">
+                    <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                        checked={quickLoginEnabled}
+                        onChange={(e) => {
+                            const on = e.target.checked;
+                            setQuickLoginEnabled(on);
+                            if (!on) {
+                                setQuickLoginConfig({ enabled: false, pin: '' });
+                                setQuickLoginSaved(true);
+                                setTimeout(() => setQuickLoginSaved(false), 2000);
+                            }
+                        }}
+                    />
+                    <span className="text-sm font-medium text-slate-700">啟用 PIN 測試登入</span>
+                </label>
+                {quickLoginEnabled && (
+                    <div className="pl-7 space-y-2">
+                        <label className="block text-sm font-medium text-slate-600">PIN（僅數字建議 4～8 碼）</label>
+                        <div className="flex gap-2 flex-wrap items-center">
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                maxLength={12}
+                                value={quickLoginPin}
+                                onChange={(e) => setQuickLoginPin(e.target.value.replace(/\s/g, ''))}
+                                placeholder="例如 5012"
+                                className="w-40 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setQuickLoginConfig({ enabled: true, pin: quickLoginPin });
+                                    setQuickLoginSaved(true);
+                                    setTimeout(() => setQuickLoginSaved(false), 2000);
+                                }}
+                                disabled={!quickLoginPin.trim()}
+                                className="px-4 py-2 rounded-lg text-sm font-bold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                儲存 PIN
+                            </button>
+                            {quickLoginSaved && (
+                                <span className="text-sm font-medium text-green-600">已儲存 — 請重新開啟登入頁或重整以套用</span>
+                            )}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                            關閉上方勾選即立即停用，無需按儲存。若已啟用但未儲存 PIN，登入頁也不會顯示區塊。
+                        </p>
+                    </div>
+                )}
+            </div>
+        </section>
+
         {/* GAS Connection Section */}
         <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
@@ -244,6 +334,46 @@ const Settings: React.FC = () => {
                 <p className="text-xs text-slate-400">
                     此網址用於檔案生成（如薪資單）及舊資料匯入。
                 </p>
+                {/* 顯示目前實際使用的網址（設定或 config fallback） */}
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-600 flex items-center">
+                            <Link2 size={14} className="mr-1" /> 目前使用的 GAS 網址
+                        </span>
+                        {effectiveGasUrl && (
+                            <button
+                                type="button"
+                                onClick={() => copyToClipboard(effectiveGasUrl)}
+                                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center shrink-0"
+                            >
+                                <Copy size={14} className="mr-1" /> 複製
+                            </button>
+                        )}
+                    </div>
+                    {effectiveGasUrl ? (
+                        <code className="block text-xs text-slate-700 break-all bg-white border border-slate-100 rounded px-2 py-2 select-all">
+                            {effectiveGasUrl}
+                        </code>
+                    ) : (
+                        <p className="text-xs text-amber-700">尚未設定，請貼上 Web App URL 並儲存。</p>
+                    )}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                        <span className="text-xs font-bold text-slate-600 flex items-center">
+                            <Link2 size={14} className="mr-1" /> 本系統存取網址
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => copyToClipboard(typeof window !== 'undefined' ? window.location.href : '')}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center shrink-0"
+                        >
+                            <Copy size={14} className="mr-1" /> 複製
+                        </button>
+                    </div>
+                    <code className="block text-xs text-slate-700 break-all bg-white border border-slate-100 rounded px-2 py-2 select-all">
+                        {typeof window !== 'undefined' ? window.location.href : ''}
+                    </code>
+                    <p className="text-[11px] text-slate-500">給同事書籤或使用行動裝置時，可複製上方網址（同機開發時常為 http://本機IP:5173/）。</p>
+                </div>
             </div>
         </section>
 

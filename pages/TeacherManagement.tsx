@@ -16,6 +16,8 @@ export default function TeacherManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** true = 僅檢視，需點「編輯」才能修改 */
+  const [isReadOnlyView, setIsReadOnlyView] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'INTERNAL' | 'EXTERNAL' | 'LANGUAGE'>('ALL');
   const [filterOvertimeOnly, setFilterOvertimeOnly] = useState(false);
   const [filterJobTitle, setFilterJobTitle] = useState<string>('ALL');
@@ -99,7 +101,8 @@ export default function TeacherManagement() {
     entryDocuments: []
   });
 
-  const handleOpenModal = (teacher?: Teacher) => {
+  const handleOpenModal = (teacher?: Teacher, readOnly = false) => {
+    setIsReadOnlyView(!!teacher && readOnly);
     if (teacher) {
       setEditingId(teacher.id);
       setFormData({
@@ -438,6 +441,7 @@ export default function TeacherManagement() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnlyView) return;
     const isHomeroomLogic = (formData.teacherRole?.includes('導師') || formData.isGraduatingHomeroom) ?? false;
     
     // Compute total reduction from existing array (if any remain) for legacy field
@@ -588,7 +592,8 @@ export default function TeacherManagement() {
       <InstructionPanel title="使用說明：教師資料管理">
         <div className="space-y-1">
           <CollapsibleItem title="新增/編輯教師">
-            <p>點擊右上角「新增」或列表中的編輯按鈕，可設定教師基本資料、薪級、專長等。系統會依據職別（編制內/外）提供不同的欄位。</p>
+            <p><strong>檢視：</strong>直接點擊列表中的<strong>教師姓名</strong>可開啟唯讀檢視，無法修改；若要修改請點視窗內「編輯」或列表右側鉛筆圖示。</p>
+            <p>點擊右上角「新增」或列表中的編輯按鈕，可設定教師基本資料、薪級、專長等。系統會依據職別（編制內/外）提供不同的欄位。有設定薪級者會顯示在名單的「薪級」欄。</p>
           </CollapsibleItem>
           <CollapsibleItem title="薪資計算與重算">
             <p>系統會根據「薪級級距表」自動計算本俸與學術研究費。若您在「系統設定」中更新了薪級表，請點擊列表上方的「重算」按鈕來批次更新所有教師的薪資資料。</p>
@@ -654,6 +659,7 @@ export default function TeacherManagement() {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 font-semibold text-slate-700">姓名</th>
+                <th className="px-6 py-4 font-semibold text-slate-700">薪級</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">類別/職別</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">資格/學歷</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">專長/任教</th>
@@ -687,8 +693,29 @@ export default function TeacherManagement() {
                 return (
                 <tr key={teacher.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
-                      <div className="font-medium text-slate-800">{teacher.name}</div>
-                      <div className="text-xs text-slate-500">{teacher.phone}</div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenModal(teacher, true)}
+                        className="text-left w-full rounded-lg -m-1 p-1 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                        title="點擊檢視資料（唯讀）"
+                      >
+                        <div className="font-medium text-indigo-700 hover:underline decoration-dotted">{teacher.name}</div>
+                        <div className="text-xs text-slate-500">{teacher.phone || ' '}</div>
+                      </button>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600">
+                    {teacher.salaryPoints && teacher.salaryPoints > 0 ? (
+                      <div className="flex flex-col">
+                        <span className="font-mono font-semibold text-indigo-700">{teacher.salaryPoints}</span>
+                        {(teacher.baseSalary > 0 || teacher.researchFee > 0) && (
+                          <span className="text-xs text-slate-500">
+                            本俸 {teacher.baseSalary || 0} / 研究費 {teacher.researchFee || 0}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded text-xs font-medium mr-2 ${
@@ -766,14 +793,14 @@ export default function TeacherManagement() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
-                    <button onClick={() => handleOpenModal(teacher)} className="text-indigo-600 hover:text-indigo-900 p-1"><Edit2 size={18} /></button>
+                    <button type="button" onClick={() => handleOpenModal(teacher, false)} title="編輯" className="text-indigo-600 hover:text-indigo-900 p-1"><Edit2 size={18} /></button>
                     <button onClick={() => deleteTeacher(teacher.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={18} /></button>
                   </td>
                 </tr>
               )})}
               {filteredTeachers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">找不到符合的教師資料</td>
+                  <td colSpan={8} className="px-6 py-8 text-center text-slate-400">找不到符合的教師資料</td>
                 </tr>
               )}
             </tbody>
@@ -786,11 +813,25 @@ export default function TeacherManagement() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
-              <h2 className="text-xl font-bold text-slate-800">{editingId ? '編輯教師' : '新增教師'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
+              <h2 className="text-xl font-bold text-slate-800">
+                {editingId
+                  ? (isReadOnlyView ? `檢視教師：${formData.name}` : '編輯教師')
+                  : '新增教師'}
+              </h2>
+              <button type="button" onClick={() => { setIsModalOpen(false); setIsReadOnlyView(false); }} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
             </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {isReadOnlyView && (
+              <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900 flex items-center gap-2">
+                <Info size={16} className="shrink-0" />
+                <span>目前為<strong>唯讀檢視</strong>。若要修改資料，請點下方「編輯」。</span>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-6 relative">
+              {/* 唯讀時阻擋表單內所有點擊（課表格子、超鐘點格等） */}
+              {isReadOnlyView && (
+                <div className="absolute inset-0 z-10 cursor-default rounded-lg" aria-hidden style={{ minHeight: '60vh' }} title="唯讀模式" />
+              )}
+              <div className={isReadOnlyView ? 'pointer-events-none select-none opacity-95' : ''}>
               
               {/* Basic Info */}
               <div>
@@ -1129,10 +1170,20 @@ export default function TeacherManagement() {
 
               {/* Note */}
               <div><label className="block text-sm font-medium text-slate-700 mb-1">備註</label><textarea className="w-full px-3 py-2 border rounded-lg h-20 resize-none" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea></div>
-
-              <div className="pt-4 flex space-x-3 border-t">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-bold">取消</button>
-                <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-md">確認儲存</button>
+              </div>
+              {/* 以上包在 div 內，唯讀時整塊不可互動；footer 在外可點 */}
+              <div className="pt-4 flex space-x-3 border-t relative z-20">
+                {isReadOnlyView ? (
+                  <>
+                    <button type="button" onClick={() => { setIsModalOpen(false); setIsReadOnlyView(false); }} className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-bold">關閉</button>
+                    <button type="button" onClick={() => setIsReadOnlyView(false)} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-md">編輯</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-bold">取消</button>
+                    <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-md">確認儲存</button>
+                  </>
+                )}
               </div>
             </form>
           </div>
