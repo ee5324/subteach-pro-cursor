@@ -451,8 +451,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
       }
     }
-    await setDoc(doc(db, 'substituteApplications', id), {
-      ...app,
+    await updateDoc(doc(db, 'substituteApplications', id), {
       status: 'approved',
       teacherId,
       updatedAt: Date.now(),

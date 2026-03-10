@@ -62,21 +62,24 @@ const ApplySubstitute: React.FC = () => {
     }
     setLoading(true);
     try {
-      await addDoc(collection(db, 'substituteApplications'), {
+      // Firestore 不接受 undefined，只傳有值的欄位
+      const payload: Record<string, unknown> = {
         name: name.trim(),
         phone: phone.trim(),
-        unavailableTime: unavailableTime.trim() || undefined,
-        availableTime: availableTime.trim() || undefined,
         hasCertificate,
-        hasEducationCredential: hasEducationCredential ?? undefined,
-        educationLevel: educationLevel || undefined,
         graduationMajor: graduationMajor.trim(),
-        teachingItems: teachingItems.length ? teachingItems : undefined,
-        lineAccount: lineAccount.trim() || undefined,
-        note: note.trim() || undefined,
         status: 'pending',
         createdAt: Date.now(),
-      });
+      };
+      if (unavailableTime.trim()) payload.unavailableTime = unavailableTime.trim();
+      if (availableTime.trim()) payload.availableTime = availableTime.trim();
+      if (hasEducationCredential !== null) payload.hasEducationCredential = hasEducationCredential;
+      if (educationLevel) payload.educationLevel = educationLevel;
+      if (teachingItems.length > 0) payload.teachingItems = teachingItems;
+      if (lineAccount.trim()) payload.lineAccount = lineAccount.trim();
+      if (note.trim()) payload.note = note.trim();
+
+      await addDoc(collection(db, 'substituteApplications'), payload);
       setSent(true);
       setName('');
       setPhone('');
