@@ -128,6 +128,39 @@ export interface SubPoolItem {
   teachingSubject?: string; // 專長領域 (Pool 專屬的備註，預設帶入教師專長)
 }
 
+/** 對外代課教師報名表單（未登入可送出；主系統審核） */
+export interface SubstituteApplication {
+  id: string;
+  name: string;
+  phone: string;
+  /** 一定沒辦法代的時間；沒有寫「無」 */
+  unavailableTime?: string;
+  /** 方便代課的時間 */
+  availableTime?: string;
+  /** 國小教師證：有 / 沒有 */
+  hasCertificate: boolean;
+  /** 有無國小教育學程修畢證書 */
+  hasEducationCredential?: boolean;
+  /** 最高學歷：大學(含同等)、研究所、博士 */
+  educationLevel?: '大學' | '研究所' | '博士';
+  graduationMajor: string;   // 系所
+  /** 可以任教的項目（可複選） */
+  teachingItems?: string[];
+  lineAccount: string;       // LINE 帳號/ID（留 LINE 也請留電話）
+  note?: string;             // 其他備註
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+  updatedAt?: number;
+  /** 審核通過後建立的教師 ID（若已加入教師名單） */
+  teacherId?: string;
+}
+
+/** 報名表「可以任教的項目」選項 */
+export const APPLY_TEACHING_ITEMS = [
+  '低年級導師', '中年級導師', '高年級導師',
+  '本土語文', '英語', '資訊', '自然', '社會', '音樂', '視覺藝術', '體育',
+] as const;
+
 // 新增：非常態活動紀錄
 export interface SpecialActivity {
   id: string;

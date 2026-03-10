@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Teacher, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll } from '../types';
+import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
@@ -36,7 +36,11 @@ interface AppContextType {
   activeSemesterId: string | null;
   subPool: SubPoolItem[];
   languagePayrolls: LanguagePayroll[];
+  substituteApplications: SubstituteApplication[];
   loading: boolean;
+
+  deleteSubstituteApplication: (id: string) => Promise<void>;
+  approveSubstituteApplication: (id: string, options?: { addToSubPool: boolean }) => Promise<{ teacherId: string }>;
 
   addTeacher: (teacher: Teacher) => Promise<void>;
   updateTeacher: (updatedTeacher: Teacher) => Promise<void>;
@@ -101,6 +105,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const [subPool, setSubPool] = useState<SubPoolItem[]>([]);
   const [languagePayrolls, setLanguagePayrolls] = useState<LanguagePayroll[]>([]);
+  const [substituteApplications, setSubstituteApplications] = useState<SubstituteApplication[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -202,6 +207,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (snap.exists()) {
         setActiveSemesterId(snap.data().activeSemesterId || null);
       }
+    }));
+
+    unsubs.push(onSnapshot(collection(db, 'substituteApplications'), (snap) => {
+      setSubstituteApplications(snap.docs.map(d => ({ ...d.data(), id: d.id } as SubstituteApplication)));
     }));
 
     setLoading(false);
@@ -392,6 +401,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await setDoc(doc(db, 'subPool', item.teacherId), { ...item, updatedAt: Date.now() });
   };
 
+  const deleteSubstituteApplication = async (id: string) => {
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'substituteApplications', id));
+  };
+
+  const approveSubstituteApplication = async (id: string, options?: { addToSubPool: boolean }) => {
+    if (!db) throw new Error("Firebase not initialized");
+    const app = substituteApplications.find(a => a.id === id);
+    if (!app) throw new Error("找不到該筆報名資料");
+    if (app.status === 'approved') throw new Error("此筆已審核通過");
+    const addToSubPoolFlag = options?.addToSubPool !== false;
+    const teacherId = `app_${id}`;
+    const educationStr = [app.educationLevel, app.graduationMajor?.trim()].filter(Boolean).join(' ');
+    const noteParts = [
+      app.lineAccount ? `LINE: ${app.lineAccount}` : '',
+      app.unavailableTime ? `無法代課時段: ${app.unavailableTime}` : '',
+      app.availableTime ? `可代課時段: ${app.availableTime}` : '',
+      app.hasEducationCredential === true ? '學程修畢' : app.hasEducationCredential === false ? '未學程修畢' : '',
+      app.note || '',
+    ].filter(Boolean);
+    const newTeacher: Teacher = {
+      id: teacherId,
+      name: app.name.trim(),
+      phone: app.phone.trim(),
+      education: educationStr || app.graduationMajor?.trim() || undefined,
+      hasCertificate: app.hasCertificate,
+      type: TeacherType.EXTERNAL,
+      expertise: (app.teachingItems && app.teachingItems.length > 0) ? app.teachingItems : undefined,
+      note: noteParts.length > 0 ? noteParts.join('；') : undefined,
+      isRetired: false,
+      isSpecialEd: false,
+      isGraduatingHomeroom: false,
+      baseSalary: 0,
+      researchFee: 0,
+      isHomeroom: false,
+    };
+    await setDoc(doc(db, 'teachers', teacherId), newTeacher);
+    if (addToSubPoolFlag) {
+      if (!subPool.some(i => i.teacherId === teacherId)) {
+        await setDoc(doc(db, 'subPool', teacherId), { teacherId, status: 'available', note: '', updatedAt: Date.now() });
+      }
+    }
+    await setDoc(doc(db, 'substituteApplications', id), {
+      ...app,
+      status: 'approved',
+      teacherId,
+      updatedAt: Date.now(),
+    });
+    return { teacherId };
+  };
+
   const checkGasConnection = async (): Promise<boolean> => {
     const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
     if (!targetUrl) return false;
@@ -498,7 +558,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = {
     currentUser,
     teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
-    semesters, activeSemesterId, subPool, languagePayrolls,
+    semesters, activeSemesterId, subPool, languagePayrolls, substituteApplications,
     loading, 
     addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
@@ -507,6 +567,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addSemester, updateSemester, removeSemester, setSemesterActive,
     updateSettings, addHoliday, removeHoliday, 
     addToSubPool, removeFromSubPool, updateSubPoolItem,
+    deleteSubstituteApplication, approveSubstituteApplication,
     addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,
     loadFromGas, migrateToFirebase, syncToPublicBoard, checkGasConnection,
   };

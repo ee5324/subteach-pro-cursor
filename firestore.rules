@@ -67,6 +67,12 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // 12. 代課教師報名（對外表單：未登入可建立，僅登入可讀/改/刪）
+    match /substituteApplications/{appId} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn();
+    }
+
     // =========================================================
     // 預設規則
     // =========================================================

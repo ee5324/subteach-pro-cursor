@@ -51,6 +51,8 @@ import LanguageTeachers from './pages/LanguageTeachers';
 import LanguageSalary from './pages/LanguageSalary';
 import LeaveRules from './pages/LeaveRules';
 import Login from './pages/Login';
+import ApplySubstitute from './pages/ApplySubstitute';
+import SubstituteApplications from './pages/SubstituteApplications';
 import { useAppStore } from './store/useAppStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
@@ -80,7 +82,8 @@ const App: React.FC = () => {
     <HashRouter>
       <Routes>
         <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <Login />} />
-        
+        <Route path="/apply" element={<ApplySubstitute />} />
+
         <Route path="/" element={
           <ProtectedRoute>
             <Layout />
@@ -91,6 +94,7 @@ const App: React.FC = () => {
           <Route path="pending" element={<PendingItems />} />
           <Route path="requests" element={<IncomingRequests />} />
           <Route path="sub-pool" element={<SubPool />} />
+          <Route path="substitute-applications" element={<SubstituteApplications />} />
           <Route path="entry" element={<EntryForm />} />
           <Route path="entry/:id" element={<EntryForm />} />
           <Route path="special" element={<SpecialActivities />} />

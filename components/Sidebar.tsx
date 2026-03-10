@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -102,6 +102,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/sub-pool" className={linkClass} onClick={onClose}>
           <UserCheck size={18} />
           <span>代課人力庫</span>
+        </NavLink>
+
+        <NavLink to="/substitute-applications" className={linkClass} onClick={onClose}>
+          <UserPlus size={18} />
+          <span>代課教師報名審核</span>
         </NavLink>
         
         <NavLink to="/teachers" className={linkClass} onClick={onClose}>
