@@ -16,6 +16,9 @@ var CONFIG = {
   // 月份清冊的範本工作表名稱 (印領清冊)
   SUMMARY_TEMPLATE_SHEET_NAME: '導師請假範本',
 
+  // 家長會清冊範本（若存在則使用，否則用導師請假範本）
+  PTA_SUMMARY_TEMPLATE_SHEET_NAME: '家長會清冊範本',
+
   // 黏貼憑證的範本工作表名稱
   VOUCHER_TEMPLATE_SHEET_NAME: '憑證範本',
   

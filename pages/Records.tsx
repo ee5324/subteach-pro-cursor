@@ -889,7 +889,7 @@ const Records: React.FC = () => {
                                             <span className="text-slate-600 flex items-center">
                                                 {d.payType === PayType.HOURLY ? 
                                                     `${d.periodCount}節 (${d.selectedPeriods?.join(',') || ''})` : 
-                                                    `${d.periodCount}天`
+                                                    d.payType === PayType.HALF_DAY ? '半日' : `${d.periodCount}天`
                                                 }
                                                 {isOvertime && <span className="ml-1 text-[10px] bg-purple-100 text-purple-700 px-1 rounded font-bold">超鐘</span>}
                                             </span>
@@ -1161,7 +1161,7 @@ const Records: React.FC = () => {
                                                             )}
                                                         </div>
                                                         <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs mr-2">
-                                                            {item.payType === PayType.HOURLY ? `${item.periodCount}節` : `${item.periodCount}天`}
+                                                            {item.payType === PayType.HOURLY ? `${item.periodCount}節` : item.payType === PayType.HALF_DAY ? '半日' : `${item.periodCount}天`}
                                                         </span>
                                                         <div className="ml-auto flex items-center space-x-1">
                                                             <span className="text-slate-400 text-xs">${item.calculatedAmount.toLocaleString()}</span>

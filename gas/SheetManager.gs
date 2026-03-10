@@ -850,8 +850,9 @@ var SheetManager = {
     
     records.forEach(function(record) {
       if (!record.details) return;
+      // 公派(家長會) 整筆只入家長會清冊，不進入依假別分類的一般清冊
+      if (record.leaveType === '公派(家長會)') return;
       record.details.forEach(function(detail) {
-        // Skip overtime details for payroll summary
         if (detail.isOvertime) return;
 
         var sheetName = SheetManagerHelpers.getSafeSheetName(detail.date, record.leaveType);
@@ -894,6 +895,14 @@ var SheetManager = {
             subPeriods = Number(detail.periodCount) || 0;
             group.totalPeriods += subPeriods;
             group.hourlyTotal += detail.calculatedAmount;
+        } else if (detail.payType === '半日薪') {
+            subDays = 0.5;
+            group.totalDays += subDays;
+            var hDays = 0.5;
+            var hFee = Math.round((4000 / daysInMonth) * hDays);
+            group.homeroomDays += hDays;
+            group.homeroomFee += hFee;
+            group.hourlyTotal += (detail.calculatedAmount - hFee);
         } else {
             subDays = Number(detail.periodCount) || 0;
             group.totalDays += subDays;
@@ -908,10 +917,77 @@ var SheetManager = {
         if (detail.payType === '鐘點費') {
             note = "0日" + subPeriods + "節";
             if(detail.selectedPeriods && detail.selectedPeriods.length > 0) note += "(" + detail.selectedPeriods.join(',') + ")";
+        } else if (detail.payType === '半日薪') {
+            note = "半日0節";
         } else {
             note = subDays + "日0節";
         }
         group.notes.push(note);
+      });
+    });
+
+    // 家長會清冊：情況一 公派(家長會) 整筆；情況二 半日薪+家委支出 僅導師費。排除 半日薪+自理。
+    var ptaSheetsData = {};
+    records.forEach(function(record) {
+      if (!record.details) return;
+      record.details.forEach(function(detail) {
+        if (detail.isOvertime) return;
+        var ym = detail.date.substring(0, 7);
+        var sheetName = ym + '_家長會';
+        if (!ptaSheetsData[sheetName]) ptaSheetsData[sheetName] = {};
+        var subTeacherName = detail.substituteTeacherId === 'pending' || !detail.substituteTeacherId ? '待聘' : detail.substituteTeacherId;
+        if (!ptaSheetsData[sheetName][subTeacherName]) {
+            ptaSheetsData[sheetName][subTeacherName] = {
+                dates: [], fullDates: [], originalTeachers: [], leaveTypes: [], reasons: [], notes: [],
+                subTeacherObj: teacherMap[subTeacherName] || null,
+                totalDays: 0, totalPeriods: 0, hourlyTotal: 0, homeroomDays: 0, homeroomFee: 0, finalAmount: 0
+            };
+        }
+        var group = ptaSheetsData[sheetName][subTeacherName];
+        var dateStr = detail.date.substring(5).replace('-', '/');
+        var daysInMonth = SheetManagerHelpers.getSafeDaysInMonth(detail.date);
+        var isCase1 = (record.leaveType === '公派(家長會)');
+        var isCase2 = (detail.payType === '半日薪' && record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)');
+        if (!isCase1 && !isCase2) return;
+
+        if (group.dates.indexOf(dateStr) === -1) group.dates.push(dateStr);
+        if (group.fullDates.indexOf(detail.date) === -1) group.fullDates.push(detail.date);
+        if (group.originalTeachers.indexOf(record.originalTeacherId) === -1) group.originalTeachers.push(record.originalTeacherId);
+        if (group.leaveTypes.indexOf(record.leaveType) === -1) group.leaveTypes.push(record.leaveType);
+        var reason = record.reason || '';
+        if (reason && group.reasons.indexOf(reason) === -1) group.reasons.push(reason);
+
+        if (isCase1) {
+            var subDays = 0, subPeriods = 0;
+            if (detail.payType === '鐘點費') {
+                subPeriods = Number(detail.periodCount) || 0;
+                group.totalPeriods += subPeriods;
+                group.hourlyTotal += detail.calculatedAmount;
+                group.notes.push("0日" + subPeriods + "節" + (detail.selectedPeriods && detail.selectedPeriods.length ? "(" + detail.selectedPeriods.join(',') + ")" : ""));
+            } else if (detail.payType === '半日薪') {
+                group.totalDays += 0.5;
+                group.homeroomDays += 0.5;
+                var hFee = Math.round((4000 / daysInMonth) * 0.5);
+                group.homeroomFee += hFee;
+                group.hourlyTotal += (detail.calculatedAmount - hFee);
+                group.notes.push("半日0節");
+            } else {
+                subDays = Number(detail.periodCount) || 0;
+                group.totalDays += subDays;
+                group.homeroomDays += subDays;
+                var hFee = Math.round((4000 / daysInMonth) * subDays);
+                group.homeroomFee += hFee;
+                group.hourlyTotal += (detail.calculatedAmount - hFee);
+                group.notes.push(subDays + "日0節");
+            }
+            group.finalAmount += detail.calculatedAmount;
+        } else {
+            group.homeroomDays += 0.5;
+            var feeOnly = Math.round((4000 / daysInMonth) * 0.5);
+            group.homeroomFee += feeOnly;
+            group.finalAmount += feeOnly;
+            group.notes.push("半日導師費家長會");
+        }
       });
     });
 
@@ -1052,6 +1128,84 @@ var SheetManager = {
         }
         var defaultSheet = newSS.getSheets()[0];
         if (defaultSheet.getName() !== "印領清冊" && defaultSheet.getName() !== "黏貼憑證") { newSS.deleteSheet(defaultSheet); }
+    }
+
+    // 家長會清冊（情況一 公派(家長會) 整筆 + 情況二 半日薪家委支出 僅導師費）
+    var ptaTemplateSheet = (CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME && ss.getSheetByName(CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME)) || templateSheet;
+    for (var ptaSheetName in ptaSheetsData) {
+        var ptaGroups = ptaSheetsData[ptaSheetName];
+        var ptaRows = [];
+        for (var subName in ptaGroups) {
+            var g = ptaGroups[subName];
+            var dateDisplay = SheetManagerHelpers.formatDateRanges(g.fullDates);
+            var subTeacherInfo = g.subTeacherObj;
+            var salaryGradeDisplay = (subTeacherInfo && subTeacherInfo.salaryPoints) ? (subTeacherInfo.salaryPoints + "\n" + (subTeacherInfo.hasCertificate ? '(有證)' : '(無證)')) : '';
+            var dailyRateDisplay = g.totalDays > 0 ? Math.round((g.finalAmount - g.homeroomFee) / g.totalDays) : '';
+            var origDisplay = g.originalTeachers.join('\n');
+            var typeDisplay = g.leaveTypes.map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
+            var reasonDisplay = g.reasons.join('\n');
+            var noteDisplay = g.notes.join('\n');
+            ptaRows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, g.totalDays || '', g.totalPeriods || '', g.hourlyTotal || '', origDisplay, typeDisplay, reasonDisplay, noteDisplay, g.homeroomDays || '', g.homeroomFee || '', g.finalAmount, '', '', '', '', '' ]);
+            processedCount++;
+        }
+        var ptaParts = ptaSheetName.split('_');
+        var ptaYm = ptaParts[0];
+        var ptaYear = ptaYm.split('-')[0];
+        var ptaMonth = ptaYm.split('-')[1];
+        var ptaRocYear = parseInt(ptaYear) - 1911;
+        var ptaYFolder = getOrCreateSubFolder(rootFolder, ptaYear);
+        var ptaMFolder = getOrCreateSubFolder(ptaYFolder, ptaMonth);
+        var ptaFileName = ptaRocYear + "年" + ptaMonth + "月_家長會_印領清冊";
+        var ptaExisting = ptaMFolder.getFilesByName(ptaFileName);
+        while (ptaExisting.hasNext()) { ptaExisting.next().setTrashed(true); }
+        var ptaNewSS = SpreadsheetApp.create(ptaFileName);
+        DriveApp.getFileById(ptaNewSS.getId()).moveTo(ptaMFolder);
+        generatedUrls.push(ptaNewSS.getUrl());
+        var ptaSummarySheet = ptaTemplateSheet.copyTo(ptaNewSS);
+        ptaSummarySheet.setName("印領清冊");
+        var ptaTitle = "加昌國小" + ptaRocYear + "年" + ptaMonth + "月代課教師印領清冊~~【級科任教師】公假家長會";
+        ptaSummarySheet.getRange("A1").setValue(ptaTitle);
+        var ptaDaysInMonth = new Date(parseInt(ptaYear), parseInt(ptaMonth), 0).getDate();
+        ptaSummarySheet.getRange("D2").setValue("日薪\n(" + ptaDaysInMonth + "日)");
+        ptaSummarySheet.getRange("M2").setValue("導師費(" + parseInt(ptaMonth) + "月4000元)");
+        var ptaSumDays = 0, ptaSumPeriods = 0, ptaSumHourly = 0, ptaSumHDays = 0, ptaSumHFee = 0, ptaSumTotal = 0;
+        ptaRows.forEach(function(r) { ptaSumDays += Number(r[4]) || 0; ptaSumPeriods += Number(r[5]) || 0; ptaSumHourly += Number(r[6]) || 0; ptaSumHDays += Number(r[11]) || 0; ptaSumHFee += Number(r[12]) || 0; ptaSumTotal += Number(r[13]) || 0; });
+        var ptaStartRow = 3;
+        var ptaDataCount = ptaRows.length;
+        if (ptaDataCount > 0) {
+            if (ptaDataCount > 1) ptaSummarySheet.insertRowsAfter(ptaStartRow, ptaDataCount - 1);
+            ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 19).setValues(ptaRows);
+            var ptaRange = ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 19);
+            ptaRange.setBorder(true, true, true, true, true, true);
+            ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 1).setNumberFormat("@");
+            ptaRange.setVerticalAlignment("middle").setHorizontalAlignment("center");
+            ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 2).setWrap(true);
+            ptaSummarySheet.getRange(ptaStartRow, 8, ptaDataCount, 4).setWrap(true);
+            var ptaTotalRowIndex = ptaStartRow + ptaDataCount;
+            ptaSummarySheet.getRange(ptaStartRow, 4, ptaDataCount + 1, 4).setFontSize(14);
+            ptaSummarySheet.getRange(ptaStartRow, 12, ptaDataCount + 1, 3).setFontSize(14);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 1, 1, 2).merge().setValue("合計").setHorizontalAlignment("center");
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 5).setValue(ptaSumDays);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 6).setValue(ptaSumPeriods);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 7).setValue(ptaSumHourly);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 12).setValue(ptaSumHDays);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 13).setValue(ptaSumHFee);
+            ptaSummarySheet.getRange(ptaTotalRowIndex, 14).setValue(ptaSumTotal);
+            var ptaFooterStart = ptaTotalRowIndex + 1;
+            ptaSummarySheet.getRange(ptaFooterStart, 1).setValue("製表人：");
+            ptaSummarySheet.getRange(ptaFooterStart, 8).setValue("勞保承辦：");
+            ptaSummarySheet.getRange(ptaFooterStart, 14).setValue("校長：");
+            ptaSummarySheet.getRange(ptaFooterStart + 3, 1).setValue("教務主任：");
+            ptaSummarySheet.getRange(ptaFooterStart + 3, 8).setValue("人事主任：");
+            ptaSummarySheet.getRange(ptaFooterStart + 6, 8).setValue("會計主任：");
+            ptaSummarySheet.getRange(ptaFooterStart, 1, 10, 19).setFontWeight("bold").setFontSize(11);
+            for (var ri = ptaStartRow; ri <= ptaFooterStart + 9; ri++) {
+                ptaSummarySheet.setRowHeight(ri, Math.round(ptaSummarySheet.getRowHeight(ri) * 1.25));
+            }
+        }
+        var ptaDefault = ptaNewSS.getSheets()[0];
+        if (ptaDefault.getName() !== "印領清冊") ptaNewSS.deleteSheet(ptaDefault);
     }
     return { count: processedCount, urls: generatedUrls };
   },

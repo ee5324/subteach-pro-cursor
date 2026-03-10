@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -6,11 +6,12 @@ import {
   signInAnonymously,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../src/lib/firebase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LogIn, UserPlus, Mail, Lock, Loader2, KeyRound } from 'lucide-react';
-import { isQuickLoginActive, verifyQuickLoginPin } from '../utils/quickLoginStorage';
+import { isQuickLoginActive, verifyQuickLoginPin, setQuickLoginConfig } from '../utils/quickLoginStorage';
 
 const Login: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,13 +20,41 @@ const Login: React.FC = () => {
   const [quickPin, setQuickPin] = useState('');
   const navigate = useNavigate();
 
-  const handleQuickAnonymousLogin = async () => {
-    if (!isQuickLoginActive()) return;
+  // 測試模式：網址帶 ?testPin=5012 時啟用 PIN、預填，並自動以該 PIN 匿名登入
+  useEffect(() => {
+    const testPin = searchParams.get('testPin');
+    if (!testPin?.trim() || loading) return;
+    setQuickLoginConfig({ enabled: true, pin: testPin.trim() });
+    setQuickPin(testPin.trim());
     setError('');
-    if (!verifyQuickLoginPin(quickPin)) {
+    if (!verifyQuickLoginPin(testPin.trim())) return;
+    if (!auth) {
+      setError('Firebase 未初始化，無法登入。');
+      return;
+    }
+    setLoading(true);
+    signInAnonymously(auth)
+      .then(() => navigate('/'))
+      .catch((err: any) => {
+        console.error('Anonymous auth failed', err);
+        let msg = err?.message || '匿名登入失敗';
+        if (err?.code === 'auth/operation-not-allowed') {
+          msg = 'Firebase 尚未啟用匿名登入，請到 Firebase Console → Authentication → Sign-in method 開啟「匿名」。';
+        }
+        setError(msg);
+      })
+      .finally(() => setLoading(false));
+  }, [searchParams]);
+
+  const handleQuickAnonymousLogin = async (pinOverride?: string) => {
+    const pinToUse = pinOverride ?? quickPin;
+    if (!pinToUse.trim()) return;
+    setQuickLoginConfig({ enabled: true, pin: pinToUse.trim() });
+    if (!verifyQuickLoginPin(pinToUse)) {
       setError('PIN 錯誤');
       return;
     }
+    setError('');
     if (!auth) {
       setError('Firebase 未初始化，無法登入。');
       return;

@@ -127,11 +127,14 @@ const ApplySubstitute: React.FC = () => {
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-slate-800 flex items-center justify-center gap-2">
             <UserPlus size={28} className="text-indigo-600" />
-            代課教師報名
+            加昌國小代課人力蒐集
           </h1>
           <p className="text-slate-500 text-sm mt-2">
             填寫基本資料，審核通過後將由校方聯繫並納入代課人力。
           </p>
+          <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-left text-xs text-slate-600">
+            <strong>相關資料運用說明：</strong> 表單資料僅用於本校代課人力蒐集與聯繫，審核通過後納入代課人力庫；不會另作其他用途或提供第三人。
+          </div>
         </div>
 
         {error && (

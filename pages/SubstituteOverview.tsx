@@ -115,7 +115,7 @@ const SubstituteOverview: React.FC = () => {
                         <ul className="list-circle pl-5 mt-1 text-slate-500">
                             <li><span className="text-emerald-600 font-bold">綠色文字</span>：已安排代課教師。</li>
                             <li><span className="text-red-600 font-bold">紅色區塊</span>：尚未安排代課教師 (待聘)。</li>
-                            <li><span className="bg-amber-100 text-amber-700 px-1 rounded text-xs">日薪</span>：標示為日薪制的代課紀錄。</li>
+                            <li><span className="bg-amber-100 text-amber-700 px-1 rounded text-xs">日薪</span>：日薪制；<span className="bg-amber-50 text-amber-600 px-1 rounded text-xs">半日薪</span>：半日薪制代課紀錄。</li>
                         </ul>
                     </li>
                     <li><strong>詳細資訊：</strong>滑鼠游標停留在代課卡片上，可查看請假事由與詳細狀態。</li>
@@ -181,9 +181,10 @@ const SubstituteOverview: React.FC = () => {
 
                                                             {/* Footer: PayType Badge */}
                                                             {item.payType === '日薪' && (
-                                                                <span className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[9px] px-1 rounded-bl-md font-bold">
-                                                                    日薪
-                                                                </span>
+                                                                <span className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[9px] px-1 rounded-bl-md font-bold">日薪</span>
+                                                            )}
+                                                            {item.payType === '半日薪' && (
+                                                                <span className="absolute top-0 right-0 bg-amber-50 text-amber-600 text-[9px] px-1 rounded-bl-md font-bold">半日</span>
                                                             )}
                                                             
                                                             {/* Tooltip on Hover */}

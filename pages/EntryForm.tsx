@@ -91,6 +91,7 @@ const EntryForm: React.FC = () => {
   
   const [createdAt, setCreatedAt] = useState<number>(Date.now());
   const [allowPartial, setAllowPartial] = useState(false);
+  const [homeroomFeeByPta, setHomeroomFeeByPta] = useState(false);
 
   // --- Section 2: Timetable State ---
   const [viewDate, setViewDate] = useState(new Date()); 
@@ -162,6 +163,7 @@ const EntryForm: React.FC = () => {
         setApplicationDate(normalizeDateString(existingRecord.applicationDate || getLocalTodayDate()));
         setCreatedAt(existingRecord.createdAt);
         setAllowPartial(existingRecord.allowPartial || false);
+        setHomeroomFeeByPta(!!existingRecord.homeroomFeeByPta);
         setStartDate(normalizeDateString(existingRecord.startDate)); // Set explicit range
         setEndDate(normalizeDateString(existingRecord.endDate));     // Set explicit range
         
@@ -201,6 +203,7 @@ const EntryForm: React.FC = () => {
     setDocId('');
     setSlots([]);
     setAllowPartial(false);
+    setHomeroomFeeByPta(false);
     const today = getLocalTodayDate();
     setApplicationDate(today);
     setStartDate(today);
@@ -462,9 +465,10 @@ const EntryForm: React.FC = () => {
     const recordData: LeaveRecord = {
       id: isEditMode && id ? id : crypto.randomUUID(),
       originalTeacherId, leaveType, reason, docId, applicationDate,
-      startDate: finalStart, // Use calculated start
-      endDate: finalEnd,     // Use calculated end
-      details, slots, createdAt, allowPartial
+      startDate: finalStart,
+      endDate: finalEnd,
+      details, slots, createdAt, allowPartial,
+      homeroomFeeByPta: homeroomFeeByPta || undefined
     };
 
     if (isEditMode) {
@@ -530,7 +534,7 @@ const EntryForm: React.FC = () => {
                          <div><label className="block text-xs font-bold text-slate-500 mb-1">班級</label><input type="text" className="w-full px-3 py-2 border rounded text-sm" value={editingSlot.className} onChange={e => setEditingSlot({...editingSlot, className: e.target.value})}/></div>
                     </div>
                     <div className="flex items-center space-x-4">
-                        <div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">支薪方式</label><select className="w-full px-3 py-2 border rounded text-sm" value={editingSlot.payType} onChange={e => setEditingSlot({...editingSlot, payType: e.target.value as PayType})}><option value={PayType.HOURLY}>鐘點費</option><option value={PayType.DAILY}>日薪</option></select></div>
+                        <div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">支薪方式</label><select className="w-full px-3 py-2 border rounded text-sm" value={editingSlot.payType} onChange={e => setEditingSlot({...editingSlot, payType: e.target.value as PayType})}><option value={PayType.HOURLY}>鐘點費</option><option value={PayType.DAILY}>日薪</option><option value={PayType.HALF_DAY}>半日薪</option></select></div>
                         <div className="flex items-center pt-5">
                             <input type="checkbox" id="isOvertime" checked={editingSlot.isOvertime || false} onChange={e => setEditingSlot({...editingSlot, isOvertime: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"/>
                             <label htmlFor="isOvertime" className="ml-2 text-sm font-bold text-slate-700">超鐘點時段</label>
@@ -563,7 +567,7 @@ const EntryForm: React.FC = () => {
           <CollapsibleItem title="排課與代課人指定">
             <p><strong>單節操作：</strong>在下方課表點擊空格可新增單節課程，或點擊已存在的課程進行編輯/刪除。</p>
             <p><strong>批次操作：</strong>使用上方工具列可快速設定「指定代課教師」、「科目」與「班級」，設定後點擊課表格子即可套用。</p>
-            <p><strong>支薪方式：</strong>預設為「鐘點」，若為全日代課請切換為「日薪」。</p>
+            <p><strong>支薪方式：</strong>預設為「鐘點」，若為全日代課請切換為「日薪」；半日代課請切換為「半日薪」（代課支出為一半日薪，導師費可另列家長會清冊）。</p>
           </CollapsibleItem>
           <CollapsibleItem title="儲存與確認">
             <p>確認下方統計金額無誤後，點擊右下角「儲存代課單資料」即可建立紀錄。儲存後可至「代課清冊」頁面查看或匯出憑證。</p>
@@ -648,7 +652,7 @@ const EntryForm: React.FC = () => {
                    </div>
                    <div>
                       <label className="block text-xs font-bold text-slate-500 mb-1">支薪方式</label>
-                      <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white" value={activePayType} onChange={e => setActivePayType(e.target.value as PayType)}><option value={PayType.HOURLY}>鐘點費</option><option value={PayType.DAILY}>日薪 (全日)</option></select>
+                      <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white" value={activePayType} onChange={e => setActivePayType(e.target.value as PayType)}><option value={PayType.HOURLY}>鐘點費</option><option value={PayType.DAILY}>日薪 (全日)</option><option value={PayType.HALF_DAY}>半日薪</option></select>
                    </div>
                 </div>
 
@@ -663,6 +667,17 @@ const EntryForm: React.FC = () => {
              </div>
              
              {activePayType === PayType.DAILY && <div className="mt-2 text-[11px] text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-flex items-center"><Info size={12} className="mr-1"/>日薪模式：請點選當日有課的時段；為確保一致性，系統將不會自動遞增班級。</div>}
+             {(activePayType === PayType.HALF_DAY || homeroomFeeByPta) && (
+              <div className="mt-2 space-y-1">
+                {activePayType === PayType.HALF_DAY && <div className="text-[11px] text-amber-600 bg-amber-50 px-2 py-1 rounded inline-flex items-center"><Info size={12} className="mr-1"/>半日薪：代課支出為一半的日薪；導師費(半日)可由家長會清冊另列。</div>}
+                {leaveType !== LeaveType.PUBLIC_PTA && (
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={homeroomFeeByPta} onChange={e => setHomeroomFeeByPta(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
+                    <span>家委支出（導師費由家長會，僅導師費入家長會清冊）</span>
+                  </label>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="p-6 overflow-x-auto">
@@ -711,10 +726,11 @@ const EntryForm: React.FC = () => {
                                      <div className={`font-bold ${textColor} w-full truncate`}>{slot.substituteTeacherId ? teachers.find(t => t.id === slot.substituteTeacherId)?.name : <span className="flex items-center justify-center"><UserX size={10} className="mr-1"/>待聘</span>}</div>
                                      <div className="text-[10px] text-slate-500 w-full truncate mt-0.5">{slot.subject} {slot.className}</div>
                                      {slot.payType === PayType.DAILY && <div className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[9px] px-1 rounded-bl leading-none py-0.5 font-bold">日薪</div>}
+                                     {slot.payType === PayType.HALF_DAY && <div className="absolute top-0 right-0 bg-amber-50 text-amber-600 text-[9px] px-1 rounded-bl leading-none py-0.5 font-bold">半日</div>}
                                      {slot.isOvertime && <div className="absolute bottom-0 right-0 bg-purple-100 text-purple-700 text-[9px] px-1 rounded-tl leading-none py-0.5 font-bold">超鐘</div>}
                                    </>
                                ) : (
-                                   isHoliday ? <span className="opacity-50 text-[10px] text-slate-400 flex flex-col items-center"><Ban size={14} className="text-rose-300"/><span className="text-[9px] text-rose-300 font-bold mt-0.5">禁止</span></span> : <span className="opacity-0 hover:opacity-100 text-[10px] text-indigo-300">{activePayType === PayType.DAILY ? '日薪' : '新增'}</span>
+                                   isHoliday ? <span className="opacity-50 text-[10px] text-slate-400 flex flex-col items-center"><Ban size={14} className="text-rose-300"/><span className="text-[9px] text-rose-300 font-bold mt-0.5">禁止</span></span> : <span className="opacity-0 hover:opacity-100 text-[10px] text-indigo-300">{activePayType === PayType.DAILY ? '日薪' : activePayType === PayType.HALF_DAY ? '半日' : '新增'}</span>
                                )}
                              </button>
                           </div>

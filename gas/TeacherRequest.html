@@ -21,6 +21,7 @@
         
         .slot-hourly { background-color: #eef2ff; border: 1px solid #c7d2fe; color: #4338ca; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .slot-daily { background-color: #fffbeb; border: 1px solid #fde68a; color: #b45309; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .slot-halfday { background-color: #fef3c7; border: 1px solid #fcd34d; color: #92400e; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         
         .slot-disabled { background-color: #f1f5f9; border: 1px solid #e2e8f0; cursor: not-allowed; opacity: 0.6; }
 
@@ -146,6 +147,12 @@
                                         <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                                         日薪 (含導師費)
                                     </button>
+                                    <button type="button" @click="form.payType = '半日薪'" 
+                                        class="flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all flex items-center justify-center whitespace-nowrap"
+                                        :class="form.payType === '半日薪' ? 'bg-amber-400 text-white border-amber-400 shadow-md' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'">
+                                        <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        半日薪
+                                    </button>
                                 </div>
                             </div>
 
@@ -238,6 +245,7 @@
                                                         <div class="font-bold w-full truncate">{{ getSelected(day.dateStr, period).subject }}</div>
                                                         <div class="w-full truncate opacity-80 text-[10px]">{{ getSelected(day.dateStr, period).className }}</div>
                                                         <div v-if="form.payType === '日薪'" class="mt-1 px-1 rounded bg-white/30 text-[9px] scale-90">日薪</div>
+                                                        <div v-if="form.payType === '半日薪'" class="mt-1 px-1 rounded bg-white/30 text-[9px] scale-90">半日</div>
                                                     </template>
                                                 </button>
 
@@ -336,6 +344,7 @@
                                         選定請假日期後，<strong>請點擊下方的課表格子</strong>。
                                         <br>藍色 = 鐘點費 (選幾節算幾節)
                                         <br>黃色 = 日薪 (含導師費，點選即代表全日)
+                                        <br>淺黃 = 半日薪 (代課支出為一半日薪，導師費可另列家長會清冊)
                                     </p>
                                 </div>
                             </li>
@@ -389,7 +398,7 @@
             <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95 duration-200">
                 <div class="text-center mb-6">
                     <h3 class="font-bold text-lg text-slate-800">
-                        {{ form.payType === '日薪' ? '📅 設定課程 (日薪模式)' : '🕒 設定課程 (鐘點模式)' }}
+                        {{ form.payType === '日薪' ? '📅 設定課程 (日薪模式)' : form.payType === '半日薪' ? '⏱ 設定課程 (半日薪模式)' : '🕒 設定課程 (鐘點模式)' }}
                     </h3>
                     <p class="text-xs text-slate-400 mt-1">請輸入該節次的科目與班級</p>
                 </div>
@@ -548,7 +557,9 @@
                 const getSlotClass = (date, period) => {
                     const hasData = !!detailsMap.value[`${date}_${period}`];
                     if (!hasData) return 'slot-empty';
-                    return form.value.payType === '日薪' ? 'slot-daily' : 'slot-hourly';
+                    if (form.value.payType === '日薪') return 'slot-daily';
+                    if (form.value.payType === '半日薪') return 'slot-halfday';
+                    return 'slot-hourly';
                 };
 
                 // Slot interaction

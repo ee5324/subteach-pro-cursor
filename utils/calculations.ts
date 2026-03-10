@@ -146,29 +146,24 @@ export const calculatePay = (
     return periods * HOURLY_RATE;
   }
 
+  const daysInMonth = getDaysInMonth(date);
+  let baseSalary = subTeacher.baseSalary;
+  if (subTeacher.salaryPoints && salaryGrades.length > 0) {
+    const grade = salaryGrades.find(g => g.points === subTeacher.salaryPoints);
+    if (grade) baseSalary = grade.salary;
+  }
+  let dailyRate = (baseSalary + subTeacher.researchFee) / daysInMonth;
+  if (isHomeroomSubstitute) {
+    dailyRate += HOMEROOM_FEE_MONTHLY / daysInMonth;
+  }
+
   if (payType === PayType.DAILY) {
-    const daysInMonth = getDaysInMonth(date);
-    
-    // Determine Base Salary:
-    // If teacher has salaryPoints AND we can find it in the table, use the table value.
-    // Otherwise, fallback to the manually entered baseSalary.
-    let baseSalary = subTeacher.baseSalary;
-    
-    if (subTeacher.salaryPoints && salaryGrades.length > 0) {
-        const grade = salaryGrades.find(g => g.points === subTeacher.salaryPoints);
-        if (grade) {
-            baseSalary = grade.salary;
-        }
-    }
+    return Math.round(dailyRate * periods);
+  }
 
-    // Daily Salary Formula: (Base + Research) / Days in Month
-    let dailyRate = (baseSalary + subTeacher.researchFee) / daysInMonth;
-
-    if (isHomeroomSubstitute) {
-      dailyRate += HOMEROOM_FEE_MONTHLY / daysInMonth;
-    }
-
-    return Math.round(dailyRate * periods); 
+  // 半日薪：代課支出為一半的日薪（每「單位」為 0.5 日）
+  if (payType === PayType.HALF_DAY) {
+    return Math.round(dailyRate * 0.5 * periods);
   }
 
   return 0;
@@ -250,11 +245,10 @@ export const convertSlotsToDetails = (
     // Calculate Pay
     const teacher = teachers.find(t => t.id === g.teacherId);
     
-    const count = g.payType === PayType.HOURLY ? g.periods.length : 1; 
+    const count = g.payType === PayType.HOURLY ? g.periods.length : 1;
 
-    // Logic Update: If PayType is DAILY, assume Homeroom duties (and fee) are required.
-    // Otherwise, fall back to the teacher's profile.
-    const isHomeroomSub = g.payType === PayType.DAILY ? true : (teacher?.isHomeroom || false);
+    // DAILY / HALF_DAY: assume homeroom duties (and fee). HALF_DAY = 半日薪，導師費可由家長會清冊另列。
+    const isHomeroomSub = (g.payType === PayType.DAILY || g.payType === PayType.HALF_DAY) ? true : (teacher?.isHomeroom || false);
 
     return {
       id: crypto.randomUUID(),

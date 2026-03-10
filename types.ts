@@ -8,14 +8,16 @@ export enum TeacherType {
 export enum PayType {
   HOURLY = '鐘點費',
   DAILY = '日薪',
+  HALF_DAY = '半日薪',
 }
 
 export enum LeaveType {
-  PUBLIC_OFFICIAL = '公付 (公假)', // 新增
+  PUBLIC_OFFICIAL = '公付 (公假)',
   PUBLIC_GENERAL = '公付 (喪病產等)',
   PUBLIC_MENTAL = '公付 (身心)',
   PUBLIC_AFFAIRS = '公付 (其他事務費)',
   PUBLIC_COUNSELING = '公付 (學輔事務費)',
+  PUBLIC_PTA = '公派(家長會)',
   PERSONAL = '自理 (事假/病假)',
 }
 
@@ -238,8 +240,10 @@ export interface LeaveRecord {
   details: SubstituteDetail[]; // 用於薪資計算 (只含已確認教師)
   slots?: TimetableSlot[];     // 用於課表還原 (含待聘與科目班級)
   createdAt: number;
-  allowPartial?: boolean; // 新增：是否允許分段代課 (預設 false: 全代)
-  processingStatus?: ProcessingStatus; // 新增：行政處理狀態
+  allowPartial?: boolean; // 是否允許分段代課 (預設 false: 全代)
+  processingStatus?: ProcessingStatus; // 行政處理狀態
+  /** 家委支出：半日薪時打勾表示導師費由家長會支出，僅導師費納入家長會清冊 */
+  homeroomFeeByPta?: boolean;
 }
 
 // 新增：超鐘點紀錄

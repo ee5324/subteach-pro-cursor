@@ -466,7 +466,7 @@ const FixedOvertimePage: React.FC = () => {
 
         record.slots.forEach(slot => {
           if (!slot.substituteTeacherId || !slot.date.startsWith(monthPrefix)) return;
-          const isDailyPay = slot.payType === PayType.DAILY || (slot as any).payType === '日薪';
+          const isDailyPay = slot.payType === PayType.DAILY || slot.payType === PayType.HALF_DAY || (slot as any).payType === '日薪' || (slot as any).payType === '半日薪';
           if (isDailyPay) return;
 
           const slotDate = parseLocalDate(slot.date);

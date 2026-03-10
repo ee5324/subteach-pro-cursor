@@ -435,7 +435,7 @@ const Overtime: React.FC = () => {
                   const isOvertimeSlot = originalOvertimeSlots.some(s => s.day === dayOfWeek && String(s.period) === String(slot.period));
 
                   if (slot.substituteTeacherId === teacherId && normDate.startsWith(monthPrefix)) {
-                      const isDailyPay = slot.payType === PayType.DAILY || (slot as any).payType === '日薪';
+                      const isDailyPay = slot.payType === PayType.DAILY || slot.payType === PayType.HALF_DAY || (slot as any).payType === '日薪' || (slot as any).payType === '半日薪';
                       if (isOvertimeSlot && !isDailyPay) {
                           const key = `${normDate}|${String(slot.period)}`;
                           if (!seenDatePeriod.has(key)) {
@@ -458,7 +458,7 @@ const Overtime: React.FC = () => {
               record.details.forEach(detail => {
                   const normDate = normalizeDateString(detail.date);
                   if (detail.substituteTeacherId !== teacherId || !normDate.startsWith(monthPrefix)) return;
-                  const isDailyPay = detail.payType === PayType.DAILY || (detail as any).payType === '日薪';
+                  const isDailyPay = detail.payType === PayType.DAILY || detail.payType === PayType.HALF_DAY || (detail as any).payType === '日薪' || (detail as any).payType === '半日薪';
                   if (isDailyPay) return;
 
                   const dateObj = parseLocalDate(normDate);

@@ -112,7 +112,7 @@ const IncomingRequests: React.FC = () => {
                         subject: d.subject || '未定',
                         className: d.className || '未定',
                         substituteTeacherId: null, // Default to pending
-                        payType: req.payType === '日薪' ? PayType.DAILY : PayType.HOURLY
+                        payType: req.payType === '日薪' ? PayType.DAILY : req.payType === '半日薪' ? PayType.HALF_DAY : PayType.HOURLY
                     }));
                 }
             } catch (e) {

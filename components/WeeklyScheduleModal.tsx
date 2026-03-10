@@ -255,7 +255,7 @@ const WeeklyScheduleModal: React.FC<WeeklyScheduleModalProps> = ({
                                                                         {item.className}
                                                                     </div>
                                                                     {item.payType && (
-                                                                        <div className={`text-[10px] px-1 rounded inline-block mt-0.5 ${item.payType === '日薪' ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-600'}`}>
+                                                                        <div className={`text-[10px] px-1 rounded inline-block mt-0.5 ${item.payType === '日薪' ? 'bg-amber-100 text-amber-700' : item.payType === '半日薪' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
                                                                             {item.payType}
                                                                         </div>
                                                                     )}

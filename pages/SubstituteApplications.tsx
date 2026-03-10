@@ -275,12 +275,17 @@ const SubstituteApplications: React.FC = () => {
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-        <ExternalLink size={16} />
+      <div className="mt-4 flex items-center gap-2 text-sm text-slate-500 flex-wrap">
+        <ExternalLink size={16} className="shrink-0" />
         <span>對外報名表單網址：</span>
-        <code className="bg-slate-100 px-2 py-1 rounded text-xs break-all">
+        <a
+          href={typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}#/apply` : '#/apply'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-indigo-600 hover:underline text-xs break-all bg-slate-100 px-2 py-1 rounded"
+        >
           {typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}#/apply` : '#/apply'}
-        </code>
+        </a>
         <button
           type="button"
           onClick={() => {

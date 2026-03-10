@@ -622,6 +622,9 @@ const PendingItems: React.FC = () => {
                                                                 {item.payType === PayType.DAILY && (
                                                                     <span className="ml-1 text-[9px] bg-amber-100 text-amber-700 px-1 rounded">日薪</span>
                                                                 )}
+                                                                {item.payType === PayType.HALF_DAY && (
+                                                                    <span className="ml-1 text-[9px] bg-amber-50 text-amber-600 px-1 rounded">半日薪</span>
+                                                                )}
                                                             </td>
                                                             <td className="px-4 py-2 text-slate-600">
                                                                 <span className="font-medium text-slate-800">{item.subject}</span>
@@ -687,6 +690,7 @@ const PendingItems: React.FC = () => {
                    >
                        <option value={PayType.HOURLY}>鐘點費</option>
                        <option value={PayType.DAILY}>日薪</option>
+                       <option value={PayType.HALF_DAY}>半日薪</option>
                    </select>
 
                    {/* Actions */}
