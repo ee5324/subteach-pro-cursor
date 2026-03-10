@@ -31,6 +31,7 @@ const SubstituteApplications: React.FC = () => {
   const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: ModalType }>({
     isOpen: false, title: '', message: '', type: 'info',
   });
+  const [deleteConfirm, setDeleteConfirm] = useState<AppType | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -50,7 +51,6 @@ const SubstituteApplications: React.FC = () => {
   }, [substituteApplications, statusFilter, searchTerm]);
 
   const handleDelete = async (app: AppType) => {
-    if (!confirm(`確定要刪除「${app.name}」的報名資料？此操作無法復原。`)) return;
     setActionLoading(app.id);
     try {
       await deleteSubstituteApplication(app.id);
@@ -85,6 +85,22 @@ const SubstituteApplications: React.FC = () => {
   return (
     <div className="p-8 pb-32">
       <Modal isOpen={modal.isOpen} onClose={() => setModal({ ...modal, isOpen: false })} title={modal.title} message={modal.message} type={modal.type} />
+      <Modal
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (!deleteConfirm) return;
+          const target = deleteConfirm;
+          setDeleteConfirm(null);
+          handleDelete(target);
+        }}
+        title="確認刪除"
+        message={deleteConfirm ? `確定要刪除「${deleteConfirm.name}」的報名資料？\n此操作無法復原。` : ''}
+        type="warning"
+        mode="confirm"
+        confirmText="確定刪除"
+        cancelText="取消"
+      />
 
       <header className="mb-6">
         <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
@@ -237,7 +253,7 @@ const SubstituteApplications: React.FC = () => {
                       )}
                       <button
                         type="button"
-                        onClick={() => handleDelete(app)}
+                        onClick={() => setDeleteConfirm(app)}
                         disabled={isBusy}
                         className="text-red-500 hover:text-red-700 p-1.5 rounded hover:bg-red-50 disabled:opacity-50"
                         title="刪除報名"
