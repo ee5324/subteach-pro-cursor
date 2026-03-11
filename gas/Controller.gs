@@ -79,7 +79,8 @@ function doPost(e) {
     } else if (action === 'GENERATE_REPORTS') {
       var records = data.records;
       var teachers = data.teachers;
-      var resultObj = SheetManager.syncRecords(records, teachers);
+      var options = data.options || {};
+      var resultObj = SheetManager.syncRecords(records, teachers, options);
       result = { 
         status: 'success', 
         message: '報表產生成功 (共處理 ' + resultObj.count + ' 筆資料)',

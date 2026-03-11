@@ -841,7 +841,7 @@ var SheetManager = {
     if (rowIndex > 0) { sheet.getRange(rowIndex, 13).setValue('Pending'); return true; } else { throw new Error("找不到該筆申請紀錄 (UUID: " + uuid + ")"); }
   },
 
-  syncRecords: function(records, teachers) {
+  syncRecords: function(records, teachers, exportOptions) {
     if (!records || records.length === 0) return { count: 0, urls: [] };
     var ss = getSpreadsheet(); 
     var teacherMap = {};
@@ -1002,73 +1002,69 @@ var SheetManager = {
     
     var rootFolderId = CONFIG.OUTPUT_FOLDER_ID;
     var rootFolder = rootFolderId ? DriveApp.getFolderById(rootFolderId) : DriveApp.getRootFolder();
-    
-    for (var sheetName in sheetsData) {
-        var groups = sheetsData[sheetName];
+    var ptaTemplateSheet = (CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME && ss.getSheetByName(CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME)) || templateSheet;
+    var typeOrder = ['公假', '喪病產', '身心假', '學輔事務', '其他事務', '公付其他', '自理', '家長會'];
+    exportOptions = exportOptions || {};
+    var selectedLedgers = exportOptions.ledgers || exportOptions.ledgerTypes || null;   // array of typeRaw
+    var selectedVouchers = exportOptions.vouchers || exportOptions.voucherTypes || null; // array of typeRaw
+
+    function normalizeSelection(arr) {
+        if (!arr) return null;
+        if (Object.prototype.toString.call(arr) !== '[object Array]') return null;
+        var set = {};
+        arr.forEach(function(x) { if (x !== null && x !== undefined) set[String(x)] = true; });
+        return set;
+    }
+    var selectedLedgersSet = normalizeSelection(selectedLedgers);
+    var selectedVouchersSet = normalizeSelection(selectedVouchers);
+
+    function isLedgerSelected(typeRaw) {
+        if (!selectedLedgersSet) return true; // default: all
+        return !!selectedLedgersSet[String(typeRaw)];
+    }
+    function isVoucherSelected(typeRaw) {
+        if (!selectedVouchersSet) return true; // default: all
+        return !!selectedVouchersSet[String(typeRaw)];
+    }
+
+    function typeRawToStr(typeRaw) {
+        if (typeRaw === '自理') return '課務自理';
+        if (typeRaw === '喪病產') return '喪病產假';
+        if (typeRaw === '身心障礙') return '身心假';
+        return typeRaw || '其他';
+    }
+
+    function buildRowsFromGroups(groups, teacherMap) {
         var rows = [];
         for (var subName in groups) {
             var g = groups[subName];
-            
             var dateDisplay = SheetManagerHelpers.formatDateRanges(g.fullDates);
-            
-            var subTeacherInfo = g.subTeacherObj;
+            var subTeacherInfo = g.subTeacherObj || teacherMap[subName];
             var salaryGradeDisplay = '';
             if (subTeacherInfo && subTeacherInfo.salaryPoints) {
                 var certStatus = subTeacherInfo.hasCertificate ? '(有證)' : '(無證)';
                 salaryGradeDisplay = subTeacherInfo.salaryPoints + "\n" + certStatus;
             }
-            var dailyRateDisplay = '';
-            if (g.totalDays > 0) { dailyRateDisplay = Math.round((g.finalAmount - g.homeroomFee) / g.totalDays); }
-            var origDisplay = g.originalTeachers.join('\n');
-            var typeDisplay = g.leaveTypes.map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
-            var reasonDisplay = g.reasons.join('\n');
-            
-            var noteDisplay = "";
-            if (g.totalDays > 0 && g.totalPeriods === 0) {
-                noteDisplay = g.totalDays + "日";
-            } else {
-                noteDisplay = g.notes.join('\n');
-            }
-
+            var dailyRateDisplay = g.totalDays > 0 ? Math.round((g.finalAmount - g.homeroomFee) / g.totalDays) : '';
+            var origDisplay = (g.originalTeachers || []).join('\n');
+            var typeDisplay = (g.leaveTypes || []).map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
+            var reasonDisplay = (g.reasons || []).join('\n');
+            var noteDisplay = (g.totalDays > 0 && g.totalPeriods === 0) ? g.totalDays + "日" : (g.notes || []).join('\n');
             rows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, g.totalDays || '', g.totalPeriods || '', g.hourlyTotal || '', origDisplay, typeDisplay, reasonDisplay, noteDisplay, g.homeroomDays || '', g.homeroomFee || '', g.finalAmount, '', '', '', '', '' ]);
-            processedCount++;
         }
-        var parts = sheetName.split('_');
-        var ym = parts[0]; 
-        var typeRaw = parts[1]; 
-        
-        var typeStr = typeRaw;
-        if (typeRaw === '自理') typeStr = '課務自理';
-        else if (typeRaw === '喪病產') typeStr = '喪病產假';
-        else if (typeRaw === '身心障礙') typeStr = '身心假';
-        
-        var year = ym.split('-')[0];
-        var month = ym.split('-')[1];
-        var rocYear = parseInt(year) - 1911;
-        var yFolder = getOrCreateSubFolder(rootFolder, year);
-        var mFolder = getOrCreateSubFolder(yFolder, month);
-        
-        var fileName = rocYear + "年" + month + "月_" + typeStr + "_印領清冊";
-        var existingFiles = mFolder.getFilesByName(fileName);
-        while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true); }
-        
-        var newSS = SpreadsheetApp.create(fileName);
-        var newFile = DriveApp.getFileById(newSS.getId());
-        newFile.moveTo(mFolder); 
-        generatedUrls.push(newSS.getUrl());
-        
-        var summarySheet = templateSheet.copyTo(newSS);
-        summarySheet.setName("印領清冊");
-        
-        var title = "加昌國小" + rocYear + "年" + month + "月代課教師印領清冊~~【級科任教師】" + typeStr;
-        summarySheet.getRange("A1").setValue(title);
-        
+        return rows;
+    }
+
+    function writeLedgerToSheet(summarySheet, rows, typeStr, rocYear, month, titlePrefix, options) {
+        var startRow = 3;
+        var dataCount = rows.length;
+        var endRow = startRow + dataCount - 1;
         var sumDays = 0, sumPeriods = 0, sumHourly = 0, sumHDays = 0, sumHFee = 0, sumTotal = 0;
         rows.forEach(function(r) { sumDays += Number(r[4]) || 0; sumPeriods += Number(r[5]) || 0; sumHourly += Number(r[6]) || 0; sumHDays += Number(r[11]) || 0; sumHFee += Number(r[12]) || 0; sumTotal += Number(r[13]) || 0; });
-        var startRow = 3; 
-        var dataCount = rows.length;
+        var title = titlePrefix + typeStr;
+        summarySheet.getRange("A1").setValue(title);
         if (dataCount > 0) {
-            if (dataCount > 1) { summarySheet.insertRowsAfter(startRow, dataCount - 1); }
+            if (dataCount > 1) summarySheet.insertRowsAfter(startRow, dataCount - 1);
             summarySheet.getRange(startRow, 1, dataCount, 19).setValues(rows);
             var rangeToFormat = summarySheet.getRange(startRow, 1, dataCount, 19);
             rangeToFormat.setBorder(true, true, true, true, true, true);
@@ -1077,7 +1073,7 @@ var SheetManager = {
             summarySheet.getRange(startRow, 1, dataCount, 2).setWrap(true);
             summarySheet.getRange(startRow, 8, dataCount, 4).setWrap(true);
             var totalRowIndex = startRow + dataCount;
-            // 清冊數字欄位放大為 14 號字：D:G、L:N（含合計列）
+            // D:G、L:N（含合計列）
             summarySheet.getRange(startRow, 4, dataCount + 1, 4).setFontSize(14);
             summarySheet.getRange(startRow, 12, dataCount + 1, 3).setFontSize(14);
             summarySheet.getRange(totalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
@@ -1089,124 +1085,123 @@ var SheetManager = {
             summarySheet.getRange(totalRowIndex, 13).setValue(sumHFee);
             summarySheet.getRange(totalRowIndex, 14).setValue(sumTotal);
             var footerStartRow = totalRowIndex + 1;
-            var row1 = footerStartRow;
-            summarySheet.getRange(row1, 1).setValue("製表人：");
-            summarySheet.getRange(row1, 8).setValue("勞保承辦：");
-            summarySheet.getRange(row1, 14).setValue("校長：");
-            var row3 = footerStartRow + 3;
-            summarySheet.getRange(row3, 1).setValue("教務主任：");
-            summarySheet.getRange(row3, 8).setValue("人事主任：");
-            var row5 = footerStartRow + 6;
-            summarySheet.getRange(row5, 8).setValue("會計主任：");
+            summarySheet.getRange(footerStartRow, 1).setValue("製表人：");
+            summarySheet.getRange(footerStartRow, 8).setValue("勞保承辦：");
+            summarySheet.getRange(footerStartRow, 14).setValue("校長：");
+            summarySheet.getRange(footerStartRow + 3, 1).setValue("教務主任：");
+            summarySheet.getRange(footerStartRow + 3, 8).setValue("人事主任：");
+            summarySheet.getRange(footerStartRow + 6, 8).setValue("會計主任：");
             summarySheet.getRange(footerStartRow, 1, 10, 19).setFontWeight("bold").setFontSize(11);
-
-            // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
             for (var rowIndex = startRow; rowIndex <= footerStartRow + 9; rowIndex++) {
-                var currentHeight = summarySheet.getRowHeight(rowIndex);
-                summarySheet.setRowHeight(rowIndex, Math.round(currentHeight * 1.25));
+                summarySheet.setRowHeight(rowIndex, Math.round(summarySheet.getRowHeight(rowIndex) * 1.25));
+            }
+            if (options && options.deleteExtraRows) {
+                var maxRows = summarySheet.getMaxRows();
+                if (maxRows > footerStartRow + 9) summarySheet.deleteRows(footerStartRow + 10, maxRows - footerStartRow - 9);
             }
         }
-        if (voucherTemplate) {
-            var voucherSheet = voucherTemplate.copyTo(newSS);
-            voucherSheet.setName("黏貼憑證");
-            var moneyStr = Math.round(sumTotal).toString();
-            var len = moneyStr.length;
-            voucherSheet.getRange("J6:O6").clearContent();
-            for (var i = 0; i < 6; i++) {
-                var colIndex = 15 - i; 
-                var charIndex = len - 1 - i;
-                if (charIndex >= 0) { voucherSheet.getRange(6, colIndex).setValue(moneyStr.charAt(charIndex)); } else { voucherSheet.getRange(6, colIndex).setValue("-"); }
-            }
-            voucherSheet.getRange("C6").setValue(title);
-            voucherSheet.getRange("P6").setValue(title);
-            voucherSheet.getRange("A22").setValue(title);
-            voucherSheet.getRange("P22").setValue(title);
-            voucherSheet.getRange("M22").setValue(sumTotal);
-            voucherSheet.getRange("H19").setValue(rocYear);
-            voucherSheet.getRange("J19").setValue(month);
-            var lastDay = new Date(year, month, 0).getDate();
-            voucherSheet.getRange("L19").setValue(lastDay);
-        }
-        var defaultSheet = newSS.getSheets()[0];
-        if (defaultSheet.getName() !== "印領清冊" && defaultSheet.getName() !== "黏貼憑證") { newSS.deleteSheet(defaultSheet); }
+        return { sumTotal: sumTotal, title: title };
     }
 
-    // 家長會清冊（情況一 公派(家長會) 整筆 + 情況二 半日薪且(家委支出或身心假) 僅導師費）
-    var ptaTemplateSheet = (CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME && ss.getSheetByName(CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME)) || templateSheet;
-    for (var ptaSheetName in ptaSheetsData) {
-        var ptaGroups = ptaSheetsData[ptaSheetName];
-        var ptaRows = [];
-        for (var subName in ptaGroups) {
-            var g = ptaGroups[subName];
-            var dateDisplay = SheetManagerHelpers.formatDateRanges(g.fullDates);
-            var subTeacherInfo = g.subTeacherObj;
-            var salaryGradeDisplay = (subTeacherInfo && subTeacherInfo.salaryPoints) ? (subTeacherInfo.salaryPoints + "\n" + (subTeacherInfo.hasCertificate ? '(有證)' : '(無證)')) : '';
-            var dailyRateDisplay = g.totalDays > 0 ? Math.round((g.finalAmount - g.homeroomFee) / g.totalDays) : '';
-            var origDisplay = g.originalTeachers.join('\n');
-            var typeDisplay = g.leaveTypes.map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
-            var reasonDisplay = g.reasons.join('\n');
-            var noteDisplay = g.notes.join('\n');
-            ptaRows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, g.totalDays || '', g.totalPeriods || '', g.hourlyTotal || '', origDisplay, typeDisplay, reasonDisplay, noteDisplay, g.homeroomDays || '', g.homeroomFee || '', g.finalAmount, '', '', '', '', '' ]);
-            processedCount++;
+    function addVoucherSheet(newSS, sumTotal, title, rocYear, month, year, sheetName) {
+        if (!voucherTemplate) return;
+        var voucherSheet = voucherTemplate.copyTo(newSS);
+        voucherSheet.setName(sheetName || "黏貼憑證");
+        var moneyStr = Math.round(Number(sumTotal) || 0).toString();
+        var len = moneyStr.length;
+        voucherSheet.getRange("J6:O6").clearContent();
+        for (var i = 0; i < 6; i++) {
+            var colIndex = 15 - i;
+            var charIndex = len - 1 - i;
+            if (charIndex >= 0) voucherSheet.getRange(6, colIndex).setValue(moneyStr.charAt(charIndex));
+            else voucherSheet.getRange(6, colIndex).setValue("-");
         }
-        var ptaParts = ptaSheetName.split('_');
-        var ptaYm = ptaParts[0];
-        var ptaYear = ptaYm.split('-')[0];
-        var ptaMonth = ptaYm.split('-')[1];
-        var ptaRocYear = parseInt(ptaYear) - 1911;
-        var ptaYFolder = getOrCreateSubFolder(rootFolder, ptaYear);
-        var ptaMFolder = getOrCreateSubFolder(ptaYFolder, ptaMonth);
-        var ptaFileName = ptaRocYear + "年" + ptaMonth + "月_家長會_印領清冊";
-        var ptaExisting = ptaMFolder.getFilesByName(ptaFileName);
-        while (ptaExisting.hasNext()) { ptaExisting.next().setTrashed(true); }
-        var ptaNewSS = SpreadsheetApp.create(ptaFileName);
-        DriveApp.getFileById(ptaNewSS.getId()).moveTo(ptaMFolder);
-        generatedUrls.push(ptaNewSS.getUrl());
-        var ptaSummarySheet = ptaTemplateSheet.copyTo(ptaNewSS);
-        ptaSummarySheet.setName("印領清冊");
-        var ptaTitle = "加昌國小" + ptaRocYear + "年" + ptaMonth + "月代課教師印領清冊~~【級科任教師】公假家長會";
-        ptaSummarySheet.getRange("A1").setValue(ptaTitle);
-        var ptaDaysInMonth = new Date(parseInt(ptaYear), parseInt(ptaMonth), 0).getDate();
-        ptaSummarySheet.getRange("D2").setValue("日薪\n(" + ptaDaysInMonth + "日)");
-        ptaSummarySheet.getRange("M2").setValue("導師費(" + parseInt(ptaMonth) + "月4000元)");
-        var ptaSumDays = 0, ptaSumPeriods = 0, ptaSumHourly = 0, ptaSumHDays = 0, ptaSumHFee = 0, ptaSumTotal = 0;
-        ptaRows.forEach(function(r) { ptaSumDays += Number(r[4]) || 0; ptaSumPeriods += Number(r[5]) || 0; ptaSumHourly += Number(r[6]) || 0; ptaSumHDays += Number(r[11]) || 0; ptaSumHFee += Number(r[12]) || 0; ptaSumTotal += Number(r[13]) || 0; });
-        var ptaStartRow = 3;
-        var ptaDataCount = ptaRows.length;
-        if (ptaDataCount > 0) {
-            if (ptaDataCount > 1) ptaSummarySheet.insertRowsAfter(ptaStartRow, ptaDataCount - 1);
-            ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 19).setValues(ptaRows);
-            var ptaRange = ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 19);
-            ptaRange.setBorder(true, true, true, true, true, true);
-            ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 1).setNumberFormat("@");
-            ptaRange.setVerticalAlignment("middle").setHorizontalAlignment("center");
-            ptaSummarySheet.getRange(ptaStartRow, 1, ptaDataCount, 2).setWrap(true);
-            ptaSummarySheet.getRange(ptaStartRow, 8, ptaDataCount, 4).setWrap(true);
-            var ptaTotalRowIndex = ptaStartRow + ptaDataCount;
-            ptaSummarySheet.getRange(ptaStartRow, 4, ptaDataCount + 1, 4).setFontSize(14);
-            ptaSummarySheet.getRange(ptaStartRow, 12, ptaDataCount + 1, 3).setFontSize(14);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 1, 1, 2).merge().setValue("合計").setHorizontalAlignment("center");
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 5).setValue(ptaSumDays);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 6).setValue(ptaSumPeriods);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 7).setValue(ptaSumHourly);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 12).setValue(ptaSumHDays);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 13).setValue(ptaSumHFee);
-            ptaSummarySheet.getRange(ptaTotalRowIndex, 14).setValue(ptaSumTotal);
-            var ptaFooterStart = ptaTotalRowIndex + 1;
-            ptaSummarySheet.getRange(ptaFooterStart, 1).setValue("製表人：");
-            ptaSummarySheet.getRange(ptaFooterStart, 8).setValue("勞保承辦：");
-            ptaSummarySheet.getRange(ptaFooterStart, 14).setValue("校長：");
-            ptaSummarySheet.getRange(ptaFooterStart + 3, 1).setValue("教務主任：");
-            ptaSummarySheet.getRange(ptaFooterStart + 3, 8).setValue("人事主任：");
-            ptaSummarySheet.getRange(ptaFooterStart + 6, 8).setValue("會計主任：");
-            ptaSummarySheet.getRange(ptaFooterStart, 1, 10, 19).setFontWeight("bold").setFontSize(11);
-            for (var ri = ptaStartRow; ri <= ptaFooterStart + 9; ri++) {
-                ptaSummarySheet.setRowHeight(ri, Math.round(ptaSummarySheet.getRowHeight(ri) * 1.25));
+        voucherSheet.getRange("C6").setValue(title);
+        voucherSheet.getRange("P6").setValue(title);
+        voucherSheet.getRange("A22").setValue(title);
+        voucherSheet.getRange("P22").setValue(title);
+        voucherSheet.getRange("M22").setValue(Number(sumTotal) || 0);
+        voucherSheet.getRange("H19").setValue(rocYear);
+        voucherSheet.getRange("J19").setValue(month);
+        var lastDay = new Date(year, month, 0).getDate();
+        voucherSheet.getRange("L19").setValue(lastDay);
+    }
+
+    var monthsSeen = {};
+    for (var sheetName in sheetsData) { var ym = sheetName.split('_')[0]; monthsSeen[ym] = true; }
+    for (var ptaSheetName in ptaSheetsData) { var ym = ptaSheetName.split('_')[0]; monthsSeen[ym] = true; }
+    var monthsList = Object.keys(monthsSeen).sort();
+
+    for (var mi = 0; mi < monthsList.length; mi++) {
+        var ym = monthsList[mi];
+        var year = ym.split('-')[0];
+        var month = ym.split('-')[1];
+        var rocYear = parseInt(year) - 1911;
+        var titlePrefix = "加昌國小" + rocYear + "年" + month + "月代課教師印領清冊~~【級科任教師】";
+        var monthItems = [];
+        for (var ti = 0; ti < typeOrder.length; ti++) {
+            var typeRaw = typeOrder[ti];
+            var sheetNameKey = ym + '_' + (typeRaw === '家長會' ? '家長會' : typeRaw);
+            var groups = typeRaw === '家長會' ? ptaSheetsData[sheetNameKey] : sheetsData[sheetNameKey];
+            if (!groups) continue;
+            var rows = buildRowsFromGroups(groups, teacherMap);
+            // 家長會清冊：只顯示應發金額 > 0 的教師（有實際支領家長會薪水者）
+            if (typeRaw === '家長會') {
+                rows = rows.filter(function(r) { return (Number(r[13]) || 0) > 0; });
+            }
+            if (rows.length === 0) continue;
+            var needLedger = isLedgerSelected(typeRaw);
+            var needVoucher = isVoucherSelected(typeRaw);
+            if (!needLedger && !needVoucher) continue;
+            monthItems.push({ typeRaw: typeRaw, typeStr: typeRaw === '家長會' ? '家長會' : typeRawToStr(typeRaw), rows: rows, isPta: typeRaw === '家長會', needLedger: needLedger, needVoucher: needVoucher });
+        }
+        if (monthItems.length === 0) continue;
+
+        var yFolder = getOrCreateSubFolder(rootFolder, year);
+        var mFolder = getOrCreateSubFolder(yFolder, month);
+        var fileName = rocYear + "年" + month + "月_代課印領清冊";
+        var existingFiles = mFolder.getFilesByName(fileName);
+        while (existingFiles.hasNext()) { existingFiles.next().setTrashed(true); }
+        var newSS = SpreadsheetApp.create(fileName);
+        DriveApp.getFileById(newSS.getId()).moveTo(mFolder);
+        generatedUrls.push(newSS.getUrl());
+
+        for (var si = 0; si < monthItems.length; si++) {
+            var item = monthItems[si];
+            processedCount += item.rows.length;
+            var ledgerInfo = null;
+            if (item.needLedger) {
+                var srcTemplate = item.isPta ? ptaTemplateSheet : templateSheet;
+                var newSheet = srcTemplate.copyTo(newSS);
+                newSheet.setName(item.typeStr);
+                if (item.isPta) {
+                    var ptaDaysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+                    newSheet.getRange("D2").setValue("日薪\n(" + ptaDaysInMonth + "日)");
+                    newSheet.getRange("M2").setValue("導師費(" + parseInt(month) + "月4000元)");
+                    ledgerInfo = writeLedgerToSheet(newSheet, item.rows, '公假家長會', rocYear, month, titlePrefix, { deleteExtraRows: true });
+                } else {
+                    ledgerInfo = writeLedgerToSheet(newSheet, item.rows, item.typeStr, rocYear, month, titlePrefix, {});
+                }
+            } else {
+                // Only voucher requested — still need title and sumTotal
+                var sumTotal = 0;
+                item.rows.forEach(function(r) { sumTotal += Number(r[13]) || 0; });
+                var title = item.isPta ? (titlePrefix + '公假家長會') : (titlePrefix + item.typeStr);
+                ledgerInfo = { sumTotal: sumTotal, title: title };
+            }
+            if (item.needVoucher) {
+                var voucherName = (item.isPta ? '家長會' : item.typeStr) + '_憑證';
+                addVoucherSheet(newSS, ledgerInfo.sumTotal, ledgerInfo.title, rocYear, month, year, voucherName);
             }
         }
-        var ptaDefault = ptaNewSS.getSheets()[0];
-        if (ptaDefault.getName() !== "印領清冊") ptaNewSS.deleteSheet(ptaDefault);
+
+        var sheets = newSS.getSheets();
+        for (var si = 0; si < sheets.length; si++) {
+            if (sheets[si].getName() === '工作表1' || sheets[si].getName() === 'Sheet1') {
+                newSS.deleteSheet(sheets[si]);
+                break;
+            }
+        }
     }
     return { count: processedCount, urls: generatedUrls };
   },

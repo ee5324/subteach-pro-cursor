@@ -58,6 +58,25 @@ const Records: React.FC = () => {
   const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [errorLog, setErrorLog] = useState<string | null>(null);
+
+  // Export Picker Modal
+  const EXPORT_TYPE_OPTIONS: { key: string; label: string; description?: string }[] = [
+    { key: '公假', label: '公假' },
+    { key: '喪病產', label: '喪病產假' },
+    { key: '身心假', label: '身心假' },
+    { key: '學輔事務', label: '學輔事務' },
+    { key: '其他事務', label: '其他事務' },
+    { key: '公付其他', label: '公付其他' },
+    { key: '自理', label: '課務自理' },
+    { key: '家長會', label: '家長會' },
+  ];
+  const [isExportPickerOpen, setIsExportPickerOpen] = useState(false);
+  const [selectedLedgerTypes, setSelectedLedgerTypes] = useState<Set<string>>(
+    () => new Set(EXPORT_TYPE_OPTIONS.map(o => o.key))
+  );
+  const [selectedVoucherTypes, setSelectedVoucherTypes] = useState<Set<string>>(
+    () => new Set(EXPORT_TYPE_OPTIONS.map(o => o.key))
+  );
   
   // Doc Generation States
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -413,32 +432,48 @@ const Records: React.FC = () => {
       }
 
       setIsGeneratingReport(true);
-      const pendingTabs = [openPendingTab(), openPendingTab()];
       try {
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_REPORTS', {
               records: filteredRecords,
-              teachers: teachers
+              teachers: teachers,
+              options: {
+                  ledgers: Array.from(selectedLedgerTypes),
+                  vouchers: Array.from(selectedVoucherTypes),
+              }
           });
           
           if (result.data && result.data.urls && result.data.urls.length > 0) {
-              result.data.urls.forEach((url: any, index: number) => {
-                  const opened = navigateOpenedTab(pendingTabs[index] || null, String(url));
-                  if (!opened) window.open(String(url), '_blank');
-              });
-              pendingTabs.slice(result.data.urls.length).forEach(tab => tab?.close());
-              showModal({ title: '產生成功', message: "印領清冊與黏貼憑證已產生並自動開啟。", type: 'success' });
+              result.data.urls.forEach((url: any) => window.open(String(url), '_blank'));
+              showModal({ title: '產生成功', message: "已依勾選項目產生清冊/憑證並自動開啟。", type: 'success' });
           } else {
-              pendingTabs.forEach(tab => tab?.close());
               showModal({ title: '產生成功', message: "已產生至指定資料夾，但未回傳網址。", type: 'success' });
           }
 
       } catch (e: any) {
-          pendingTabs.forEach(tab => tab?.close());
           const msg = e instanceof Error ? e.message : String(e);
           showModal({ title: '產生失敗', message: String(msg), type: 'error' });
       } finally {
           setIsGeneratingReport(false);
       }
+  };
+
+  const handleOpenExportPicker = () => {
+      if (!settings.gasWebAppUrl) {
+          showModal({ title: '未設定連線', message: "請先設定 GAS Web App URL。", type: 'warning', onConfirm: handleOpenSettings });
+          return;
+      }
+      if (filteredRecords.length === 0) {
+          showModal({ title: '無資料', message: "該月份無代課紀錄 (含跨月)。", type: 'warning' });
+          return;
+      }
+      setIsExportPickerOpen(true);
+  };
+
+  const toggleSetItem = (set: Set<string>, key: string) => {
+      const next = new Set(set);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
   };
 
   const handleBatchGenerateDispatch = async () => {
@@ -597,6 +632,118 @@ const Records: React.FC = () => {
         mode={modal.mode}
       />
 
+      <Modal
+        isOpen={isExportPickerOpen}
+        onClose={() => setIsExportPickerOpen(false)}
+        onConfirm={async () => {
+            // basic guard
+            if (selectedLedgerTypes.size === 0 && selectedVoucherTypes.size === 0) {
+                showModal({ title: '未選擇任何項目', message: '請至少勾選 1 種清冊或憑證再匯出。', type: 'warning' });
+                return;
+            }
+            setIsExportPickerOpen(false);
+            await handleGenerateReport();
+        }}
+        title="選擇匯出項目"
+        type="info"
+        mode="confirm"
+        confirmText="開始匯出"
+        cancelText="取消"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <div className="text-sm text-slate-600">
+            你可以分別選擇要匯出的「清冊」與「憑證」。未勾選的類型不會產生對應工作表。
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-slate-200 rounded-xl p-4 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-bold text-slate-800">清冊（工作表）</div>
+                <div className="flex gap-2">
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                    onClick={() => setSelectedLedgerTypes(new Set(EXPORT_TYPE_OPTIONS.map(o => o.key)))}
+                    type="button"
+                  >
+                    全選
+                  </button>
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                    onClick={() => setSelectedLedgerTypes(new Set())}
+                    type="button"
+                  >
+                    全不選
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {EXPORT_TYPE_OPTIONS.map(opt => {
+                  const checked = selectedLedgerTypes.has(opt.key);
+                  return (
+                    <label key={`ledger-${opt.key}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setSelectedLedgerTypes(prev => toggleSetItem(prev, opt.key))}
+                        />
+                        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
+                      </div>
+                      <span className="text-xs text-slate-400">{opt.key}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl p-4 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-bold text-slate-800">憑證（工作表）</div>
+                <div className="flex gap-2">
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                    onClick={() => setSelectedVoucherTypes(new Set(EXPORT_TYPE_OPTIONS.map(o => o.key)))}
+                    type="button"
+                  >
+                    全選
+                  </button>
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                    onClick={() => setSelectedVoucherTypes(new Set())}
+                    type="button"
+                  >
+                    全不選
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {EXPORT_TYPE_OPTIONS.map(opt => {
+                  const checked = selectedVoucherTypes.has(opt.key);
+                  return (
+                    <label key={`voucher-${opt.key}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setSelectedVoucherTypes(prev => toggleSetItem(prev, opt.key))}
+                        />
+                        <span className="text-sm font-medium text-slate-700">{opt.label}</span>
+                      </div>
+                      <span className="text-xs text-slate-400">{opt.label}_憑證</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
+            小提醒：若你只勾選「憑證」不勾選「清冊」，系統仍會以當月資料計算合計金額並產生憑證工作表。
+          </div>
+        </div>
+      </Modal>
+
       {/* Header Area */}
       <header className="mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -702,7 +849,7 @@ const Records: React.FC = () => {
                 </button>
 
                 <button 
-                    onClick={handleGenerateReport}
+                    onClick={handleOpenExportPicker}
                     disabled={isGeneratingReport}
                     className="px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm flex items-center shadow-sm font-medium whitespace-nowrap"
                     title="匯出本月印領清冊與憑證至 Google Drive"
