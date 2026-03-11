@@ -1175,8 +1175,14 @@ var SheetManager = {
                 newSheet.setName(item.typeStr);
                 if (item.isPta) {
                     var ptaDaysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+                    var ptaFeePerDay = Math.round(4000 / ptaDaysInMonth);
                     newSheet.getRange("D2").setValue("日薪\n(" + ptaDaysInMonth + "日)");
-                    newSheet.getRange("M2").setValue("導師費(" + parseInt(month) + "月4000元)");
+                    var m2Text = "導師費(" + parseInt(month) + "月" + ptaFeePerDay + "元/日)";
+                    var m2Rich = SpreadsheetApp.newRichTextValue().setText(m2Text)
+                        .setTextStyle(0, 3, SpreadsheetApp.newTextStyle().setFontSize(14).build())
+                        .setTextStyle(3, m2Text.length, SpreadsheetApp.newTextStyle().setFontSize(10).build())
+                        .build();
+                    newSheet.getRange("M2").setRichTextValue(m2Rich);
                     ledgerInfo = writeLedgerToSheet(newSheet, item.rows, '公假家長會', rocYear, month, titlePrefix, { deleteExtraRows: true });
                 } else {
                     ledgerInfo = writeLedgerToSheet(newSheet, item.rows, item.typeStr, rocYear, month, titlePrefix, {});
