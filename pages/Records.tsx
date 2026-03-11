@@ -436,7 +436,7 @@ const Records: React.FC = () => {
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_REPORTS', {
               records: filteredRecords,
               teachers: teachers,
-              options: {
+              exportOptions: {
                   ledgers: Array.from(selectedLedgerTypes),
                   vouchers: Array.from(selectedVoucherTypes),
               }

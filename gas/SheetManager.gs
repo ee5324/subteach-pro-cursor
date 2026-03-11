@@ -1005,12 +1005,12 @@ var SheetManager = {
     var ptaTemplateSheet = (CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME && ss.getSheetByName(CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME)) || templateSheet;
     var typeOrder = ['公假', '喪病產', '身心假', '學輔事務', '其他事務', '公付其他', '自理', '家長會'];
     exportOptions = exportOptions || {};
-    var selectedLedgers = exportOptions.ledgers || exportOptions.ledgerTypes || null;   // array of typeRaw
-    var selectedVouchers = exportOptions.vouchers || exportOptions.voucherTypes || null; // array of typeRaw
+    // 僅當明確傳入陣列時才依勾選過濾；否則視為未指定，匯出全部
+    var selectedLedgers = (exportOptions.ledgers !== undefined && Array.isArray(exportOptions.ledgers)) ? exportOptions.ledgers : (Array.isArray(exportOptions.ledgerTypes) ? exportOptions.ledgerTypes : null);
+    var selectedVouchers = (exportOptions.vouchers !== undefined && Array.isArray(exportOptions.vouchers)) ? exportOptions.vouchers : (Array.isArray(exportOptions.voucherTypes) ? exportOptions.voucherTypes : null);
 
     function normalizeSelection(arr) {
-        if (!arr) return null;
-        if (Object.prototype.toString.call(arr) !== '[object Array]') return null;
+        if (arr == null || !Array.isArray(arr)) return null;
         var set = {};
         arr.forEach(function(x) { if (x !== null && x !== undefined) set[String(x)] = true; });
         return set;
@@ -1019,11 +1019,11 @@ var SheetManager = {
     var selectedVouchersSet = normalizeSelection(selectedVouchers);
 
     function isLedgerSelected(typeRaw) {
-        if (!selectedLedgersSet) return true; // default: all
+        if (selectedLedgersSet == null) return true;
         return !!selectedLedgersSet[String(typeRaw)];
     }
     function isVoucherSelected(typeRaw) {
-        if (!selectedVouchersSet) return true; // default: all
+        if (selectedVouchersSet == null) return true;
         return !!selectedVouchersSet[String(typeRaw)];
     }
 
@@ -1065,17 +1065,16 @@ var SheetManager = {
         summarySheet.getRange("A1").setValue(title);
         if (dataCount > 0) {
             if (dataCount > 1) summarySheet.insertRowsAfter(startRow, dataCount - 1);
-            summarySheet.getRange(startRow, 1, dataCount, 19).setValues(rows);
-            var rangeToFormat = summarySheet.getRange(startRow, 1, dataCount, 19);
+            summarySheet.getRange(startRow, 1, endRow, 19).setValues(rows);
+            var rangeToFormat = summarySheet.getRange(startRow, 1, endRow, 19);
             rangeToFormat.setBorder(true, true, true, true, true, true);
-            summarySheet.getRange(startRow, 1, dataCount, 1).setNumberFormat("@");
+            summarySheet.getRange(startRow, 1, endRow, 1).setNumberFormat("@");
             rangeToFormat.setVerticalAlignment("middle").setHorizontalAlignment("center");
-            summarySheet.getRange(startRow, 1, dataCount, 2).setWrap(true);
+            summarySheet.getRange(startRow, 1, endRow, 2).setWrap(true);
             summarySheet.getRange(startRow, 8, dataCount, 4).setWrap(true);
             var totalRowIndex = startRow + dataCount;
-            // D:G、L:N（含合計列）
-            summarySheet.getRange(startRow, 4, dataCount + 1, 4).setFontSize(14);
-            summarySheet.getRange(startRow, 12, dataCount + 1, 3).setFontSize(14);
+            summarySheet.getRange(startRow, 4, endRow + 1, 4).setFontSize(14);
+            summarySheet.getRange(startRow, 12, endRow + 1, 14).setFontSize(14);
             summarySheet.getRange(totalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
             summarySheet.getRange(totalRowIndex, 1, 1, 2).merge().setValue("合計").setHorizontalAlignment("center");
             summarySheet.getRange(totalRowIndex, 5).setValue(sumDays);

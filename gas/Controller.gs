@@ -79,7 +79,7 @@ function doPost(e) {
     } else if (action === 'GENERATE_REPORTS') {
       var records = data.records;
       var teachers = data.teachers;
-      var options = data.options || {};
+      var options = data.exportOptions || data.options || {};
       var resultObj = SheetManager.syncRecords(records, teachers, options);
       result = { 
         status: 'success', 
