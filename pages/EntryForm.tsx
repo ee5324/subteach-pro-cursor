@@ -468,7 +468,7 @@ const EntryForm: React.FC = () => {
       startDate: finalStart,
       endDate: finalEnd,
       details, slots, createdAt, allowPartial,
-      homeroomFeeByPta: homeroomFeeByPta || undefined
+      homeroomFeeByPta: !!homeroomFeeByPta
     };
 
     if (isEditMode) {

@@ -305,7 +305,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const updateRecord = async (updatedRecord: LeaveRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'records', updatedRecord.id), updatedRecord as any);
+    const docRef = doc(db, 'records', updatedRecord.id);
+    await setDoc(docRef, { ...updatedRecord }, { merge: true });
   };
   
   const deleteRecord = async (id: string) => { 

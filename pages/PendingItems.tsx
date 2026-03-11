@@ -672,23 +672,19 @@ const PendingItems: React.FC = () => {
       )}
 
       {/* Floating Bulk Action Bar */}
-      <div className={`fixed bottom-10 left-0 right-0 p-4 transform transition-transform duration-300 z-50 ${selectedItems.size > 0 ? 'translate-y-0' : 'translate-y-full'}`}>
-           <div className="max-w-4xl mx-auto bg-slate-800 text-white rounded-2xl shadow-2xl p-4 flex flex-col md:flex-row items-center justify-between border border-slate-700">
-               
-               <div className="flex items-center mb-4 md:mb-0">
-                   <div className="bg-indigo-500 rounded-lg p-2 mr-3 font-bold text-white min-w-[3rem] text-center">
+      <div className={`fixed bottom-6 left-0 right-0 px-3 transform transition-transform duration-300 z-50 ${selectedItems.size > 0 ? 'translate-y-0' : 'translate-y-full'}`}>
+           <div className="max-w-2xl mx-auto bg-slate-800 text-white rounded-xl shadow-xl py-2.5 px-3 flex flex-col sm:flex-row items-center justify-between gap-2 border border-slate-700">
+               <div className="flex items-center gap-2 shrink-0">
+                   <div className="bg-indigo-500 rounded-md px-2 py-1 font-bold text-white text-sm min-w-[2rem] text-center">
                        {selectedItems.size}
                    </div>
                    <div>
-                       <div className="font-bold text-lg">已選擇 {selectedItems.size} 節課程</div>
-                       <div className="text-slate-400 text-xs">請選擇代課教師以進行批次派代</div>
+                       <div className="font-semibold text-sm">已選 {selectedItems.size} 節</div>
+                       <div className="text-slate-400 text-[10px]">選擇代課教師後套用</div>
                    </div>
                </div>
-
-               <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-                   
-                   {/* Teacher Select */}
-                   <div className="w-full md:w-64 text-slate-800">
+               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                   <div className="min-w-[140px] max-w-[180px] text-slate-800">
                        <SearchableSelect
                            options={substituteTeacherOptions}
                            value={bulkTeacherId}
@@ -698,9 +694,8 @@ const PendingItems: React.FC = () => {
                        />
                    </div>
 
-                   {/* Pay Type */}
                    <select
-                        className="w-full md:w-auto px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                        className="px-2 py-1.5 rounded-md bg-slate-700 border border-slate-600 text-white text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
                         value={bulkPayType}
                         onChange={(e) => setBulkPayType(e.target.value as PayType)}
                    >
@@ -708,27 +703,16 @@ const PendingItems: React.FC = () => {
                        <option value={PayType.DAILY}>日薪</option>
                        <option value={PayType.HALF_DAY}>半日薪</option>
                    </select>
-
-                   {/* 家委支出 */}
-                   <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer whitespace-nowrap">
+                   <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer whitespace-nowrap" title="僅導師費入家長會清冊">
                        <input type="checkbox" checked={bulkHomeroomFeeByPta} onChange={e => setBulkHomeroomFeeByPta(e.target.checked)} className="rounded border-slate-500 bg-slate-700 text-indigo-500 focus:ring-indigo-500"/>
-                       <span>家委支出（僅導師費入家長會清冊）</span>
+                       <span>家委支出</span>
                    </label>
-
-                   {/* Actions */}
-                   <div className="flex space-x-2 w-full md:w-auto">
-                       <button 
-                            onClick={clearSelection}
-                            className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-600 hover:bg-slate-700 text-slate-300 transition-colors"
-                       >
+                   <div className="flex space-x-1.5">
+                       <button onClick={clearSelection} className="px-3 py-1.5 rounded-md border border-slate-600 hover:bg-slate-700 text-slate-300 text-sm transition-colors">
                            取消
                        </button>
-                       <button 
-                            onClick={applyBulkAssignment}
-                            className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center whitespace-nowrap"
-                       >
-                           <CheckCircle size={18} className="mr-2"/>
-                           確認套用
+                       <button onClick={applyBulkAssignment} className="px-4 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold flex items-center justify-center whitespace-nowrap">
+                           <CheckCircle size={14} className="mr-1"/>套用
                        </button>
                    </div>
                </div>
