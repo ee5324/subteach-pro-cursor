@@ -926,7 +926,7 @@ var SheetManager = {
       });
     });
 
-    // 家長會清冊：情況一 公派(家長會) 整筆；情況二 半日薪+家委支出 僅導師費。排除 半日薪+自理。
+    // 家長會清冊：情況一 公派(家長會) 整筆；情況二 半日薪+(家委支出 或 身心假) 僅導師費。排除 半日薪+自理。
     var ptaSheetsData = {};
     records.forEach(function(record) {
       if (!record.details) return;
@@ -947,7 +947,8 @@ var SheetManager = {
         var dateStr = detail.date.substring(5).replace('-', '/');
         var daysInMonth = SheetManagerHelpers.getSafeDaysInMonth(detail.date);
         var isCase1 = (record.leaveType === '公派(家長會)');
-        var isCase2 = (detail.payType === '半日薪' && record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)');
+        var isMentalLeave = record.leaveType && record.leaveType.indexOf('身心') > -1;
+        var isCase2 = (detail.payType === '半日薪' && (record.homeroomFeeByPta || isMentalLeave) && record.leaveType !== '自理 (事假/病假)');
         if (!isCase1 && !isCase2) return;
 
         if (group.dates.indexOf(dateStr) === -1) group.dates.push(dateStr);
@@ -1130,7 +1131,7 @@ var SheetManager = {
         if (defaultSheet.getName() !== "印領清冊" && defaultSheet.getName() !== "黏貼憑證") { newSS.deleteSheet(defaultSheet); }
     }
 
-    // 家長會清冊（情況一 公派(家長會) 整筆 + 情況二 半日薪家委支出 僅導師費）
+    // 家長會清冊（情況一 公派(家長會) 整筆 + 情況二 半日薪且(家委支出或身心假) 僅導師費）
     var ptaTemplateSheet = (CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME && ss.getSheetByName(CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME)) || templateSheet;
     for (var ptaSheetName in ptaSheetsData) {
         var ptaGroups = ptaSheetsData[ptaSheetName];

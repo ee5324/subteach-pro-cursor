@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeeklyScheduleModal, { ScheduleGroup } from '../components/WeeklyScheduleModal';
-import { PayType, TeacherType, Teacher } from '../types';
+import { PayType, LeaveType, TeacherType, Teacher } from '../types';
 import SearchableSelect, { SelectOption } from '../components/SearchableSelect';
 import { convertSlotsToDetails } from '../utils/calculations';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
@@ -55,6 +55,7 @@ const PendingItems: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [bulkTeacherId, setBulkTeacherId] = useState<string>('');
   const [bulkPayType, setBulkPayType] = useState<PayType>(PayType.HOURLY);
+  const [bulkHomeroomFeeByPta, setBulkHomeroomFeeByPta] = useState(false);
 
   // Sync state
   const [isPublishing, setIsPublishing] = useState(false);
@@ -233,6 +234,7 @@ const PendingItems: React.FC = () => {
   const clearSelection = () => {
       setSelectedItems(new Set());
       setBulkTeacherId('');
+      setBulkHomeroomFeeByPta(false);
   };
 
   const handleBulkTeacherSelection = (val: string) => {
@@ -305,7 +307,8 @@ const PendingItems: React.FC = () => {
           updateRecord({
               ...record,
               slots: updatedSlots,
-              details: newDetails
+              details: newDetails,
+              homeroomFeeByPta: bulkHomeroomFeeByPta
           });
       });
 
@@ -557,18 +560,31 @@ const PendingItems: React.FC = () => {
                                 // Logic: If ALL are public -> ON. If ANY are hidden -> OFF (so toggle turns all ON)
                                 const isRecordPublic = recordItems.every(i => i.isPublic);
                                 const firstItem = recordItems[0];
+                                const record = records.find(r => r.id === recordId);
+                                const showPtaCheckbox = record && record.leaveType !== LeaveType.PUBLIC_PTA;
 
                                 return (
                                     <div key={recordId} className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         
                                         {/* Record Header with Toggle */}
-                                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 flex justify-between items-center">
-                                            <div className="flex items-center">
+                                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2">
+                                            <div className="flex items-center flex-wrap gap-3">
                                                 <ListFilter size={16} className="text-slate-400 mr-2"/>
                                                 <span className="font-bold text-slate-700 text-sm mr-3">{firstItem.reason}</span>
                                                 <span className="text-xs text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">
                                                     {recordItems.length} 節
                                                 </span>
+                                                {showPtaCheckbox && record && (
+                                                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!record.homeroomFeeByPta}
+                                                            onChange={() => updateRecord({ ...record, homeroomFeeByPta: !record.homeroomFeeByPta })}
+                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <span>家委支出</span>
+                                                    </label>
+                                                )}
                                             </div>
                                             
                                             <div className="flex items-center">
@@ -692,6 +708,12 @@ const PendingItems: React.FC = () => {
                        <option value={PayType.DAILY}>日薪</option>
                        <option value={PayType.HALF_DAY}>半日薪</option>
                    </select>
+
+                   {/* 家委支出 */}
+                   <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer whitespace-nowrap">
+                       <input type="checkbox" checked={bulkHomeroomFeeByPta} onChange={e => setBulkHomeroomFeeByPta(e.target.checked)} className="rounded border-slate-500 bg-slate-700 text-indigo-500 focus:ring-indigo-500"/>
+                       <span>家委支出（僅導師費入家長會清冊）</span>
+                   </label>
 
                    {/* Actions */}
                    <div className="flex space-x-2 w-full md:w-auto">
