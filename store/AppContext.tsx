@@ -7,6 +7,20 @@ import { db, auth } from '../src/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, updateDoc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+/** Firestore 不支援 undefined，寫入前移除物件中所有 undefined 欄位 */
+function stripUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map((item) => stripUndefined(item)) as T;
+  if (typeof obj === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v !== undefined) out[k] = stripUndefined(v);
+    }
+    return out as T;
+  }
+  return obj;
+}
+
 export interface AppSettings {
   gasWebAppUrl: string;
   semesterStart?: string; // YYYY-MM-DD
@@ -224,33 +238,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addLanguagePayroll = async (payroll: LanguagePayroll) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'languagePayrolls', payroll.id), payroll);
+    await setDoc(doc(db, 'languagePayrolls', payroll.id), stripUndefined(payroll));
   };
   const updateLanguagePayroll = async (updatedPayroll: LanguagePayroll) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'languagePayrolls', updatedPayroll.id), updatedPayroll as any);
+    await updateDoc(doc(db, 'languagePayrolls', updatedPayroll.id), stripUndefined(updatedPayroll as Record<string, unknown>) as any);
   };
   const deleteLanguagePayroll = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
     await deleteDoc(doc(db, 'languagePayrolls', id));
   };
 
-  const addTeacher = async (teacher: Teacher) => { 
+  const addTeacher = async (teacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'teachers', teacher.id), teacher);
+    await setDoc(doc(db, 'teachers', teacher.id), stripUndefined(teacher));
   };
-  const updateTeacher = async (updatedTeacher: Teacher) => { 
+  const updateTeacher = async (updatedTeacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'teachers', updatedTeacher.id), updatedTeacher as any);
+    await updateDoc(doc(db, 'teachers', updatedTeacher.id), stripUndefined(updatedTeacher as Record<string, unknown>) as any);
   };
-  const setAllTeachers = async (newTeachers: Teacher[]) => { 
+  const setAllTeachers = async (newTeachers: Teacher[]) => {
     if (!db) throw new Error("Firebase not initialized");
     const batch = writeBatch(db);
-    // This is dangerous if list is large, but for now:
-    // First, delete all? No, that's too aggressive.
-    // Just overwrite/add.
     newTeachers.forEach(t => {
-      batch.set(doc(db, 'teachers', t.id), t);
+      batch.set(doc(db, 'teachers', t.id), stripUndefined(t));
     });
     await batch.commit();
   };
@@ -300,13 +311,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addRecord = async (record: LeaveRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'records', record.id), record);
+    await setDoc(doc(db, 'records', record.id), stripUndefined(record));
   };
   
   const updateRecord = async (updatedRecord: LeaveRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
     const docRef = doc(db, 'records', updatedRecord.id);
-    await setDoc(docRef, { ...updatedRecord }, { merge: true });
+    await setDoc(docRef, stripUndefined({ ...updatedRecord }), { merge: true });
   };
   
   const deleteRecord = async (id: string) => { 
@@ -316,15 +327,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateOvertimeRecord = async (record: OvertimeRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'overtimeRecords', record.id), record);
+    await setDoc(doc(db, 'overtimeRecords', record.id), stripUndefined(record));
   };
   const addActivity = async (activity: SpecialActivity) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'specialActivities', activity.id), activity);
+    await setDoc(doc(db, 'specialActivities', activity.id), stripUndefined(activity));
   };
   const updateActivity = async (updatedActivity: SpecialActivity) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'specialActivities', updatedActivity.id), updatedActivity as any);
+    await updateDoc(doc(db, 'specialActivities', updatedActivity.id), stripUndefined(updatedActivity as Record<string, unknown>) as any);
   };
   const deleteActivity = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -332,11 +343,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const updateFixedOvertimeConfig = async (config: FixedOvertimeConfig) => { 
     if (!db) throw new Error("Firebase not initialized");
-    // We use teacherId as ID for this config? Or generate a UUID?
-    // The type has `id`? Let's check type. FixedOvertimeConfig usually just has teacherId.
-    // If it doesn't have an ID, we use teacherId as key.
-    // Assuming config has teacherId.
-    await setDoc(doc(db, 'fixedOvertimeConfig', config.teacherId), config);
+    await setDoc(doc(db, 'fixedOvertimeConfig', config.teacherId), stripUndefined(config));
   };
   const removeFixedOvertimeConfig = async (teacherId: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -344,7 +351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const addGradeEvent = async (event: GradeEvent) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'gradeEvents', event.id), event);
+    await setDoc(doc(db, 'gradeEvents', event.id), stripUndefined(event));
   };
   const removeGradeEvent = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -353,12 +360,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const addSemester = async (sem: SemesterDefinition) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'semesters', sem.id), sem);
+    await setDoc(doc(db, 'semesters', sem.id), stripUndefined(sem));
     await setSemesterActive(sem.id);
   };
   const updateSemester = async (sem: SemesterDefinition) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'semesters', sem.id), sem as any);
+    await updateDoc(doc(db, 'semesters', sem.id), stripUndefined(sem as Record<string, unknown>) as any);
   };
   const removeSemester = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -372,7 +379,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const updateSettings = async (newSettings: AppSettings) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'system', 'settings'), newSettings);
+    await setDoc(doc(db, 'system', 'settings'), stripUndefined(newSettings));
   };
   const addHoliday = async (date: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -389,8 +396,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!db) throw new Error("Firebase not initialized");
       if (!subPool.some(i => i.teacherId === teacherId)) {
           const newItem: SubPoolItem = { teacherId, status: 'available', note: '', updatedAt: Date.now() };
-          // Use teacherId as doc ID for subPool to ensure uniqueness
-          await setDoc(doc(db, 'subPool', teacherId), newItem);
+          await setDoc(doc(db, 'subPool', teacherId), stripUndefined(newItem));
       }
   };
   const removeFromSubPool = async (teacherId: string) => {
@@ -399,7 +405,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const updateSubPoolItem = async (item: SubPoolItem) => {
       if (!db) throw new Error("Firebase not initialized");
-      await setDoc(doc(db, 'subPool', item.teacherId), { ...item, updatedAt: Date.now() });
+      await setDoc(doc(db, 'subPool', item.teacherId), stripUndefined({ ...item, updatedAt: Date.now() }));
   };
 
   const deleteSubstituteApplication = async (id: string) => {
@@ -438,18 +444,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       researchFee: 0,
       isHomeroom: false,
     };
-    await setDoc(doc(db, 'teachers', teacherId), newTeacher);
+    await setDoc(doc(db, 'teachers', teacherId), stripUndefined(newTeacher));
     if (addToSubPoolFlag) {
       if (!subPool.some(i => i.teacherId === teacherId)) {
         const poolNote = [app.unavailableTime ? `無法：${app.unavailableTime}` : '', app.availableTime ? `可代課：${app.availableTime}` : ''].filter(Boolean).join('；');
         const teachingSubjectStr = (app.teachingItems && app.teachingItems.length > 0) ? app.teachingItems.join(',') : '';
-        await setDoc(doc(db, 'subPool', teacherId), {
+        await setDoc(doc(db, 'subPool', teacherId), stripUndefined({
           teacherId,
           status: 'available',
           note: poolNote,
           updatedAt: Date.now(),
           teachingSubject: teachingSubjectStr,
-        });
+        }));
       }
     }
     await updateDoc(doc(db, 'substituteApplications', id), {
