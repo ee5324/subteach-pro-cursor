@@ -971,6 +971,7 @@ const Records: React.FC = () => {
                                <CalendarIcon size={32} className="text-slate-300" />
                            </div>
                            <span>{selectedMonth} 月份沒有代課紀錄 (含跨月)</span>
+                           <p className="mt-2 text-sm text-slate-400 max-w-md">若待聘清單有資料但這裡沒有，請用上方 ◀ ▶ 切換到請假日期所在的月份（例如 4/2 請選 4 月）</p>
                        </td>
                     </tr>
                   ) : (

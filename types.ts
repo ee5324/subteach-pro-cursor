@@ -242,7 +242,9 @@ export interface LeaveRecord {
   createdAt: number;
   allowPartial?: boolean; // 是否允許分段代課 (預設 false: 全代)
   processingStatus?: ProcessingStatus; // 行政處理狀態
-  /** 家委支出：半日薪時打勾表示導師費由家長會支出，僅導師費納入家長會清冊 */
+  /** 家長會支出鐘點：鐘點費由家長會支出，入家長會清冊 */
+  ptaPaysHourly?: boolean;
+  /** 家長會支出導師費(半天)：僅半日導師費入家長會清冊 */
   homeroomFeeByPta?: boolean;
 }
 

@@ -926,7 +926,7 @@ var SheetManager = {
       });
     });
 
-    // 家長會清冊：情況一 公派(家長會) 整筆；情況二 半日薪+(家委支出 或 身心假) 僅導師費。排除 半日薪+自理。
+    // 家長會清冊：情況一 公派(家長會) 整筆；情況二 家長會支出鐘點(ptaPaysHourly) 鐘點費入清冊；情況三 家長會支出導師費(半天)(homeroomFeeByPta) 僅半日導師費入清冊。
     var ptaSheetsData = {};
     records.forEach(function(record) {
       if (!record.details) return;
@@ -947,9 +947,9 @@ var SheetManager = {
         var dateStr = detail.date.substring(5).replace('-', '/');
         var daysInMonth = SheetManagerHelpers.getSafeDaysInMonth(detail.date);
         var isCase1 = (record.leaveType === '公派(家長會)');
-        var isMentalLeave = record.leaveType && record.leaveType.indexOf('身心') > -1;
-        var isCase2 = (detail.payType === '半日薪' && (record.homeroomFeeByPta || isMentalLeave) && record.leaveType !== '自理 (事假/病假)');
-        if (!isCase1 && !isCase2) return;
+        var isCase2a = (record.ptaPaysHourly && detail.payType === '鐘點費');
+        var isCase2b = (record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)');
+        if (!isCase1 && !isCase2a && !isCase2b) return;
 
         if (group.dates.indexOf(dateStr) === -1) group.dates.push(dateStr);
         if (group.fullDates.indexOf(detail.date) === -1) group.fullDates.push(detail.date);
@@ -982,7 +982,13 @@ var SheetManager = {
                 group.notes.push(subDays + "日0節");
             }
             group.finalAmount += detail.calculatedAmount;
-        } else {
+        } else if (isCase2a) {
+            var subPeriods = Number(detail.periodCount) || 0;
+            group.totalPeriods += subPeriods;
+            group.hourlyTotal += detail.calculatedAmount;
+            group.finalAmount += detail.calculatedAmount;
+            group.notes.push("家長會支出鐘點 0日" + subPeriods + "節" + (detail.selectedPeriods && detail.selectedPeriods.length ? "(" + detail.selectedPeriods.join(',') + ")" : ""));
+        } else if (isCase2b) {
             group.homeroomDays += 0.5;
             var feeOnly = Math.round((4000 / daysInMonth) * 0.5);
             group.homeroomFee += feeOnly;

@@ -55,6 +55,7 @@ const PendingItems: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [bulkTeacherId, setBulkTeacherId] = useState<string>('');
   const [bulkPayType, setBulkPayType] = useState<PayType>(PayType.HOURLY);
+  const [bulkPtaPaysHourly, setBulkPtaPaysHourly] = useState(false);
   const [bulkHomeroomFeeByPta, setBulkHomeroomFeeByPta] = useState(false);
 
   // Sync state
@@ -234,6 +235,7 @@ const PendingItems: React.FC = () => {
   const clearSelection = () => {
       setSelectedItems(new Set());
       setBulkTeacherId('');
+      setBulkPtaPaysHourly(false);
       setBulkHomeroomFeeByPta(false);
   };
 
@@ -308,6 +310,7 @@ const PendingItems: React.FC = () => {
               ...record,
               slots: updatedSlots,
               details: newDetails,
+              ptaPaysHourly: bulkPtaPaysHourly,
               homeroomFeeByPta: bulkHomeroomFeeByPta
           });
       });
@@ -575,15 +578,16 @@ const PendingItems: React.FC = () => {
                                                     {recordItems.length} 節
                                                 </span>
                                                 {showPtaCheckbox && record && (
-                                                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!record.homeroomFeeByPta}
-                                                            onChange={() => updateRecord({ ...record, homeroomFeeByPta: !record.homeroomFeeByPta })}
-                                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                                        />
-                                                        <span>家委支出</span>
-                                                    </label>
+                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                                                            <input type="checkbox" checked={!!record.ptaPaysHourly} onChange={() => updateRecord({ ...record, ptaPaysHourly: !record.ptaPaysHourly })} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
+                                                            <span>家長會支出鐘點</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                                                            <input type="checkbox" checked={!!record.homeroomFeeByPta} onChange={() => updateRecord({ ...record, homeroomFeeByPta: !record.homeroomFeeByPta })} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
+                                                            <span>家長會支出導師費(半天)</span>
+                                                        </label>
+                                                    </div>
                                                 )}
                                             </div>
                                             
@@ -703,9 +707,13 @@ const PendingItems: React.FC = () => {
                        <option value={PayType.DAILY}>日薪</option>
                        <option value={PayType.HALF_DAY}>半日薪</option>
                    </select>
-                   <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer whitespace-nowrap" title="僅導師費入家長會清冊">
+                   <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer whitespace-nowrap" title="鐘點費由家長會，入家長會清冊">
+                       <input type="checkbox" checked={bulkPtaPaysHourly} onChange={e => setBulkPtaPaysHourly(e.target.checked)} className="rounded border-slate-500 bg-slate-700 text-indigo-500 focus:ring-indigo-500"/>
+                       <span>家長會支出鐘點</span>
+                   </label>
+                   <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer whitespace-nowrap" title="僅半日導師費入家長會清冊">
                        <input type="checkbox" checked={bulkHomeroomFeeByPta} onChange={e => setBulkHomeroomFeeByPta(e.target.checked)} className="rounded border-slate-500 bg-slate-700 text-indigo-500 focus:ring-indigo-500"/>
-                       <span>家委支出</span>
+                       <span>家長會支出導師費(半天)</span>
                    </label>
                    <div className="flex space-x-1.5">
                        <button onClick={clearSelection} className="px-3 py-1.5 rounded-md border border-slate-600 hover:bg-slate-700 text-slate-300 text-sm transition-colors">

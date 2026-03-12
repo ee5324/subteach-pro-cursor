@@ -91,6 +91,7 @@ const EntryForm: React.FC = () => {
   
   const [createdAt, setCreatedAt] = useState<number>(Date.now());
   const [allowPartial, setAllowPartial] = useState(false);
+  const [ptaPaysHourly, setPtaPaysHourly] = useState(false);
   const [homeroomFeeByPta, setHomeroomFeeByPta] = useState(false);
 
   // --- Section 2: Timetable State ---
@@ -163,6 +164,7 @@ const EntryForm: React.FC = () => {
         setApplicationDate(normalizeDateString(existingRecord.applicationDate || getLocalTodayDate()));
         setCreatedAt(existingRecord.createdAt);
         setAllowPartial(existingRecord.allowPartial || false);
+        setPtaPaysHourly(!!existingRecord.ptaPaysHourly);
         setHomeroomFeeByPta(!!existingRecord.homeroomFeeByPta);
         setStartDate(normalizeDateString(existingRecord.startDate)); // Set explicit range
         setEndDate(normalizeDateString(existingRecord.endDate));     // Set explicit range
@@ -203,6 +205,7 @@ const EntryForm: React.FC = () => {
     setDocId('');
     setSlots([]);
     setAllowPartial(false);
+    setPtaPaysHourly(false);
     setHomeroomFeeByPta(false);
     const today = getLocalTodayDate();
     setApplicationDate(today);
@@ -470,6 +473,7 @@ const EntryForm: React.FC = () => {
       slots,
       createdAt,
       allowPartial: allowPartial || undefined,
+      ptaPaysHourly: ptaPaysHourly || undefined,
       homeroomFeeByPta: homeroomFeeByPta || undefined
     };
 
@@ -479,7 +483,14 @@ const EntryForm: React.FC = () => {
         showModal({ title: '儲存成功', message: '代課單已更新。', type: 'success', onConfirm: () => closeModal(), confirmText: '好' });
       } else {
         await addRecord(recordData);
-        showModal({ title: '建立成功', message: '資料已儲存！', type: 'success', onConfirm: () => { resetForm(); closeModal(); }, confirmText: '新增下一筆' });
+        const saveMonth = finalStart ? finalStart.slice(0, 7) : ''; // 例 2025-04
+        showModal({
+          title: '建立成功',
+          message: `資料已儲存！${saveMonth ? `\n請至「代課清冊」並選擇「${saveMonth}」該月份即可看到本筆。` : ''}`,
+          type: 'success',
+          onConfirm: () => { resetForm(); closeModal(); },
+          confirmText: '新增下一筆'
+        });
       }
     } catch (err: any) {
       console.error('儲存失敗', err);
@@ -611,10 +622,14 @@ const EntryForm: React.FC = () => {
                 <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg" value={reason} onChange={e => setReason(e.target.value)} placeholder="例：公假研習" />
              </div>
              {leaveType !== LeaveType.PUBLIC_PTA && (
-               <div className="md:col-span-12">
+               <div className="md:col-span-12 space-y-2">
+                 <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                   <input type="checkbox" checked={ptaPaysHourly} onChange={e => setPtaPaysHourly(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
+                   <span>家長會支出鐘點（鐘點費由家長會，入家長會清冊）</span>
+                 </label>
                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                    <input type="checkbox" checked={homeroomFeeByPta} onChange={e => setHomeroomFeeByPta(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
-                   <span>家委支出（導師費由家長會，僅導師費入家長會清冊；半日薪時勾選生效）</span>
+                   <span>家長會支出導師費(半天)（僅半日導師費入家長會清冊）</span>
                  </label>
                </div>
              )}
@@ -690,10 +705,14 @@ const EntryForm: React.FC = () => {
              {activePayType === PayType.DAILY && <div className="mt-2 text-[11px] text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-flex items-center"><Info size={12} className="mr-1"/>日薪模式：請點選當日有課的時段；為確保一致性，系統將不會自動遞增班級。</div>}
              {activePayType === PayType.HALF_DAY && <div className="mt-2 text-[11px] text-amber-600 bg-amber-50 px-2 py-1 rounded inline-flex items-center"><Info size={12} className="mr-1"/>半日薪：代課支出為一半的日薪；導師費(半日)可由家長會清冊另列。</div>}
              {leaveType !== LeaveType.PUBLIC_PTA && (
-              <div className="mt-2">
+              <div className="mt-2 space-y-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={ptaPaysHourly} onChange={e => setPtaPaysHourly(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
+                  <span>家長會支出鐘點</span>
+                </label>
                 <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                   <input type="checkbox" checked={homeroomFeeByPta} onChange={e => setHomeroomFeeByPta(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"/>
-                  <span>家委支出（導師費由家長會，僅導師費入家長會清冊；半日薪時勾選生效）</span>
+                  <span>家長會支出導師費(半天)</span>
                 </label>
               </div>
             )}
