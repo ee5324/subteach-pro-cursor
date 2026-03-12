@@ -53,6 +53,7 @@ import LeaveRules from './pages/LeaveRules';
 import Login from './pages/Login';
 import ApplySubstitute from './pages/ApplySubstitute';
 import SubstituteApplications from './pages/SubstituteApplications';
+import PublicBoard from './pages/PublicBoard';
 import { useAppStore } from './store/useAppStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
@@ -83,6 +84,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/apply" element={<ApplySubstitute />} />
+        <Route path="/public" element={<PublicBoard />} />
 
         <Route path="/" element={
           <ProtectedRoute>

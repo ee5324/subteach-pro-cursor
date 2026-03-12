@@ -1,0 +1,437 @@
+/**
+ * 代課缺額公告（對外公開）
+ * 與 GAS 脫鉤，改為從 Firebase 讀取缺額與寫入報名。
+ */
+import React, { useEffect, useState, useMemo } from 'react';
+import { db } from '../src/lib/firebase';
+import { doc, onSnapshot, collection, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { RefreshCw, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+
+const PERIOD_ORDER = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
+
+interface Vacancy {
+  id: string;
+  date: string;
+  period: string;
+  originalTeacherName: string;
+  subject: string;
+  className: string;
+  reason?: string;
+  payType?: string;
+  status?: string;
+  recordId?: string;
+  allowPartial?: boolean;
+}
+
+export default function PublicBoard() {
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [applicationCounts, setApplicationCounts] = useState<Record<string, number>>({});
+  const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
+  const [currentWeekIndex, setCurrentWeekIndex] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: '', phone: '', note: '' });
+
+  useEffect(() => {
+    if (!db) {
+      setErrorMsg('Firebase 未初始化');
+      setLoading(false);
+      return;
+    }
+    const unsubVac = onSnapshot(doc(db, 'publicBoard', 'vacancies'), (snap) => {
+      const data = snap.data();
+      setVacancies((data?.vacancies || []) as Vacancy[]);
+      setLoading(false);
+    }, (err) => {
+      setErrorMsg(err.message);
+      setLoading(false);
+    });
+    const unsubApp = onSnapshot(collection(db, 'publicBoardApplications'), (snap) => {
+      const counts: Record<string, number> = {};
+      snap.docs.forEach(d => {
+        const vid = (d.data().vacancyId as string) || '';
+        counts[vid] = (counts[vid] || 0) + 1;
+      });
+      setApplicationCounts(counts);
+    }, () => {});
+    return () => { unsubVac(); unsubApp(); };
+  }, []);
+
+  const openOnly = vacancies.filter(v => v.status === '開放報名');
+
+  const teacherGroups = useMemo(() => {
+    const groups: Record<string, { name: string; count: number; hasDaily: boolean; dates: Date[]; subjects: Set<string>; classes: Set<string> }> = {};
+    openOnly.forEach(v => {
+      const name = v.originalTeacherName || '未知教師';
+      if (!groups[name]) {
+        groups[name] = { name, count: 0, hasDaily: false, dates: [], subjects: new Set(), classes: new Set() };
+      }
+      groups[name].count++;
+      if (v.payType === '日薪') groups[name].hasDaily = true;
+      const d = v.date ? new Date(v.date.substring(0, 10)) : new Date();
+      groups[name].dates.push(d);
+      if (v.subject) groups[name].subjects.add(v.subject);
+      if (v.className) groups[name].classes.add(String(v.className));
+    });
+    return Object.values(groups).map(g => {
+      const sorted = g.dates.sort((a, b) => a.getTime() - b.getTime());
+      const fmt = (d: Date) => (d.getMonth() + 1) + '/' + d.getDate();
+      const start = fmt(sorted[0]);
+      const end = fmt(sorted[sorted.length - 1]);
+      return {
+        ...g,
+        dateRange: start === end ? start : `${start} ~ ${end}`,
+        subjects: Array.from(g.subjects).join(', '),
+        classes: Array.from(g.classes).sort()
+      };
+    });
+  }, [openOnly]);
+
+  const filteredVacancies = useMemo(() => {
+    if (!selectedTeacher) return [];
+    return openOnly.filter(v => v.originalTeacherName === selectedTeacher);
+  }, [openOnly, selectedTeacher]);
+
+  const getMonday = (d: Date) => {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.setDate(diff));
+  };
+
+  const vacanciesByWeek = useMemo(() => {
+    const groups: Record<string, Vacancy[]> = {};
+    filteredVacancies.forEach(v => {
+      const d = new Date((v.date || '').substring(0, 10));
+      const mon = getMonday(d);
+      const mStr = mon.getFullYear() + '-' + String(mon.getMonth() + 1).padStart(2, '0') + '-' + String(mon.getDate()).padStart(2, '0');
+      if (!groups[mStr]) groups[mStr] = [];
+      groups[mStr].push(v);
+    });
+    return groups;
+  }, [filteredVacancies]);
+
+  const sortedWeekKeys = Object.keys(vacanciesByWeek).sort();
+  const currentWeekKey = sortedWeekKeys[currentWeekIndex] || sortedWeekKeys[0];
+  const currentWeekVacancies = currentWeekKey ? vacanciesByWeek[currentWeekKey] || [] : [];
+  const currentWeekDays = useMemo(() => {
+    if (!currentWeekKey) return [];
+    const monday = new Date(currentWeekKey);
+    return Array.from({ length: 5 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  }, [currentWeekKey]);
+
+  const formatDateSimple = (d: Date) => (d.getMonth() + 1) + '/' + d.getDate();
+  const currentWeekRange = currentWeekKey && currentWeekDays.length
+    ? `${formatDateSimple(currentWeekDays[0])} ~ ${formatDateSimple(currentWeekDays[4])}`
+    : '無資料';
+
+  const getPeriodLabel = (p: string) => p === '早' ? '早自習' : p === '午' ? '午休' : '第 ' + p + ' 節';
+
+  const getSlotItems = (items: Vacancy[], dateObj: Date, period: string) =>
+    items.filter(item => {
+      const itemD = new Date((item.date || '').substring(0, 10));
+      return itemD.getDate() === dateObj.getDate() && itemD.getMonth() === dateObj.getMonth() && String(item.period) === String(period);
+    });
+
+  const toggleSelection = (id: string) => {
+    const target = vacancies.find(v => v.id === id);
+    if (!target || target.status !== '開放報名') return;
+    let ids = [id];
+    if (!target.allowPartial && target.recordId) {
+      ids = openOnly.filter(v => v.recordId === target.recordId).map(v => v.id);
+    }
+    const allSelected = ids.every(i => selectedIds.includes(i));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(s => !ids.includes(s)));
+    } else {
+      setSelectedIds(prev => [...prev, ...ids.filter(i => !prev.includes(i))]);
+    }
+  };
+
+  const getCurrentMaxQueue = () => {
+    if (selectedIds.length === 0) return 0;
+    return Math.max(0, ...selectedIds.map(id => applicationCounts[id] || 0));
+  };
+
+  const submitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.phone.trim() || !db) return;
+    setSubmitting(true);
+    try {
+      let maxOrder = 0;
+      for (const vid of selectedIds) {
+        await addDoc(collection(db, 'publicBoardApplications'), {
+          vacancyId: vid,
+          name: form.name.trim(),
+          phone: String(form.phone).trim(),
+          note: (form.note || '').trim(),
+          createdAt: Date.now()
+        });
+        const q = query(collection(db, 'publicBoardApplications'), where('vacancyId', '==', vid));
+        const snap = await getDocs(q);
+        if (snap.size > maxOrder) maxOrder = snap.size;
+      }
+      alert(`報名成功！您已排入順位，最高順位為第 ${maxOrder} 位。系統將儘快與您聯繫。`);
+      setShowModal(false);
+      setSelectedIds([]);
+      setForm({ name: '', phone: '', note: '' });
+    } catch (err: any) {
+      alert('送出失敗: ' + (err?.message || err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!db) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-red-200 text-red-700">
+          <p className="font-bold">無法載入：Firebase 未初始化。</p>
+          <p className="text-sm mt-2">請確認環境變數已設定。</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 pb-32 max-w-7xl mx-auto">
+      <header className="mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center">
+              <span className="mr-2 text-3xl">🏫</span> 代課缺額公告
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">
+              {selectedTeacher ? `正在檢視：${selectedTeacher} 老師的代課需求` : '請點選下方教師卡片，查看詳細代課時段。'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setLoading(true); setLoading(false); }}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium"
+            >
+              <RefreshCw size={16} />
+              <span className="hidden sm:inline">重新整理</span>
+            </button>
+          </div>
+        </div>
+        {errorMsg && (
+          <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded border border-red-200 whitespace-pre-line">
+            {errorMsg}
+          </div>
+        )}
+      </header>
+
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
+          <p className="text-slate-400 font-medium">正在載入最新缺額...</p>
+        </div>
+      )}
+
+      {!loading && openOnly.length === 0 && (
+        <div className="bg-white p-12 rounded-2xl text-center shadow-sm border border-slate-200">
+          <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
+          <p className="text-slate-500">感謝您的關注，所有課程都已安排妥當。</p>
+        </div>
+      )}
+
+      {!loading && openOnly.length > 0 && !selectedTeacher && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {teacherGroups.map(g => (
+            <button
+              key={g.name}
+              type="button"
+              onClick={() => { setSelectedTeacher(g.name); setCurrentWeekIndex(0); setSelectedIds([]); }}
+              className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-left hover:border-indigo-400 hover:shadow-md transition-all"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg font-bold mr-4">
+                    {g.name.slice(-1)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-slate-800">{g.name} 老師</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">{g.subjects}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">{g.count} 節待聘</span>
+                  {g.hasDaily && <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full">含代導師</span>}
+                </div>
+              </div>
+              <div className="space-y-2 text-sm text-slate-600">
+                <div className="flex items-center bg-slate-50 p-2 rounded-lg">📅 {g.dateRange}</div>
+                <div className="flex items-center bg-slate-50 p-2 rounded-lg">任教班級：{g.classes.join(', ')}</div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-sm">
+                <span className="text-slate-400">點擊查看詳情</span>
+                <span className="text-indigo-600 font-bold">前往報名 →</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!loading && selectedTeacher && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => { setSelectedTeacher(null); setSelectedIds([]); }}
+              className="flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-bold bg-white px-4 py-2 rounded-lg border border-slate-200"
+            >
+              <ArrowLeft size={20} /> 返回列表
+            </button>
+            <span className="bg-indigo-50 px-4 py-2 rounded-lg text-indigo-800 text-sm font-medium border border-indigo-100">
+              {selectedTeacher} 老師代課需求
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm border border-slate-200 sticky top-2 z-30">
+            <button
+              type="button"
+              onClick={() => setCurrentWeekIndex(i => Math.max(0, i - 1))}
+              disabled={currentWeekIndex <= 0}
+              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={24} className="text-slate-600" />
+            </button>
+            <div className="text-center">
+              <div className="text-lg font-bold text-indigo-900">📅 {currentWeekRange}</div>
+              <div className="text-xs text-slate-500 mt-0.5">本週有 {currentWeekVacancies.length} 節缺額</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentWeekIndex(i => Math.min(sortedWeekKeys.length - 1, i + 1))}
+              disabled={currentWeekIndex >= sortedWeekKeys.length - 1}
+              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight size={24} className="text-slate-600" />
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+            <table className="w-full text-center border-collapse min-w-[800px]">
+              <thead>
+                <tr>
+                  <th className="w-20 p-3 bg-slate-50 border-b border-slate-200 text-slate-500 text-sm font-bold sticky left-0">節次</th>
+                  {currentWeekDays.map((date, i) => (
+                    <th key={i} className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-700 min-w-[140px]">
+                      <div className="font-bold">{['週一', '週二', '週三', '週四', '週五'][i]}</div>
+                      <div className="text-sm text-slate-500">{formatDateSimple(date)}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PERIOD_ORDER.map(period => (
+                  <tr key={period}>
+                    <td className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-600 font-bold text-sm sticky left-0">
+                      {getPeriodLabel(period)}
+                    </td>
+                    {currentWeekDays.map((date, i) => (
+                      <td key={i} className="p-1 border-b border-r border-slate-100 align-top h-28">
+                        <div className="h-full flex flex-col gap-1.5 p-1">
+                          {getSlotItems(currentWeekVacancies, date, period).map(item => {
+                            const isSel = selectedIds.includes(item.id);
+                            const cnt = applicationCounts[item.id] || 0;
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => toggleSelection(item.id)}
+                                className={`relative border rounded-xl p-2.5 text-left w-full shadow-sm transition-all text-sm ${
+                                  isSel ? 'bg-indigo-600 border-indigo-700 text-white' : 'bg-white border-slate-200 hover:border-indigo-400'
+                                }`}
+                              >
+                                <span className={`absolute top-0 right-0 rounded-bl-lg px-1.5 py-0.5 text-[10px] font-bold ${
+                                  isSel ? 'bg-white/20 text-white' : item.payType === '日薪' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  {item.payType === '日薪' ? '代導師' : '鐘點'}
+                                </span>
+                                <div className="font-bold truncate pr-14">{item.subject}</div>
+                                <div className="text-xs truncate opacity-80">{item.className}</div>
+                                <div className="mt-1 text-[10px]">
+                                  {cnt > 0 ? `${cnt}人排隊` : '可報名'}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-50">
+          <div className="bg-slate-800/90 backdrop-blur text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center border border-slate-600">
+            <div>
+              <div className="font-bold text-lg flex items-center">
+                <span className="bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm font-bold">{selectedIds.length}</span>
+                節課程
+              </div>
+              <div className="text-xs text-slate-300 mt-1">已選取代課時段</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              className="bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-3 rounded-xl font-bold shadow-lg"
+            >
+              下一步 →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="bg-slate-50 px-6 py-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-slate-800 text-lg">📝 填寫報名資料</h3>
+              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200">✕</button>
+            </div>
+            <div className="bg-indigo-50 p-4 border-b text-sm text-indigo-800">
+              <div className="font-bold text-indigo-900">目前候用狀況</div>
+              <div className="mt-1">此時段已有 <strong>{getCurrentMaxQueue()}</strong> 人報名。若您現在報名，將排在第 <strong className="text-xl bg-white px-1.5 rounded">{getCurrentMaxQueue() + 1}</strong> 順位。</div>
+            </div>
+            <form onSubmit={submitForm} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-1 text-slate-700">姓名 *</label>
+                <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="請輸入您的全名" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1 text-slate-700">聯絡電話 *</label>
+                <input required type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0912345678" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1 text-slate-700">備註留言</label>
+                <textarea value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} rows={2} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="選填" />
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50">取消</button>
+                <button type="submit" disabled={submitting} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-70 flex items-center justify-center">
+                  {submitting ? '送出中...' : '確認報名'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

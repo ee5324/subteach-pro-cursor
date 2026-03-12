@@ -568,8 +568,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const syncToPublicBoard = async (vacancies: any[]) => {
+      if (db) {
+          const withStatus = (vacancies || []).map((v: any) => ({ ...v, status: '開放報名' }));
+          await setDoc(doc(db, 'publicBoard', 'vacancies'), {
+              vacancies: sanitizeForFirestore(withStatus),
+              updatedAt: Date.now()
+          });
+          return;
+      }
       const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
-      if (!targetUrl) throw new Error("未設定 Google Apps Script URL。");
+      if (!targetUrl) throw new Error("未設定 Google Apps Script URL，且 Firebase 未啟用。");
       return await callGasApi(targetUrl, 'SYNC_PUBLIC_VACANCIES', { vacancies });
   };
 

@@ -85,6 +85,17 @@ service cloud.firestore {
       allow read, update, delete: if isSignedIn();
     }
 
+    // 13. 公開缺額看板（對外：任何人可讀；僅登入可寫。與 GS 脫鉤，改由 Firebase 提供）
+    match /publicBoard/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    // 14. 公開缺額報名紀錄（對外：未登入可建立；僅登入可讀）
+    match /publicBoardApplications/{appId} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn();
+    }
+
     // =========================================================
     // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
     // =========================================================

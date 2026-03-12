@@ -349,11 +349,6 @@ const PendingItems: React.FC = () => {
   };
 
   const handlePublish = async () => {
-      if (!settings.gasWebAppUrl) {
-          setFeedbackModal({ isOpen: true, title: '錯誤', message: '請先設定 GAS URL', type: 'error' });
-          return;
-      }
-      
       setIsPublishing(true);
       try {
           const payload = [];
@@ -472,13 +467,16 @@ const PendingItems: React.FC = () => {
         </ul>
       </InstructionPanel>
 
-      {settings.gasWebAppUrl && (
-          <div className="mb-4 text-right">
-              <a href={settings.gasWebAppUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-500 hover:underline flex items-center justify-end">
-                  <ExternalLink size={12} className="mr-1"/> 前往公開報名頁面 (測試用)
+      <div className="mb-4 text-right flex items-center justify-end gap-4 flex-wrap">
+          <a href="#/public" target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline font-medium flex items-center">
+              <ExternalLink size={12} className="mr-1"/> 公開缺額公告 (Firebase)
+          </a>
+          {settings.gasWebAppUrl && (
+              <a href={settings.gasWebAppUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline flex items-center">
+                  <ExternalLink size={12} className="mr-1"/> 舊版 (GAS)
               </a>
-          </div>
-      )}
+          )}
+      </div>
 
       {/* Global Public Toggle */}
       {groupedList.length > 0 && (
