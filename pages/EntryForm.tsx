@@ -482,8 +482,14 @@ const EntryForm: React.FC = () => {
         showModal({ title: '建立成功', message: '資料已儲存！', type: 'success', onConfirm: () => { resetForm(); closeModal(); }, confirmText: '新增下一筆' });
       }
     } catch (err: any) {
+      console.error('儲存失敗', err);
+      const code = err?.code || '';
       const msg = err?.message || String(err);
-      showModal({ title: '儲存失敗', message: `無法寫入資料：${msg}`, type: 'error' });
+      showModal({
+        title: '儲存失敗',
+        message: `無法寫入資料${code ? ` (${code})` : ''}：${msg}`,
+        type: 'error'
+      });
     }
   };
 

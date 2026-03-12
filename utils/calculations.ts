@@ -146,13 +146,14 @@ export const calculatePay = (
     return periods * HOURLY_RATE;
   }
 
-  const daysInMonth = getDaysInMonth(date);
-  let baseSalary = subTeacher.baseSalary;
+  const daysInMonth = getDaysInMonth(date) || 30;
+  let baseSalary = Number(subTeacher.baseSalary) || 0;
   if (subTeacher.salaryPoints && salaryGrades.length > 0) {
     const grade = salaryGrades.find(g => g.points === subTeacher.salaryPoints);
-    if (grade) baseSalary = grade.salary;
+    if (grade) baseSalary = Number(grade.salary) || 0;
   }
-  let dailyRate = (baseSalary + subTeacher.researchFee) / daysInMonth;
+  const researchFee = Number(subTeacher.researchFee) || 0;
+  let dailyRate = (baseSalary + researchFee) / daysInMonth;
   if (isHomeroomSubstitute) {
     dailyRate += HOMEROOM_FEE_MONTHLY / daysInMonth;
   }
