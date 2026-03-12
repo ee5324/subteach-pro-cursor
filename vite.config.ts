@@ -5,15 +5,15 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
-      // 本機預覽：固定 3080，同網段手機可用 http://本機IP:3080
+      // 本機預覽：固定 3003，同網段手機可用 http://本機IP:3003
       server: {
-        port: 3080,
+        port: 3003,
         strictPort: true,
         host: true, // 等同 0.0.0.0，對外可連
-        open: true, // 啟動後自動開瀏覽器
+        open: false, // 在 Cursor 內用 Simple Browser 開 http://127.0.0.1:3003
       },
       preview: {
-        port: 3080,
+        port: 3003,
         strictPort: true,
         host: true,
       },
