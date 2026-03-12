@@ -424,7 +424,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (app.status === 'approved') throw new Error("此筆已審核通過");
     const addToSubPoolFlag = options?.addToSubPool !== false;
     const teacherId = `app_${id}`;
-    const educationStr = [app.educationLevel, app.graduationMajor?.trim()].filter(Boolean).join(' ');
+    const educationStr = [app.educationLevel, app.graduationMajor != null ? String(app.graduationMajor).trim() : ''].filter(Boolean).join(' ');
     const noteParts = [
       app.lineAccount ? `LINE: ${app.lineAccount}` : '',
       app.unavailableTime ? `無法代課時段: ${app.unavailableTime}` : '',
@@ -434,9 +434,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     ].filter(Boolean);
     const newTeacher: Teacher = {
       id: teacherId,
-      name: app.name.trim(),
-      phone: app.phone.trim(),
-      education: educationStr || app.graduationMajor?.trim() || undefined,
+      name: app.name != null ? String(app.name).trim() : '',
+      phone: app.phone != null ? String(app.phone).trim() : '',
+      education: educationStr || (app.graduationMajor != null ? String(app.graduationMajor).trim() : '') || undefined,
       hasCertificate: app.hasCertificate,
       type: TeacherType.EXTERNAL,
       expertise: (app.teachingItems && app.teachingItems.length > 0) ? app.teachingItems : undefined,

@@ -278,7 +278,7 @@ const FixedOvertimePage: React.FC = () => {
               let matchedByClassName = 0;
               let hasAnyClassName = false;
               for (const slot of slotsThatWeekday) {
-                  const className = (slot.className || '').trim();
+                  const className = String(slot.className ?? '').trim();
                   if (className) hasAnyClassName = true;
                   const slotGrades = parseGradesFromString(className);
                   if (slotGrades.length === 0) continue;

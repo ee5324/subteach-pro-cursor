@@ -183,9 +183,11 @@ const Records: React.FC = () => {
   }, [selectedMonth]);
 
   // 正規化為 YYYY-MM-DD 以便正確比較（相容不同寫入格式）
-  const toYMD = (d: string): string => {
-    if (!d || typeof d !== 'string') return '';
-    const normalized = d.trim().replace(/\//g, '-');
+  const toYMD = (d: string | number | undefined | null): string => {
+    if (d == null) return '';
+    const s = String(d).trim();
+    if (!s) return '';
+    const normalized = s.replace(/\//g, '-');
     const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
     return normalized;

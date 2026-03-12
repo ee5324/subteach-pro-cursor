@@ -134,7 +134,7 @@ const EntryForm: React.FC = () => {
 
   const docIdOptions: SelectOption[] = useMemo(() => {
     const uniqueIds = new Set<string>();
-    records.forEach(r => { if (r.docId && r.docId.trim() !== '') uniqueIds.add(r.docId.trim()); });
+    records.forEach(r => { const id = r.docId != null ? String(r.docId).trim() : ''; if (id !== '') uniqueIds.add(id); });
     return Array.from(uniqueIds).sort((a, b) => b.localeCompare(a)).map(id => ({ value: id, label: id }));
   }, [records]);
 

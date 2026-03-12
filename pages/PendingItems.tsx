@@ -543,8 +543,9 @@ const PendingItems: React.FC = () => {
                                         待聘節數：{group.items.length} 節
                                         {(() => {
                                             const teacher = teachers.find(t => t.id === group.originalTeacherId);
-                                            if (teacher?.isHomeroom && teacher?.teachingClasses?.trim()) {
-                                                return <span className="ml-2 text-slate-600">｜導師班級：{teacher.teachingClasses.trim()}</span>;
+                                            const homeroomClass = teacher?.teachingClasses != null ? String(teacher.teachingClasses).trim() : '';
+                                            if (teacher?.isHomeroom && homeroomClass) {
+                                                return <span className="ml-2 text-slate-600">｜導師班級：{homeroomClass}</span>;
                                             }
                                             return null;
                                         })()}

@@ -51,7 +51,7 @@ export const getDaysInMonth = (dateString: string): number => {
  * 判斷法定基本授課節數
  */
 export const getStandardBase = (teacher: Teacher): number => {
-    const roleString = ((teacher.jobTitle || '') + (teacher.teacherRole || '')).trim();
+    const roleString = (String(teacher.jobTitle ?? '') + String(teacher.teacherRole ?? '')).trim();
     if (roleString.includes('主任')) return 1; // 主任通常極少或 0-2
     if (roleString.includes('組長')) return 9; // 組長通常 8-12
     if (roleString.includes('導師')) return 16; // 導師通常 16

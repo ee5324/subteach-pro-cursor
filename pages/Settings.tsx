@@ -74,7 +74,7 @@ const Settings: React.FC = () => {
 
   /** 與 store 內 loadFromGas 一致：設定有值用設定，否則用 config 預設 */
   const effectiveGasUrl = useMemo(
-    () => (settings.gasWebAppUrl && settings.gasWebAppUrl.trim()) || GAS_WEB_APP_URL || '',
+    () => (settings.gasWebAppUrl != null && String(settings.gasWebAppUrl).trim()) ? String(settings.gasWebAppUrl).trim() : (GAS_WEB_APP_URL || ''),
     [settings.gasWebAppUrl]
   );
 
