@@ -541,6 +541,13 @@ const PendingItems: React.FC = () => {
                                     <h2 className={`text-lg font-bold ${theme.title}`}>{group.originalTeacherName}</h2>
                                     <p className="text-slate-500 text-xs flex items-center mt-0.5">
                                         待聘節數：{group.items.length} 節
+                                        {(() => {
+                                            const teacher = teachers.find(t => t.id === group.originalTeacherId);
+                                            if (teacher?.isHomeroom && teacher?.teachingClasses?.trim()) {
+                                                return <span className="ml-2 text-slate-600">｜導師班級：{teacher.teachingClasses.trim()}</span>;
+                                            }
+                                            return null;
+                                        })()}
                                     </p>
                                 </div>
                             </div>
@@ -636,6 +643,9 @@ const PendingItems: React.FC = () => {
                                                             </td>
                                                             <td className="px-4 py-2 font-mono text-slate-600">
                                                                 {item.date}
+                                                                <span className="text-slate-400 font-sans ml-1">
+                                                                    (星期{['日','一','二','三','四','五','六'][new Date(item.date + 'T12:00:00').getDay()]})
+                                                                </span>
                                                             </td>
                                                             <td className="px-4 py-2 text-slate-600">
                                                                 {item.period === '早' ? '早自習' : item.period === '午' ? '午休' : `第 ${item.period} 節`}
