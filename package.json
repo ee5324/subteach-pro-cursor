@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "gas:push": "clasp push",
     "gas:deploy": "clasp deploy --description \"自動部署\"",
-    "push": "npm run gas:push && npm run gas:deploy && git push"
+    "push": "node scripts/push-with-gas.cjs",
+    "push:full": "npm run gas:push && npm run gas:deploy && git push"
   },
   "dependencies": {
     "firebase": "^12.10.0",
