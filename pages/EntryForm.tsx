@@ -447,36 +447,43 @@ const EntryForm: React.FC = () => {
 
   const isDocRequired = [LeaveType.PUBLIC_OFFICIAL, LeaveType.PUBLIC_AFFAIRS, LeaveType.PUBLIC_COUNSELING].includes(leaveType);
 
-  const executeSave = () => {
+  const executeSave = async () => {
     // Determine Final Date Range
-    // Respect user input `startDate` and `endDate`, but extend if slots are outside this range.
     let finalStart = startDate;
     let finalEnd = endDate;
-    
     if (slots.length > 0) {
-        const sortedDates = slots.map(s => s.date).sort();
-        const slotsStart = sortedDates[0];
-        const slotsEnd = sortedDates[sortedDates.length - 1];
-        
-        if (slotsStart < finalStart) finalStart = slotsStart;
-        if (slotsEnd > finalEnd) finalEnd = slotsEnd;
+      const sortedDates = slots.map(s => s.date).sort();
+      finalStart = sortedDates[0] < finalStart ? sortedDates[0] : finalStart;
+      finalEnd = sortedDates[sortedDates.length - 1] > finalEnd ? sortedDates[sortedDates.length - 1] : finalEnd;
     }
 
     const recordData: LeaveRecord = {
       id: isEditMode && id ? id : crypto.randomUUID(),
-      originalTeacherId, leaveType, reason, docId, applicationDate,
+      originalTeacherId,
+      leaveType,
+      reason,
+      docId: docId || undefined,
+      applicationDate: applicationDate || undefined,
       startDate: finalStart,
       endDate: finalEnd,
-      details, slots, createdAt, allowPartial,
-      homeroomFeeByPta: !!homeroomFeeByPta
+      details,
+      slots,
+      createdAt,
+      allowPartial: allowPartial || undefined,
+      homeroomFeeByPta: homeroomFeeByPta || undefined
     };
 
-    if (isEditMode) {
-      updateRecord(recordData);
-      showModal({ title: '儲存成功', message: '代課單已更新。', type: 'success', onConfirm: () => closeModal(), confirmText: '好' });
-    } else {
-      addRecord(recordData);
-      showModal({ title: '建立成功', message: '資料已儲存！', type: 'success', onConfirm: () => { resetForm(); closeModal(); }, confirmText: '新增下一筆' });
+    try {
+      if (isEditMode) {
+        await updateRecord(recordData);
+        showModal({ title: '儲存成功', message: '代課單已更新。', type: 'success', onConfirm: () => closeModal(), confirmText: '好' });
+      } else {
+        await addRecord(recordData);
+        showModal({ title: '建立成功', message: '資料已儲存！', type: 'success', onConfirm: () => { resetForm(); closeModal(); }, confirmText: '新增下一筆' });
+      }
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      showModal({ title: '儲存失敗', message: `無法寫入資料：${msg}`, type: 'error' });
     }
   };
 
