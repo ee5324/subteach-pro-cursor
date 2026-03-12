@@ -182,18 +182,47 @@ const Records: React.FC = () => {
       };
   }, [selectedMonth]);
 
+  // 正規化為 YYYY-MM-DD 以便正確比較（相容不同寫入格式）
+  const toYMD = (d: string): string => {
+    if (!d || typeof d !== 'string') return '';
+    const normalized = d.trim().replace(/\//g, '-');
+    const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+    return normalized;
+  };
+
   // 1. Filter records by Selected Month (Handle Cross-Month Overlap)
   const filteredRecords = useMemo(() => {
     const filtered = records.filter(r => {
-        // Logic: Record Start <= Month End AND Record End >= Month Start
-        // This catches any overlap
-        const inMonth = r.startDate <= monthEndStr && r.endDate >= monthStartStr;
+        const details = r.details || [];
+        const slots = r.slots || [];
+        // 若 startDate/endDate 缺失或無效，改由 details/slots 推斷
+        let start = toYMD(r.startDate || '');
+        let end = toYMD(r.endDate || '');
+        if (!start || !end) {
+          const dates = (slots.length > 0 ? slots.map(s => s.date) : details.map(d => d.date))
+            .map(toYMD)
+            .filter(Boolean)
+            .sort();
+          if (dates.length > 0) {
+            start = start || dates[0];
+            end = end || dates[dates.length - 1];
+          } else {
+            start = start || monthStartStr;
+            end = end || monthEndStr;
+          }
+        }
+        const inMonthByRange = start <= monthEndStr && end >= monthStartStr;
+        // 若 details/slots 任一日落在所選月份，也納入（避免漏顯示）
+        const hasAnyDateInMonth = [...details.map(d => toYMD(d.date)), ...slots.map(s => toYMD(s.date))]
+          .some(date => date >= monthStartStr && date <= monthEndStr);
+        const inMonth = inMonthByRange || hasAnyDateInMonth;
         if (!inMonth) return false;
 
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             const originalTeacher = teachers.find(t => t.id === r.originalTeacherId)?.name || r.originalTeacherId;
-            const subTeachers = r.details.map(d => {
+            const subTeachers = (r.details || []).map(d => {
                  return d.substituteTeacherId === 'pending' ? '待聘' : (teachers.find(t => t.id === d.substituteTeacherId)?.name || d.substituteTeacherId);
             }).join(' ');
             
@@ -949,7 +978,7 @@ const Records: React.FC = () => {
                       const originalTeacher = teachers.find(t => t.id === record.originalTeacherId);
                       
                       // 只計算與顯示當月相關的細項
-                      const currentMonthDetails = record.details.filter(d => d.date.startsWith(selectedMonth));
+                      const currentMonthDetails = (record.details || []).filter(d => d.date && d.date.startsWith(selectedMonth));
                       // Exclude overtime slots from total amount calculation for the main report to avoid double counting
                       const monthTotalAmount = currentMonthDetails.reduce((sum, d) => {
                           return d.isOvertime ? sum : sum + d.calculatedAmount;
@@ -960,8 +989,8 @@ const Records: React.FC = () => {
                       
                       // Check for holidays and weekends in details
                       const isWeekend = (dateStr: string) => { const d = new Date(dateStr); return d.getDay() === 0 || d.getDay() === 6; };
-                      const holidayConflicts = record.details.filter(d => holidays && holidays.includes(d.date)).map(d => d.date);
-                      const weekendConflicts = record.details.filter(d => isWeekend(d.date)).map(d => d.date);
+                      const holidayConflicts = (record.details || []).filter(d => holidays && holidays.includes(d.date)).map(d => d.date);
+                      const weekendConflicts = (record.details || []).filter(d => isWeekend(d.date)).map(d => d.date);
                       const allConflicts = Array.from(new Set([...holidayConflicts, ...weekendConflicts])).sort();
 
                       // Loading state for opening folder
@@ -970,10 +999,10 @@ const Records: React.FC = () => {
                       const status = record.processingStatus || '待處理';
 
                       // Calculate Display Dates (Clamped to selected month)
-                      // 若開始日期早於本月1號，顯示本月1號；否則顯示原始開始日期
-                      const displayStart = record.startDate < monthStartStr ? monthStartStr : record.startDate;
-                      // 若結束日期晚於本月最後一天，顯示本月最後一天；否則顯示原始結束日期
-                      const displayEnd = record.endDate > monthEndStr ? monthEndStr : record.endDate;
+                      const startStr = record.startDate || (record.slots?.length ? record.slots.map(s => s.date).sort()[0] : monthStartStr) || monthStartStr;
+                      const endStr = record.endDate || (record.slots?.length ? record.slots.map(s => s.date).sort().pop() : monthEndStr) || monthEndStr;
+                      const displayStart = startStr < monthStartStr ? monthStartStr : startStr;
+                      const displayEnd = endStr > monthEndStr ? monthEndStr : endStr;
 
                       return (
                         <tr key={record.id} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50/50' : ''}`}>
