@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication } from '../types';
+import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
@@ -56,8 +56,10 @@ interface AppContextType {
   languagePayrolls: LanguagePayroll[];
   substituteApplications: SubstituteApplication[];
   publicBoardApplications: PublicBoardApplication[];
+  teacherLeaveRequests: TeacherLeaveRequestDoc[];
   loading: boolean;
 
+  updateTeacherLeaveRequestStatus: (id: string, status: 'pending' | 'imported' | 'archived') => Promise<void>;
   deleteSubstituteApplication: (id: string) => Promise<void>;
   deletePublicBoardApplication: (id: string) => Promise<void>;
   approveSubstituteApplication: (id: string, options?: { addToSubPool: boolean }) => Promise<{ teacherId: string }>;
@@ -127,6 +129,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [languagePayrolls, setLanguagePayrolls] = useState<LanguagePayroll[]>([]);
   const [substituteApplications, setSubstituteApplications] = useState<SubstituteApplication[]>([]);
   const [publicBoardApplications, setPublicBoardApplications] = useState<PublicBoardApplication[]>([]);
+  const [teacherLeaveRequests, setTeacherLeaveRequests] = useState<TeacherLeaveRequestDoc[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -247,6 +250,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setPublicBoardApplications(snap.docs.map(d => {
         const data = d.data();
         return { id: d.id, vacancyId: data.vacancyId || '', name: data.name || '', phone: String(data.phone ?? ''), note: data.note, createdAt: data.createdAt || 0 } as PublicBoardApplication;
+      }));
+    }));
+
+    unsubs.push(onSnapshot(collection(db, 'teacherLeaveRequests'), (snap) => {
+      setTeacherLeaveRequests(snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          teacherName: data.teacherName || '',
+          leaveType: data.leaveType || '',
+          docId: data.docId,
+          reason: data.reason || '',
+          payType: data.payType || '鐘點費',
+          substituteTeacher: data.substituteTeacher || '教學組媒合',
+          startDate: data.startDate || '',
+          endDate: data.endDate || '',
+          details: Array.isArray(data.details) ? data.details : [],
+          status: data.status || 'pending',
+          createdAt: data.createdAt || 0,
+          updatedAt: data.updatedAt,
+        } as TeacherLeaveRequestDoc;
       }));
     }));
 
@@ -441,6 +465,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await deleteDoc(doc(db, 'publicBoardApplications', id));
   };
 
+  const updateTeacherLeaveRequestStatus = async (id: string, status: 'pending' | 'imported' | 'archived') => {
+    if (!db) throw new Error("Firebase not initialized");
+    await updateDoc(doc(db, 'teacherLeaveRequests', id), { status, updatedAt: Date.now() });
+  };
+
   const approveSubstituteApplication = async (id: string, options?: { addToSubPool: boolean }) => {
     if (!db) throw new Error("Firebase not initialized");
     const app = substituteApplications.find(a => a.id === id);
@@ -608,8 +637,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = {
     currentUser,
     teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
-    semesters, activeSemesterId, subPool, languagePayrolls, substituteApplications, publicBoardApplications,
-    loading, 
+    semesters, activeSemesterId, subPool, languagePayrolls,     substituteApplications, publicBoardApplications, teacherLeaveRequests,
+    loading,
+    updateTeacherLeaveRequestStatus,
     addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
     updateFixedOvertimeConfig, removeFixedOvertimeConfig, 

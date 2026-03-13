@@ -167,6 +167,23 @@ export interface PublicBoardApplication {
   createdAt: number;
 }
 
+/** 教師請假申請（Vercel 表單 #/teacher-request 送出，待審後匯入系統） */
+export interface TeacherLeaveRequestDoc {
+  id: string;
+  teacherName: string;
+  leaveType: string;
+  docId?: string;
+  reason: string;
+  payType: string; // '鐘點費' | '日薪' | '半日薪'
+  substituteTeacher: string; // '教學組媒合' 或 代課教師姓名
+  startDate: string;
+  endDate: string;
+  details: { date: string; period: string; subject: string; className: string }[];
+  status: 'pending' | 'imported' | 'archived';
+  createdAt: number;
+  updatedAt?: number;
+}
+
 /** 報名表「可以任教的項目」選項 */
 export const APPLY_TEACHING_ITEMS = [
   '低年級導師', '中年級導師', '高年級導師',

@@ -4,18 +4,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { PublicBoardApplication } from '../types';
+import { Teacher, TeacherType } from '../types';
 import { db } from '../src/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { Globe, Phone, User, Trash2, Loader2, Calendar } from 'lucide-react';
+import { Globe, Phone, User, Trash2, Loader2, Calendar, CheckCircle } from 'lucide-react';
 import Modal from '../components/Modal';
 
 export default function PublicBoardApplicationsPage() {
-  const { publicBoardApplications, deletePublicBoardApplication } = useAppStore();
+  const { publicBoardApplications, deletePublicBoardApplication, teachers, addTeacher } = useAppStore();
   const [vacancyLabels, setVacancyLabels] = useState<Record<string, string>>({});
   const [loadingLabels, setLoadingLabels] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<PublicBoardApplication | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  /** 確定按鈕：對應結果或新增名單提示 */
+  const [confirmModal, setConfirmModal] = useState<{
+    app: PublicBoardApplication;
+    matchedTeacher?: Teacher;
+    adding?: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!db) {
@@ -65,6 +72,44 @@ export default function PublicBoardApplicationsPage() {
     try {
       await deletePublicBoardApplication(app.id);
       setDeleteConfirm(null);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  /** 確定：對照教師名單，相符則顯示已對應，不符則提示可新增至名單 */
+  const handleConfirm = (app: PublicBoardApplication) => {
+    const nameTrim = app.name.trim();
+    const matched = teachers.find((t) => t.name.trim() === nameTrim);
+    if (matched) {
+      setConfirmModal({ app, matchedTeacher: matched });
+    } else {
+      setConfirmModal({ app });
+    }
+  };
+
+  const handleAddToTeachers = async () => {
+    if (!confirmModal?.app) return;
+    setActionLoading(confirmModal.app.id);
+    try {
+      const name = confirmModal.app.name.trim();
+      const id = name || `pb-${confirmModal.app.id}`;
+      const newTeacher: Teacher = {
+        id,
+        name,
+        type: TeacherType.INTERNAL,
+        hasCertificate: false,
+        isRetired: false,
+        isSpecialEd: false,
+        isGraduatingHomeroom: false,
+        baseSalary: 0,
+        researchFee: 0,
+        isHomeroom: false,
+        phone: confirmModal.app.phone || undefined,
+        note: '由公開缺額報名新增',
+      };
+      await addTeacher(newTeacher);
+      setConfirmModal(null);
     } finally {
       setActionLoading(null);
     }
@@ -126,7 +171,7 @@ export default function PublicBoardApplicationsPage() {
                   <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">姓名</th>
                   <th className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">電話</th>
                   <th className="px-4 py-3 font-semibold text-slate-700">備註</th>
-                  <th className="px-4 py-3 font-semibold text-slate-700 text-right w-24">操作</th>
+                  <th className="px-4 py-3 font-semibold text-slate-700 text-right w-36">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -142,14 +187,24 @@ export default function PublicBoardApplicationsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600 max-w-[180px] truncate" title={app.note || ''}>{app.note || '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(app)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="刪除此筆報名"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleConfirm(app)}
+                          className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="對照教師名單／確定"
+                        >
+                          <CheckCircle size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(app)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="刪除此筆報名"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -170,6 +225,26 @@ export default function PublicBoardApplicationsPage() {
         confirmText="刪除"
         cancelText="取消"
       />
+
+      {/* 確定：已對應教師 或 提示新增名單 */}
+      <Modal
+        isOpen={!!confirmModal}
+        onClose={() => setConfirmModal(null)}
+        onConfirm={confirmModal && !confirmModal.matchedTeacher ? handleAddToTeachers : undefined}
+        title={confirmModal?.matchedTeacher ? '已對應教師' : '未在教師名單中'}
+        message={
+          confirmModal
+            ? confirmModal.matchedTeacher
+              ? `「${confirmModal.app.name}」已對應至教師名單：${confirmModal.matchedTeacher.name}。`
+              : `「${confirmModal.app.name}」目前不在教師名單中。若要將此人加入教師管理，請點「新增至教師名單」。`
+            : ''
+        }
+        type={confirmModal?.matchedTeacher ? 'success' : 'info'}
+        mode={confirmModal && !confirmModal.matchedTeacher ? 'confirm' : 'alert'}
+        confirmText={confirmModal && !confirmModal.matchedTeacher ? '新增至教師名單' : undefined}
+        cancelText={confirmModal?.matchedTeacher ? undefined : '關閉'}
+      />
+
       {actionLoading && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
           <Loader2 size={32} className="animate-spin text-white" />

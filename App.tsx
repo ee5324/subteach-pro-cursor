@@ -55,6 +55,7 @@ import ApplySubstitute from './pages/ApplySubstitute';
 import SubstituteApplications from './pages/SubstituteApplications';
 import PublicBoard from './pages/PublicBoard';
 import PublicBoardApplicationsPage from './pages/PublicBoardApplicationsPage';
+import TeacherLeaveRequest from './pages/TeacherLeaveRequest';
 import { useAppStore } from './store/useAppStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
@@ -86,6 +87,7 @@ const App: React.FC = () => {
         <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/apply" element={<ApplySubstitute />} />
         <Route path="/public" element={<PublicBoard />} />
+        <Route path="/teacher-request" element={<TeacherLeaveRequest />} />
 
         <Route path="/" element={
           <ProtectedRoute>

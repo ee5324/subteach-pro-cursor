@@ -96,6 +96,12 @@ service cloud.firestore {
       allow read, update, delete: if isSignedIn();
     }
 
+    // 15. 教師請假申請（Vercel 表單：未登入可建立；僅登入可讀/改/刪）
+    match /teacherLeaveRequests/{requestId} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn();
+    }
+
     // =========================================================
     // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
     // =========================================================
