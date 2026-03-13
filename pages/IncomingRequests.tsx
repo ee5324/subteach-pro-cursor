@@ -299,7 +299,7 @@ const IncomingRequests: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 mb-4 space-y-2 border border-slate-100">
+                                <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 mb-4 space-y-2 border border-slate-200">
                                     <p><span className="font-bold text-slate-500">事由：</span>{req.reason}</p>
                                     <p><span className="font-bold text-slate-500">文號：</span>{req.docId || '無'}</p>
                                     <p><span className="font-bold text-slate-500">代課：</span>{req.substituteTeacher}</p>
@@ -309,7 +309,7 @@ const IncomingRequests: React.FC = () => {
                                     </p>
                                 </div>
 
-                                <div className="mt-auto pt-4 border-t border-slate-100">
+                                <div className="mt-auto pt-4 border-t border-slate-200">
                                     <div className="flex items-center justify-between mb-4">
                                         {req.fileUrl ? (
                                             <a href={req.fileUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center font-medium bg-indigo-50 px-3 py-1.5 rounded-lg">

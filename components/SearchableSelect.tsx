@@ -184,7 +184,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
               {showCreateOption && (
                   <li 
                     onClick={handleCreateClick}
-                    className="px-4 py-2 text-sm cursor-pointer flex items-center text-blue-600 bg-blue-50 hover:bg-blue-100 border-t border-slate-100"
+                    className="px-4 py-2 text-sm cursor-pointer flex items-center text-blue-600 bg-blue-50 hover:bg-blue-100 border-t border-slate-200"
                   >
                       <Plus size={16} className="mr-2" />
                       <div>

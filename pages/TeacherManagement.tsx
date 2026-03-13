@@ -668,7 +668,7 @@ export default function TeacherManagement() {
                 <th className="px-6 py-4 font-semibold text-slate-700 text-right">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {filteredTeachers.map(teacher => {
                 const totalReduction = (teacher.reductions || []).reduce((sum,r)=>sum+r.periods, 0) || teacher.adminReduction || 0;
                 const standard = getStandardBase(teacher);
@@ -762,7 +762,7 @@ export default function TeacherManagement() {
                   <td className="px-6 py-4 text-slate-600">
                     {teacher.type === TeacherType.INTERNAL ? (
                         <div className="flex flex-col space-y-1 text-xs relative group">
-                            <div className="flex justify-between w-40 border-b border-slate-100 pb-1 mb-1">
+                            <div className="flex justify-between w-40 border-b border-slate-200 pb-1 mb-1">
                                 <span className="text-slate-400">法定: {standard}</span>
                                 <span className="text-red-400">減授: -{totalReduction}</span>
                             </div>

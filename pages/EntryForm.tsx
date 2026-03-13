@@ -747,7 +747,7 @@ const EntryForm: React.FC = () => {
                         const isHoliday = holidays.includes(dayStr);
                         let boxClass = 'bg-white border-slate-200 text-slate-300 hover:border-indigo-300 hover:bg-indigo-50';
                         let textColor = 'text-slate-400';
-                        if (isHoliday && !isSelected) { boxClass = 'bg-slate-100 border-slate-100 shadow-inner pattern-diagonal-lines-sm text-slate-300 cursor-not-allowed'; }
+                        if (isHoliday && !isSelected) { boxClass = 'bg-slate-100 border-slate-200 shadow-inner pattern-diagonal-lines-sm text-slate-300 cursor-not-allowed'; }
                         if (isSelected) {
                             if (slot.substituteTeacherId === null) { boxClass = 'bg-red-50 border-red-300 shadow-sm'; textColor = 'text-red-600'; } 
                             else { 

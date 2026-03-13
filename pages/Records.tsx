@@ -949,7 +949,7 @@ const Records: React.FC = () => {
                     <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {filteredRecords.length === 0 ? (
                     <tr>
                        <td colSpan={9} className="text-center py-16 text-slate-400 flex flex-col items-center justify-center w-full">
@@ -1037,7 +1037,7 @@ const Records: React.FC = () => {
                                     const sub = teachers.find(t => t.id === d.substituteTeacherId);
                                     const isOvertime = d.isOvertime;
                                     return (
-                                    <div key={d.id} className="flex items-center space-x-2 text-xs border-b border-slate-100 last:border-0 pb-1">
+                                    <div key={d.id} className="flex items-center space-x-2 text-xs border-b border-slate-200 last:border-0 pb-1">
                                         <span className="text-slate-500 font-mono min-w-[60px]">{formatDateSimple(d.date)}</span>
                                         <div className="min-w-[80px]">
                                             <span className="font-medium text-indigo-600 block">{sub?.name || '待聘'}</span>
@@ -1155,7 +1155,7 @@ const Records: React.FC = () => {
                     <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">本月收入估算</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                     {substituteGroups.length === 0 ? (
                         <tr>
                             <td colSpan={3} className="text-center py-16 text-slate-400 flex flex-col items-center justify-center w-full">
@@ -1300,7 +1300,7 @@ const Records: React.FC = () => {
                                                 ));
                                             })()}
 
-                                            <div className="mt-12 pt-4 border-t border-slate-100 flex justify-between items-center">
+                                            <div className="mt-12 pt-4 border-t border-slate-200 flex justify-between items-center">
                                                 <span className="text-[10px] text-slate-300 italic">產自 SubTeach Pro 代課管理系統</span>
                                                 <span className="text-[10px] text-slate-300 font-mono">Teacher ID: {group.subTeacherId.slice(0,8)}</span>
                                             </div>
@@ -1311,7 +1311,7 @@ const Records: React.FC = () => {
                                             {group.items.map(item => {
                                                 const originalTeacher = teachers.find(t => t.id === item.originalTeacherId);
                                                 return (
-                                                    <div key={item.id} className="flex items-center text-sm border-b border-slate-100 pb-1 last:border-0">
+                                                    <div key={item.id} className="flex items-center text-sm border-b border-slate-200 pb-1 last:border-0">
                                                         <span className="font-mono text-slate-500 mr-3">{formatDateSimple(item.date)}</span>
                                                         <div className="mr-2">
                                                             <span className="text-slate-800">代 {originalTeacher?.name}</span>

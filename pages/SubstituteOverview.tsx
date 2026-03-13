@@ -138,7 +138,7 @@ const SubstituteOverview: React.FC = () => {
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-200">
                             {PERIOD_ROWS.map(period => (
                                 <tr key={period.id}>
                                     <td className="p-3 border-r border-slate-200 text-center font-bold text-slate-600 text-sm bg-slate-50/50 sticky left-0">
@@ -150,7 +150,7 @@ const SubstituteOverview: React.FC = () => {
                                         const isHoliday = holidays.includes(day.dateStr);
 
                                         return (
-                                            <td key={key} className={`p-2 border-r border-slate-100 align-top h-24 ${isHoliday ? 'bg-rose-50/30' : 'hover:bg-slate-50'} transition-colors`}>
+                                            <td key={key} className={`p-2 border-r border-slate-200 align-top h-24 ${isHoliday ? 'bg-rose-50/30' : 'hover:bg-slate-50'} transition-colors`}>
                                                 <div className="flex flex-col gap-2">
                                                     {items.map((item, idx) => (
                                                         <div 

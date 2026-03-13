@@ -554,7 +554,7 @@ const LanguageTeachers: React.FC = () => {
               </thead>
               <tbody>
                 {languageTeachers.filter(t => t.name.includes(searchTerm)).map(teacher => (
-                  <tr key={teacher.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={teacher.id} className="border-b border-slate-200 hover:bg-slate-50">
                     <td className="py-3 px-4 font-medium text-slate-800">{teacher.name}</td>
                     <td className="py-3 px-4 text-slate-600">
                       {teacher.teacherCategory === 'Indigenous' ? '原住民' : 
@@ -618,7 +618,7 @@ const LanguageTeachers: React.FC = () => {
             </div>
             
             {/* Batch Export Section */}
-            <div className="border-t border-slate-100 pt-4">
+            <div className="border-t border-slate-200 pt-4">
                 <h3 className="text-sm font-bold text-slate-600 mb-3">批次匯出清冊 ({selectedMonth})</h3>
                 <div className="flex flex-wrap gap-2 mb-3">
                     {payrollsInMonth.length > 0 ? payrollsInMonth.map(p => {
@@ -656,7 +656,7 @@ const LanguageTeachers: React.FC = () => {
           {currentPayroll ? (
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
               {/* Header Info */}
-              <div className="grid grid-cols-2 gap-6 mb-8 p-4 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="grid grid-cols-2 gap-6 mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">所屬主聘學校</label>
                   <SearchableSelect
@@ -921,7 +921,7 @@ const LanguageTeachers: React.FC = () => {
           </div>
           
           {/* Schedule Editor */}
-          <div className="border-t border-slate-100 pt-4 mt-2">
+          <div className="border-t border-slate-200 pt-4 mt-2">
             <div className="flex justify-between items-center mb-2">
                 <h3 className="text-sm font-bold text-slate-600 flex items-center">
                     <Calendar size={16} className="mr-1"/> 每週上課時間設定

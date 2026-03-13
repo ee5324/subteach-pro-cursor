@@ -96,19 +96,8 @@ export default function PublicBoard() {
     return () => unsub();
   }, []);
 
-  // 報名人數：訂閱 publicBoardApplications
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(collection(db, 'publicBoardApplications'), (snap) => {
-      const counts: Record<string, number> = {};
-      snap.docs.forEach((d) => {
-        const vid = (d.data().vacancyId as string) || '';
-        counts[vid] = (counts[vid] || 0) + 1;
-      });
-      setApplicationCounts(counts);
-    }, () => {});
-    return () => unsub();
-  }, []);
+  // 報名人數：公開頁不訂閱 publicBoardApplications（規則僅允許登入者讀取，且含個資），故維持 0／僅顯示「可報名」
+  // applicationCounts 保持 {}，UI 會顯示「可報名」或 0 人
 
   const openOnly = useMemo(() => {
     return vacancies.filter((v) => v.status === '開放報名' || !v.status);
@@ -352,7 +341,7 @@ export default function PublicBoard() {
               <div className="hidden sm:block space-y-2 text-sm text-slate-600">
                 <div className="flex items-center bg-slate-50 p-2.5 rounded-lg">任教班級：{g.classes.join(', ')}</div>
               </div>
-              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end items-center">
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200 flex justify-end items-center">
                 <span className="text-indigo-600 font-bold text-sm">查看時段 →</span>
               </div>
             </button>
@@ -422,7 +411,7 @@ export default function PublicBoard() {
                       {getPeriodLabel(period)}
                     </td>
                     {currentWeekDays.map((date, i) => (
-                      <td key={i} className="p-1.5 sm:p-1.5 border-b border-r border-slate-100 align-top min-h-[76px] sm:h-28">
+                      <td key={i} className="p-1.5 sm:p-1.5 border-b border-r border-slate-200 align-top min-h-[76px] sm:h-28">
                         <div className="h-full flex flex-col gap-1 sm:gap-1.5 p-1">
                           {getSlotItems(currentWeekVacancies, date, period).map((item) => {
                             const isSel = selectedIds.includes(item.id);

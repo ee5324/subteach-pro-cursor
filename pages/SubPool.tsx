@@ -151,7 +151,7 @@ const SubPool: React.FC = () => {
           
           {/* Left Panel: Source List */}
           <div className="w-80 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden shrink-0">
-              <div className="p-4 border-b border-slate-100 bg-slate-50">
+              <div className="p-4 border-b border-slate-200 bg-slate-50">
                   <h3 className="font-bold text-slate-700 mb-3 flex items-center">
                       <Users size={18} className="mr-2"/> 候選名單
                   </h3>
@@ -180,7 +180,7 @@ const SubPool: React.FC = () => {
                       <div className="text-center py-10 text-slate-400 text-sm">沒有符合的教師</div>
                   ) : (
                       sourceTeachers.map(teacher => (
-                          <div key={teacher.id} className="p-3 mb-2 bg-white border border-slate-100 rounded-lg hover:border-indigo-300 hover:shadow-sm transition-all group flex justify-between items-center">
+                          <div key={teacher.id} className="p-3 mb-2 bg-white border border-slate-200 rounded-lg hover:border-indigo-300 hover:shadow-sm transition-all group flex justify-between items-center">
                               <div>
                                   <div className="font-bold text-slate-700">{teacher.name}</div>
                                   <div className="text-xs text-slate-500 mt-0.5">
@@ -205,7 +205,7 @@ const SubPool: React.FC = () => {
 
           {/* Right Panel: Pool List */}
           <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-              <div className="p-4 border-b border-slate-100 bg-indigo-50">
+              <div className="p-4 border-b border-slate-200 bg-indigo-50">
                   <div className="flex justify-between items-center mb-3">
                       <h3 className="font-bold text-indigo-900 flex items-center">
                           <UserCheck size={18} className="mr-2"/> 目前人力庫 ({poolList.length})
@@ -288,7 +288,7 @@ const SubPool: React.FC = () => {
                               <th className="px-2 py-3 w-12 text-center"></th>
                           </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 text-sm">
+                      <tbody className="divide-y divide-slate-200 text-sm">
                           {poolList.map(item => (
                               <tr key={item.teacherId} className="hover:bg-slate-50 transition-colors">
                                   <td className="px-4 py-3">

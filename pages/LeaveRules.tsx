@@ -166,7 +166,7 @@ const LeaveRules: React.FC = () => {
 
       <div className="grid gap-6">
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-800">第一至二條：法源與適用對象</h2>
             <p className="text-sm text-slate-500 mt-1">先確認規則依據與適用人員範圍。</p>
           </div>
@@ -180,11 +180,11 @@ const LeaveRules: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-800">第三條：各類假別與日數</h2>
             <p className="text-sm text-slate-500 mt-1">整理事假、病假、婚喪、生育、陪產、捐贈及歲時祭儀放假。</p>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-200">
             {article3Rules.map(rule => (
               <div key={rule.title} className="px-6 py-5">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -210,7 +210,7 @@ const LeaveRules: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-800">第四條：公假</h2>
             <p className="text-sm text-slate-500 mt-1">公假期間由學校視實際需要定之，以下為條文列舉的重要事由。</p>
           </div>
@@ -224,7 +224,7 @@ const LeaveRules: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-800">第五至十二條：延長病假、復職、休假與寒暑假</h2>
             <p className="text-sm text-slate-500 mt-1">這一段不是單一假別，而是病假後續處理與兼行政職務教師休假制度。</p>
           </div>
@@ -238,7 +238,7 @@ const LeaveRules: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-800">第十三至十六條：請假手續、代理、曠職與例假日計算</h2>
             <p className="text-sm text-slate-500 mt-1">實務上最常影響核假、派代與扣薪的規定。</p>
           </div>
@@ -252,7 +252,7 @@ const LeaveRules: React.FC = () => {
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-800">第十七至十九條：準用對象、私校特別規定與施行日期</h2>
             <p className="text-sm text-slate-500 mt-1">補足原摘要最容易漏掉的適用範圍與私立學校差異。</p>
           </div>
@@ -264,7 +264,7 @@ const LeaveRules: React.FC = () => {
                 </div>
               ))}
             </div>
-            <div className="border-t border-slate-100 pt-4 space-y-3">
+            <div className="border-t border-slate-200 pt-4 space-y-3">
               {effectiveDateRules.map(rule => (
                 <div key={rule} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 leading-6">
                   {rule}

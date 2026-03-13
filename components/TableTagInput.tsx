@@ -136,7 +136,7 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
 
       {/* Suggestions Dropdown */}
       {isDropdownOpen && isFocused && (filteredSuggestions.length > 0 || displayValue) && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-[150px] bg-white rounded-lg shadow-lg border border-slate-100 py-1 max-h-48 overflow-y-auto">
+        <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-[150px] bg-white rounded-lg shadow-lg border border-slate-200 py-1 max-h-48 overflow-y-auto">
           {filteredSuggestions.map(suggestion => (
             <div
               key={suggestion}
@@ -149,7 +149,7 @@ const TableTagInput: React.FC<TableTagInputProps> = ({
           
           {displayValue && !filteredSuggestions.includes(displayValue) && !tags.includes(displayValue) && (
              <div
-              className="px-3 py-2 text-xs text-indigo-600 font-bold bg-indigo-50/50 hover:bg-indigo-100 cursor-pointer border-t border-slate-100 flex items-center"
+              className="px-3 py-2 text-xs text-indigo-600 font-bold bg-indigo-50/50 hover:bg-indigo-100 cursor-pointer border-t border-slate-200 flex items-center"
               onClick={() => addTag(displayValue)}
             >
               <Plus size={12} className="mr-1"/>

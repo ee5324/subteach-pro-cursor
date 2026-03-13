@@ -53,7 +53,7 @@ const Modal: React.FC<ModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100 flex flex-col max-h-[90vh]`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 flex flex-col max-h-[90vh]`}>
         
         {/* Header */}
         <div className={`px-6 py-4 flex items-center space-x-3 flex-shrink-0 ${getHeaderColor()}`}>
@@ -79,7 +79,7 @@ const Modal: React.FC<ModalProps> = ({
 
         {/* Footer - Fixed at bottom */}
         {(!children || onConfirm) && (
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-3 flex-shrink-0">
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3 flex-shrink-0">
             {mode === 'confirm' && (
               <button
                 onClick={onClose}

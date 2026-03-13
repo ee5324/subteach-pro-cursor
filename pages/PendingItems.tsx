@@ -443,7 +443,11 @@ const PendingItems: React.FC = () => {
           await syncToPublicBoard(payload);
           setFeedbackModal({ isOpen: true, title: '發佈成功', message: `已成功將 ${payload.length} 筆「公開」缺額更新至公開看板。`, type: 'success' });
       } catch (e: any) {
-          setFeedbackModal({ isOpen: true, title: '發佈失敗', message: e.message, type: 'error' });
+          const msg = (e?.message || String(e));
+          const hint = /permission|權限/i.test(msg)
+            ? '\n\n請確認：1) 已登入 2) Firebase 主控台已部署 Firestore 規則（publicBoard 集合需允許已登入使用者寫入）'
+            : '';
+          setFeedbackModal({ isOpen: true, title: '發佈失敗', message: msg + hint, type: 'error' });
       } finally {
           setIsPublishing(false);
       }
@@ -557,7 +561,7 @@ const PendingItems: React.FC = () => {
                     const items = scheduleOverviewData.get(key) || [];
                     const isHoliday = holidays.includes(day.dateStr);
                     return (
-                      <td key={key} className={`p-0.5 border border-slate-100 align-top min-h-[28px] ${isHoliday ? 'bg-rose-50/30' : ''}`}>
+                      <td key={key} className={`p-0.5 border border-slate-200 align-top min-h-[28px] ${isHoliday ? 'bg-rose-50/30' : ''}`}>
                         <div className="flex flex-col gap-0.5">
                           {items.map((item, idx) => (
                             <div key={idx} className={`rounded p-1 border shadow-sm relative group ${item.isPending ? 'bg-red-50 border-red-200' : 'bg-white border-indigo-100'}`}>
@@ -715,7 +719,7 @@ const PendingItems: React.FC = () => {
                                     <div key={recordId} className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         
                                         {/* Record Header with Toggle */}
-                                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2">
+                                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-wrap justify-between items-center gap-2">
                                             <div className="flex items-center flex-wrap gap-3">
                                                 <ListFilter size={16} className="text-slate-400 mr-2"/>
                                                 <span className="font-bold text-slate-700 text-sm mr-3">{firstItem.reason}</span>
@@ -756,7 +760,7 @@ const PendingItems: React.FC = () => {
 
                                         {/* Items Table for this Record */}
                                         <table className="w-full text-left">
-                                            <thead className="text-[10px] uppercase text-slate-400 bg-slate-50/50 border-b border-slate-100">
+                                            <thead className="text-[10px] uppercase text-slate-400 bg-slate-50/50 border-b border-slate-200">
                                                 <tr>
                                                     <th className="px-4 py-2 w-10 text-center">選取</th>
                                                     <th className="px-4 py-2">日期</th>

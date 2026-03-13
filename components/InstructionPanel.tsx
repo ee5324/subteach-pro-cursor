@@ -12,7 +12,7 @@ interface InstructionPanelProps {
 export const CollapsibleItem: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
-    <div className="border border-slate-100 rounded-lg mb-2 overflow-hidden">
+    <div className="border border-slate-200 rounded-lg mb-2 overflow-hidden">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="w-full px-4 py-2 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors text-slate-700 font-medium text-left"
@@ -21,7 +21,7 @@ export const CollapsibleItem: React.FC<{ title: string; children: React.ReactNod
         {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {isOpen && (
-        <div className="px-4 py-3 text-xs text-slate-500 bg-white border-t border-slate-100">
+        <div className="px-4 py-3 text-xs text-slate-500 bg-white border-t border-slate-200">
           {children}
         </div>
       )}
@@ -41,7 +41,7 @@ const InstructionPanel: React.FC<InstructionPanelProps> = ({
     <div className="bg-slate-50 border border-slate-200 rounded-xl mb-4 md:mb-6 overflow-hidden transition-all duration-300 shadow-sm">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 md:px-5 py-3 md:py-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-slate-800 font-bold border-b border-slate-100 min-h-[44px]"
+        className="w-full px-4 md:px-5 py-3 md:py-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-slate-800 font-bold border-b border-slate-200 min-h-[44px]"
       >
         <div className="flex items-center min-w-0">
           <HelpCircle size={20} className="mr-2 md:mr-3 text-indigo-500 shrink-0" />

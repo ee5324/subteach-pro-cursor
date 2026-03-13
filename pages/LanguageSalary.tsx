@@ -663,7 +663,7 @@ const LanguageSalary: React.FC = () => {
           {isPreviewOpen && previewData && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                   <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                      <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                           <div>
                               <h2 className="text-xl font-bold text-slate-800">預覽與編輯領據資料</h2>
                               <p className="text-sm text-slate-500">教師：{previewData.teacherName}</p>
@@ -704,7 +704,7 @@ const LanguageSalary: React.FC = () => {
                                               <th className="px-4 py-2 w-16">操作</th>
                                           </tr>
                                       </thead>
-                                      <tbody className="divide-y divide-slate-100">
+                                      <tbody className="divide-y divide-slate-200">
                                           {m.sessions.map((s) => (
                                               <tr key={s.id} className="hover:bg-slate-50">
                                                   <td className="px-4 py-2">
@@ -759,7 +759,7 @@ const LanguageSalary: React.FC = () => {
                           ))}
                       </div>
 
-                      <div className="p-6 border-t border-slate-100 flex justify-end space-x-3 bg-slate-50 rounded-b-xl">
+                      <div className="p-6 border-t border-slate-200 flex justify-end space-x-3 bg-slate-50 rounded-b-xl">
                           <button 
                               onClick={() => setIsPreviewOpen(false)}
                               className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg"
@@ -1022,7 +1022,7 @@ const LanguageSalary: React.FC = () => {
                                   </div>
                               </div>
 
-                              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                              <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                   <div className="flex items-center space-x-4">
                                       <label className="font-bold text-slate-700">每小時鐘點費：</label>
                                       <input 
@@ -1121,7 +1121,7 @@ const LanguageSalary: React.FC = () => {
                   </thead>
                   <tbody>
                     {displayedTeachersInList.filter(t => t.name.includes(searchTerm)).map(teacher => (
-                      <tr key={teacher.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={teacher.id} className="border-b border-slate-200 hover:bg-slate-50">
                         <td className="py-3 px-4 font-medium text-slate-800">{teacher.name}</td>
                         <td className="py-3 px-4 text-slate-600">
                             {teacher.teacherCategory === 'IndigenousFullTime' ? (
@@ -1252,7 +1252,7 @@ const LanguageSalary: React.FC = () => {
               </div>
               
               {/* Schedule Editor */}
-              <div className="border-t border-slate-100 pt-4 mt-2">
+              <div className="border-t border-slate-200 pt-4 mt-2">
                 <div className="flex justify-between items-center mb-2">
                     <h3 className="text-sm font-bold text-slate-600 flex items-center">
                         <Calendar size={16} className="mr-1"/> 每週上課時間設定

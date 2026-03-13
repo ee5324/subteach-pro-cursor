@@ -169,7 +169,7 @@ const SubstituteApplications: React.FC = () => {
                 <th className="px-4 py-3 font-semibold text-slate-700 text-right">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {filtered.map((app) => {
                 const statusInfo = statusMap[app.status] || statusMap.pending;
                 const isBusy = actionLoading === app.id;

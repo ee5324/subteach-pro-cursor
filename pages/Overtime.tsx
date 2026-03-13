@@ -1188,7 +1188,7 @@ const Overtime: React.FC = () => {
                          <th className="px-4 py-3 font-semibold text-slate-700 text-center w-28">拖曳 / 操作</th>
                      </tr>
                  </thead>
-                 <tbody className="divide-y divide-slate-100">
+                 <tbody className="divide-y divide-slate-200">
                      {filteredRowData.map((row, index) => {
                          const onlySubstitute = !row.hasPreciseConfig && row.subAdditions.count > 0 && row.finalOvertimeCount === 0;
                          let calcMethod = ''; 

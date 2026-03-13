@@ -210,7 +210,7 @@ const Settings: React.FC = () => {
                             <th className="px-4 py-3 font-semibold text-slate-600 text-right">操作</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-200">
                         {sortedHolidays.map(date => (
                             <tr key={date} className="hover:bg-slate-50 group">
                                 <td className="px-4 py-3 font-mono text-slate-700 flex items-center">
@@ -351,7 +351,7 @@ const Settings: React.FC = () => {
                         )}
                     </div>
                     {effectiveGasUrl ? (
-                        <code className="block text-xs text-slate-700 break-all bg-white border border-slate-100 rounded px-2 py-2 select-all">
+                        <code className="block text-xs text-slate-700 break-all bg-white border border-slate-200 rounded px-2 py-2 select-all">
                             {effectiveGasUrl}
                         </code>
                     ) : (
@@ -369,7 +369,7 @@ const Settings: React.FC = () => {
                             <Copy size={14} className="mr-1" /> 複製
                         </button>
                     </div>
-                    <code className="block text-xs text-slate-700 break-all bg-white border border-slate-100 rounded px-2 py-2 select-all">
+                    <code className="block text-xs text-slate-700 break-all bg-white border border-slate-200 rounded px-2 py-2 select-all">
                         {typeof window !== 'undefined' ? window.location.href : ''}
                     </code>
                     <p className="text-[11px] text-slate-500">給同事書籤或使用行動裝置時，可複製上方網址（同機開發時常為 http://本機IP:5173/）。</p>

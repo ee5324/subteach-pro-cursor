@@ -243,7 +243,7 @@ const SpecialActivities: React.FC = () => {
                          <th className="px-6 py-4 font-semibold text-slate-700 text-right">操作</th>
                      </tr>
                  </thead>
-                 <tbody className="divide-y divide-slate-100">
+                 <tbody className="divide-y divide-slate-200">
                      {filteredActivities.map((activity) => {
                          const teacher = teachers.find(t => t.id === activity.teacherId);
                          return (

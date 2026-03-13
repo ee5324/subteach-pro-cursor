@@ -899,7 +899,7 @@ const FixedOvertimePage: React.FC = () => {
                     <button onClick={handleAddTeacher} disabled={!addTeacherId} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50"><Plus size={20} /></button>
                 </div>
             </div>
-            <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-100 bg-slate-50/50">
+            <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-200 bg-slate-50/50">
                 拖曳每列右側把手即可調整固定兼課清冊順序，排序會自動儲存。
             </div>
 
@@ -926,7 +926,7 @@ const FixedOvertimePage: React.FC = () => {
                             <th className="px-2 py-3 w-24 text-center">拖曳 / 刪除</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
+                    <tbody className="divide-y divide-slate-200 text-sm">
                         {reportData.map((row) => (
                             <React.Fragment key={`group-${row.teacherId}`}>
                             <tr
