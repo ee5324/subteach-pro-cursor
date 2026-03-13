@@ -28,9 +28,13 @@
         -webkit-tap-highlight-color: rgba(79, 70, 229, 0.15);
         -webkit-touch-callout: none;
       }
-      /* 可點擊元素至少約 44px 高，利於手指操作 */
+      /* 手機版：基礎字級與可點擊區域，介面更友善 */
       @media (max-width: 768px) {
+        html { font-size: 16px; }
+        body { font-size: 1rem; line-height: 1.5; }
         button, [role="button"], .touch-target-min { min-height: 44px; }
+        /* 避免 iOS 點擊輸入框自動放大：輸入框至少 16px */
+        input, select, textarea { font-size: 16px !important; }
       }
       /* Print Styles：預設上下左右邊界 0.5cm */
       @media print {

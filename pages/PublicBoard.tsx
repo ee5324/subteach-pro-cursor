@@ -262,12 +262,12 @@ export default function PublicBoard() {
       <header className="mb-4 sm:mb-6 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center truncate">
-              <span className="mr-2 text-2xl sm:text-3xl shrink-0">🏫</span>
+            <h1 className="text-2xl sm:text-2xl font-bold text-slate-800 flex items-center truncate">
+              <span className="mr-2 text-3xl sm:text-3xl shrink-0">🏫</span>
               <span className="truncate">代課缺額公告</span>
             </h1>
-            <p className="text-slate-500 text-sm mt-1 truncate">
-              {selectedTeacher ? `正在檢視：${selectedTeacher} 老師的代課需求` : '請點選下方教師卡片，查看詳細代課時段。'}
+            <p className="text-slate-500 text-base sm:text-sm mt-1 truncate">
+              {selectedTeacher ? `${selectedTeacher} 老師` : '點選教師查看時段'}
             </p>
           </div>
           <div className="shrink-0">
@@ -275,7 +275,7 @@ export default function PublicBoard() {
               type="button"
               onClick={fetchVacancies}
               disabled={loading}
-              className="touch-target-min flex items-center justify-center gap-1 min-h-[44px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 rounded-lg text-sm font-medium disabled:opacity-70 transition-colors"
+              className="touch-target-min flex items-center justify-center gap-1 min-h-[44px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 rounded-lg text-base sm:text-sm font-medium disabled:opacity-70 transition-colors"
             >
               <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">重新整理</span>
@@ -283,7 +283,7 @@ export default function PublicBoard() {
           </div>
         </div>
         {errorMsg && (
-          <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 whitespace-pre-line flex items-start gap-2">
+          <div className="mt-4 p-3 bg-red-50 text-red-600 text-base sm:text-sm rounded-lg border border-red-200 whitespace-pre-line flex items-start gap-2">
             <AlertCircle size={18} className="shrink-0 mt-0.5" />
             <span>{errorMsg}</span>
           </div>
@@ -293,27 +293,27 @@ export default function PublicBoard() {
       {loading && vacancies.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
-          <p className="text-slate-400 font-medium">正在載入最新缺額...</p>
+          <p className="text-slate-400 font-medium text-base">正在載入最新缺額...</p>
         </div>
       )}
 
       {!loading && openOnly.length === 0 && (
         <div className="bg-white p-6 sm:p-12 rounded-2xl text-center shadow-sm border border-slate-200">
           <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
-          <p className="text-slate-500">感謝您的關注，所有課程都已安排妥當。</p>
-          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-left max-w-lg mx-auto">
-            <p className="text-sm font-bold text-amber-800 mb-2">📌 要在哪裡公開，這裡才會看到？</p>
-            <ol className="text-sm text-slate-700 list-decimal list-inside space-y-1">
-              <li>登入代課管理系統後，從左側選單進入 <strong>「待聘清單」</strong>（#/pending）。</li>
-              <li>在待聘清單中，將要對外顯示的課務右側切換為 <strong>「公開中」</strong>（綠色）。</li>
-              <li>點擊頁面上方藍色按鈕 <strong>「發佈公開 (N)」</strong>，將缺額寫入資料庫。</li>
-              <li>重新整理本頁或等待幾秒，即可看到剛發佈的缺額。</li>
+          <h3 className="text-xl sm:text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
+          <p className="text-slate-500 text-base">感謝您的關注，所有課程都已安排妥當。</p>
+          <div className="mt-4 sm:mt-6 p-4 sm:p-5 bg-amber-50 border border-amber-200 rounded-xl text-left max-w-lg mx-auto">
+            <p className="text-base font-bold text-amber-800 mb-2">📌 這裡才會看到缺額？</p>
+            <p className="text-sm text-slate-700 sm:hidden">後台進入 <strong>待聘清單</strong> → 設為 <strong>公開中</strong> → 點 <strong>發佈公開</strong>。</p>
+            <ol className="hidden sm:block text-sm text-slate-700 list-decimal list-inside space-y-2">
+              <li>登入後從左側進入 <strong>待聘清單</strong>（#/pending）。</li>
+              <li>將要顯示的課務切換為 <strong>公開中</strong>。</li>
+              <li>點 <strong>發佈公開 (N)</strong>，再重新整理本頁。</li>
             </ol>
-            <p className="text-xs text-slate-500 mt-3">若沒有任何待聘課程，請先在「請假登錄」建立請假並留下未派代的節次，再至待聘清單設為公開並發佈。</p>
+            <p className="text-xs text-slate-500 mt-2 hidden sm:block">若無待聘課程，請先在請假登錄建立請假並留未派代節次。</p>
           </div>
-          <p className="text-xs text-slate-400 mt-4 max-w-md mx-auto">
-            若您已在後台「發佈公開」仍看不到資料，請確認 Firebase 授權網域已加入此網址，並在後台再按一次發佈。
+          <p className="text-xs text-slate-400 mt-3 max-w-md mx-auto hidden sm:block">
+            發佈後仍看不到請確認 Firebase 授權網域並再按一次發佈。
           </p>
         </div>
       )}
@@ -331,28 +331,29 @@ export default function PublicBoard() {
               }}
               className="touch-target-min bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-6 text-left hover:border-indigo-400 hover:shadow-md active:scale-[0.99] transition-all min-h-[120px]"
             >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg font-bold mr-4">
+              <div className="flex justify-between items-start mb-2 sm:mb-4">
+                <div className="flex items-center min-w-0">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-base sm:text-lg font-bold mr-3 shrink-0">
                     {g.name.slice(-1)}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-slate-800">{g.name} 老師</h3>
-                    <p className="text-sm text-slate-500 mt-0.5">{g.subjects}</p>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-lg text-slate-800 truncate">{g.name} 老師</h3>
+                    <p className="text-sm text-slate-500 mt-0.5 truncate hidden sm:block">{g.subjects}</p>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">{g.count} 節待聘</span>
-                  {g.hasDaily && <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded-full">含代導師</span>}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="bg-indigo-100 text-indigo-700 text-sm font-bold px-2.5 py-1 rounded-full">{g.count} 節</span>
+                  {g.hasDaily && <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full mt-0.5">代導師</span>}
                 </div>
               </div>
-              <div className="space-y-2 text-sm text-slate-600">
-                <div className="flex items-center bg-slate-50 p-2 rounded-lg">📅 {g.dateRange}</div>
-                <div className="flex items-center bg-slate-50 p-2 rounded-lg">任教班級：{g.classes.join(', ')}</div>
+              <div className="flex items-center bg-slate-50 p-2 rounded-lg text-slate-600 text-sm">
+                <span className="truncate">📅 {g.dateRange}</span>
               </div>
-              <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-sm">
-                <span className="text-slate-400">點擊查看詳情</span>
-                <span className="text-indigo-600 font-bold">前往報名 →</span>
+              <div className="hidden sm:block space-y-2 text-sm text-slate-600">
+                <div className="flex items-center bg-slate-50 p-2.5 rounded-lg">任教班級：{g.classes.join(', ')}</div>
+              </div>
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 flex justify-end items-center">
+                <span className="text-indigo-600 font-bold text-sm">查看時段 →</span>
               </div>
             </button>
           ))}
@@ -368,11 +369,11 @@ export default function PublicBoard() {
                 setSelectedTeacher(null);
                 setSelectedIds([]);
               }}
-              className="touch-target-min flex items-center gap-1 min-h-[44px] text-slate-500 hover:text-indigo-600 font-bold bg-white px-4 py-2.5 rounded-lg border border-slate-200 active:bg-slate-50"
+              className="touch-target-min flex items-center gap-1 min-h-[44px] text-slate-500 hover:text-indigo-600 font-bold bg-white px-4 py-2.5 rounded-lg border border-slate-200 active:bg-slate-50 text-base"
             >
-              <ArrowLeft size={20} /> 返回列表
+              <ArrowLeft size={22} /> 返回列表
             </button>
-            <span className="bg-indigo-50 px-4 py-2 rounded-lg text-indigo-800 text-sm font-medium border border-indigo-100 truncate max-w-[200px] sm:max-w-none">
+            <span className="bg-indigo-50 px-4 py-2 rounded-lg text-indigo-800 text-base sm:text-sm font-medium border border-indigo-100 truncate max-w-[200px] sm:max-w-none">
               {selectedTeacher} 老師代課需求
             </span>
           </div>
@@ -387,8 +388,8 @@ export default function PublicBoard() {
               <ChevronLeft size={24} className="text-slate-600" />
             </button>
             <div className="text-center flex-1 min-w-0 px-2">
-              <div className="text-base sm:text-lg font-bold text-indigo-900 truncate">📅 {currentWeekRange}</div>
-              <div className="text-xs text-slate-500 mt-0.5">本週有 {currentWeekVacancies.length} 節缺額</div>
+              <div className="text-lg font-bold text-indigo-900 truncate">{currentWeekRange}</div>
+              <div className="text-sm text-slate-500 mt-0.5 hidden sm:block">本週 {currentWeekVacancies.length} 節缺額</div>
             </div>
             <button
               type="button"
@@ -401,14 +402,14 @@ export default function PublicBoard() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-            <p className="text-xs text-slate-400 text-center py-2 sm:hidden">← 可左右滑動查看一週課表 →</p>
+            <p className="text-sm text-slate-400 text-center py-2 sm:hidden">← 可左右滑動查看一週課表 →</p>
             <table className="w-full text-center border-collapse min-w-[800px]">
               <thead>
                 <tr>
-                  <th className="w-20 p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-500 text-sm font-bold sticky left-0 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">節次</th>
+                  <th className="w-[72px] sm:w-20 p-2.5 sm:p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-500 text-base sm:text-sm font-bold sticky left-0 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">節次</th>
                   {currentWeekDays.map((date, i) => (
-                    <th key={i} className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-700 min-w-[140px]">
-                      <div className="font-bold">{['週一', '週二', '週三', '週四', '週五'][i]}</div>
+                    <th key={i} className="p-2.5 sm:p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-700 min-w-[120px] sm:min-w-[140px]">
+                      <div className="font-bold text-base sm:text-sm">{['週一', '週二', '週三', '週四', '週五'][i]}</div>
                       <div className="text-sm text-slate-500">{formatDateSimple(date)}</div>
                     </th>
                   ))}
@@ -417,11 +418,11 @@ export default function PublicBoard() {
               <tbody>
                 {PERIOD_ORDER.map((period) => (
                   <tr key={period}>
-                    <td className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-600 font-bold text-sm sticky left-0 z-[1] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                    <td className="p-2 sm:p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-600 font-bold text-base sm:text-sm sticky left-0 z-[1] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                       {getPeriodLabel(period)}
                     </td>
                     {currentWeekDays.map((date, i) => (
-                      <td key={i} className="p-1 sm:p-1.5 border-b border-r border-slate-100 align-top min-h-[72px] sm:h-28">
+                      <td key={i} className="p-1.5 sm:p-1.5 border-b border-r border-slate-100 align-top min-h-[76px] sm:h-28">
                         <div className="h-full flex flex-col gap-1 sm:gap-1.5 p-1">
                           {getSlotItems(currentWeekVacancies, date, period).map((item) => {
                             const isSel = selectedIds.includes(item.id);
@@ -431,20 +432,20 @@ export default function PublicBoard() {
                                 key={item.id}
                                 type="button"
                                 onClick={() => toggleSelection(item.id)}
-                                className={`touch-target-min relative border rounded-xl p-2 sm:p-2.5 text-left w-full min-h-[52px] shadow-sm transition-all text-sm active:scale-[0.98] ${
+                                className={`touch-target-min relative border rounded-xl p-2.5 sm:p-2.5 text-left w-full min-h-[56px] sm:min-h-[52px] shadow-sm transition-all text-base sm:text-sm active:scale-[0.98] ${
                                   isSel ? 'bg-indigo-600 border-indigo-700 text-white' : 'bg-white border-slate-200 hover:border-indigo-400 active:border-indigo-300'
                                 }`}
                               >
                                 <span
-                                  className={`absolute top-0 right-0 rounded-bl-lg px-1.5 py-0.5 text-[10px] font-bold ${
+                                  className={`absolute top-0 right-0 rounded-bl-lg px-1 py-0.5 text-[10px] sm:text-xs font-bold ${
                                     isSel ? 'bg-white/20 text-white' : item.payType === '日薪' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'
                                   }`}
                                 >
-                                  {item.payType === '日薪' ? '代導師' : '鐘點'}
+                                  {item.payType === '日薪' ? '代導' : '鐘點'}
                                 </span>
-                                <div className="font-bold truncate pr-14">{item.subject}</div>
-                                <div className="text-xs truncate opacity-80">{item.className}</div>
-                                <div className="mt-1 text-[10px]">{cnt > 0 ? `${cnt}人排隊` : '可報名'}</div>
+                                <div className="font-bold truncate pr-12 text-base sm:text-sm">{item.subject}</div>
+                                <div className="hidden sm:block text-xs truncate opacity-80">{item.className}</div>
+                                <div className="mt-0.5 text-sm font-medium">{cnt > 0 ? `${cnt}人` : '可報名'}</div>
                               </button>
                             );
                           })}
@@ -464,18 +465,18 @@ export default function PublicBoard() {
           className="fixed left-2 right-2 sm:left-4 sm:right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-50"
           style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}
         >
-          <div className="bg-slate-800/95 backdrop-blur text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center gap-4 border border-slate-600">
+          <div className="bg-slate-800/95 backdrop-blur text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center gap-3 border border-slate-600">
             <div className="min-w-0">
-              <div className="font-bold text-base sm:text-lg flex items-center">
-                <span className="bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm font-bold shrink-0">{selectedIds.length}</span>
-                <span>節課程</span>
+              <div className="font-bold text-lg flex items-center">
+                <span className="bg-indigo-500 w-9 h-9 rounded-full flex items-center justify-center mr-2 sm:mr-3 text-base font-bold shrink-0">{selectedIds.length}</span>
+                <span>節</span>
               </div>
-              <div className="text-xs text-slate-300 mt-1">已選取代課時段</div>
+              <div className="text-xs text-slate-300 mt-0.5 hidden sm:block">已選時段</div>
             </div>
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="touch-target-min shrink-0 min-h-[44px] bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 text-white px-5 sm:px-6 py-3 rounded-xl font-bold shadow-lg"
+              className="touch-target-min shrink-0 min-h-[44px] bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 text-white px-5 sm:px-6 py-3 rounded-xl font-bold shadow-lg text-base"
             >
               下一步 →
             </button>
@@ -487,31 +488,30 @@ export default function PublicBoard() {
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl flex flex-col" style={{ minHeight: 'min(400px, 70vh)' }}>
             <div className="bg-slate-50 px-4 sm:px-6 py-4 border-b flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-slate-800 text-lg">📝 填寫報名資料</h3>
+              <h3 className="font-bold text-slate-800 text-lg sm:text-lg">📝 填寫報名資料</h3>
               <button type="button" onClick={() => setShowModal(false)} className="touch-target-min min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 active:bg-slate-300">
                 ✕
               </button>
             </div>
-            <div className="bg-indigo-50 p-4 border-b text-sm text-indigo-800 shrink-0">
-              <div className="font-bold text-indigo-900">目前候用狀況</div>
+            <div className="bg-indigo-50 p-4 border-b text-base sm:text-sm text-indigo-800 shrink-0">
+              <div className="font-bold text-indigo-900">候用狀況</div>
               <div className="mt-1">
-                此時段已有 <strong>{getCurrentMaxQueue()}</strong> 人報名。若您現在報名，將排在第{' '}
-                <strong className="text-xl bg-white px-1.5 rounded">{getCurrentMaxQueue() + 1}</strong> 順位。
+                已有 <strong>{getCurrentMaxQueue()}</strong> 人報名，您將排第 <strong className="bg-white px-1 rounded">{getCurrentMaxQueue() + 1}</strong> 位。
               </div>
             </div>
             <form onSubmit={submitForm} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               <div>
-                <label className="block text-sm font-bold mb-1 text-slate-700">姓名 *</label>
+                <label className="block text-base sm:text-sm font-bold mb-1 text-slate-700">姓名 *</label>
                 <input
                   required
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-base"
                   placeholder="請輸入您的全名"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold mb-1 text-slate-700">聯絡電話 *</label>
+                <label className="block text-base sm:text-sm font-bold mb-1 text-slate-700">聯絡電話 *</label>
                 <input
                   required
                   type="tel"
@@ -524,12 +524,12 @@ export default function PublicBoard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold mb-1 text-slate-700">備註留言</label>
+                <label className="block text-base sm:text-sm font-bold mb-1 text-slate-700">備註留言</label>
                 <textarea
                   value={form.note}
                   onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
                   rows={2}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-base"
                   placeholder="選填"
                 />
               </div>
