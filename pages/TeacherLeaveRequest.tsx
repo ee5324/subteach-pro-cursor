@@ -2,38 +2,92 @@
  * 教師請假申請（Vercel 表單）— 老師自行填寫，寫入 Firestore 待審，由外部申請頁匯入系統
  * 路由：#/teacher-request（公開，不需登入）
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
-import { LeaveType, PayType } from '../types';
-import { FileText, Loader2, CheckCircle, Plus, Trash2 } from 'lucide-react';
+import { LeaveType } from '../types';
+import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react';
 
-const PERIOD_OPTIONS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
+const PERIOD_ROWS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
 const LEAVE_TYPE_OPTIONS = Object.entries(LeaveType).map(([k, v]) => ({ value: v, label: v }));
+
+/** 假別適用情況簡述（依請假規則與常見實務） */
+const LEAVE_TYPE_GUIDE = [
+  { type: LeaveType.PUBLIC_OFFICIAL, text: '公付 (公假)：須有公文且註明派代或奉准公假，例如研習、語文競賽等經核定之公務。' },
+  { type: LeaveType.PUBLIC_GENERAL, text: '公付 (喪病產等)：喪假、病假、產假等依規定核給；喪假日數依親等（如父母/配偶 15 日、祖父母等 5 日），詳見請假規則。' },
+  { type: LeaveType.PUBLIC_MENTAL, text: '公付 (身心)：身心調適等依規定辦理。' },
+  { type: LeaveType.PUBLIC_AFFAIRS, text: '公付 (其他事務費)：其他經核准之公務，須有相關核定。' },
+  { type: LeaveType.PUBLIC_COUNSELING, text: '公付 (學輔事務費)：學輔相關公務經核准。' },
+  { type: LeaveType.PUBLIC_PTA, text: '公派(家長會)：家長會相關活動，依學校規定。' },
+  { type: LeaveType.PERSONAL, text: '自理 (事假/病假)：事假、病假等自理，所遺課務代課費依校內規定。' },
+];
+
+type SlotDetail = { date: string; period: string; subject: string; className: string };
 
 export default function TeacherLeaveRequest() {
   const [teacherName, setTeacherName] = useState('');
   const [leaveType, setLeaveType] = useState<string>(LeaveType.PUBLIC_OFFICIAL);
   const [docId, setDocId] = useState('');
   const [reason, setReason] = useState('');
-  const [payType, setPayType] = useState<string>(PayType.HOURLY);
   const [substituteMode, setSubstituteMode] = useState<'need_matching' | 'self_arranged'>('need_matching');
   const [substituteTeacher, setSubstituteTeacher] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [details, setDetails] = useState<{ date: string; period: string; subject: string; className: string }[]>([]);
+  const [details, setDetails] = useState<SlotDetail[]>([]);
+  const [weekIndex, setWeekIndex] = useState(0);
+  const [editingCell, setEditingCell] = useState<{ date: string; period: string } | null>(null);
+  const [editSubject, setEditSubject] = useState('');
+  const [editClassName, setEditClassName] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [showLeaveGuide, setShowLeaveGuide] = useState(false);
 
-  const addSlot = () => {
-    setDetails((prev) => [...prev, { date: startDate || '', period: '1', subject: '', className: '' }]);
+  const datesInRange = useMemo(() => {
+    if (!startDate || !endDate) return [];
+    const out: string[] = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const d = new Date(start);
+    while (d <= end) {
+      const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+      out.push(`${y}-${m}-${day}`);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }, [startDate, endDate]);
+
+  const weekdaysInRange = useMemo(() => datesInRange.filter((d) => [1, 2, 3, 4, 5].includes(new Date(d + 'T12:00:00').getDay())), [datesInRange]);
+
+  const weeks = useMemo(() => {
+    const w: string[][] = [];
+    for (let i = 0; i < weekdaysInRange.length; i += 5) w.push(weekdaysInRange.slice(i, i + 5));
+    return w;
+  }, [weekdaysInRange]);
+
+  const currentWeekDays = useMemo(() => weeks[weekIndex] || [], [weeks, weekIndex]);
+
+  const getSlot = (date: string, period: string) => details.find((s) => s.date === date && s.period === period);
+
+  const setSlot = (date: string, period: string, subject: string, className: string) => {
+    setDetails((prev) => {
+      const rest = prev.filter((s) => !(s.date === date && s.period === period));
+      if (!subject.trim() && !className.trim()) return rest;
+      return [...rest, { date, period, subject: subject.trim() || '未定', className: className.trim() || '未定' }];
+    });
   };
-  const removeSlot = (i: number) => {
-    setDetails((prev) => prev.filter((_, idx) => idx !== i));
+
+  const handleSaveCell = () => {
+    if (!editingCell) return;
+    setSlot(editingCell.date, editingCell.period, editSubject, editClassName);
+    setEditingCell(null);
+    setEditSubject('');
+    setEditClassName('');
   };
-  const updateSlot = (i: number, field: keyof (typeof details)[0], value: string) => {
-    setDetails((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+
+  const handleRemoveSlot = (date: string, period: string) => {
+    setDetails((prev) => prev.filter((s) => !(s.date === date && s.period === period)));
+    setEditingCell(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +112,7 @@ export default function TeacherLeaveRequest() {
     }
     const validDetails = details.filter((d) => d.date && d.period && d.subject.trim());
     if (validDetails.length === 0) {
-      setError('請至少新增一節課務（日期、節次、科目、班級）');
+      setError('請在下方週課表至少點選一節請假課務，並填寫科目、班級');
       return;
     }
     if (!db) {
@@ -72,7 +126,7 @@ export default function TeacherLeaveRequest() {
         leaveType,
         docId: docId.trim() || undefined,
         reason: reason.trim(),
-        payType,
+        payType: '鐘點費',
         substituteTeacher: subName,
         startDate,
         endDate,
@@ -99,7 +153,7 @@ export default function TeacherLeaveRequest() {
           <p className="text-slate-600 text-sm mb-6">教學組將審核後匯入系統，請靜候通知。</p>
           <button
             type="button"
-            onClick={() => { setSent(false); setTeacherName(''); setReason(''); setDetails([]); }}
+            onClick={() => { setSent(false); setTeacherName(''); setReason(''); setDetails([]); setStartDate(''); setEndDate(''); }}
             className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"
           >
             再填一筆
@@ -110,7 +164,7 @@ export default function TeacherLeaveRequest() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 px-4 py-6 max-w-3xl mx-auto pb-24">
+    <div className="min-h-screen bg-slate-50 text-slate-800 px-4 py-6 max-w-4xl mx-auto pb-24">
       <header className="mb-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center">
           <FileText className="mr-3 text-indigo-600" size={28} />
@@ -118,6 +172,40 @@ export default function TeacherLeaveRequest() {
         </h1>
         <p className="text-slate-500 text-sm mt-1">填寫並送出代課需求，由教學組審核後匯入系統。</p>
       </header>
+
+      {/* 填寫說明 */}
+      <section className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <h3 className="font-bold text-amber-900 flex items-center mb-2">
+          <HelpCircle size={18} className="mr-2" />
+          填寫說明
+        </h3>
+        <ol className="text-sm text-amber-900 list-decimal list-inside space-y-1">
+          <li>請先填寫基本資料（申請人、假別、事由、請假區間）與代課安排。</li>
+          <li>在「週課表」中點選請假當日、當節的格子，依序填寫科目與班級；可切換週次填寫多日。</li>
+          <li>若學校已建置您的課表，審核時教學組可代為帶入；或請於週課表內手動點選節次並填寫。</li>
+          <li>送出後請靜候教學組審核，必要時將與您聯繫確認。</li>
+        </ol>
+      </section>
+
+      {/* 假別適用情況 */}
+      <section className="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowLeaveGuide(!showLeaveGuide)}
+          className="w-full px-5 py-4 flex items-center justify-between text-left font-bold text-slate-800 bg-slate-50 hover:bg-slate-100"
+        >
+          <span className="flex items-center"><Info size={18} className="mr-2 text-indigo-600" />假別適用情況</span>
+          <span className="text-slate-400 text-sm font-normal">{showLeaveGuide ? '收合' : '展開'}</span>
+        </button>
+        {showLeaveGuide && (
+          <div className="px-5 py-4 border-t border-slate-200 text-sm text-slate-700 space-y-3">
+            {LEAVE_TYPE_GUIDE.map((g) => (
+              <p key={g.type}><strong className="text-slate-800">{g.type}</strong>：{g.text}</p>
+            ))}
+            <p className="text-slate-500 text-xs mt-2">詳細日數與條件請參照校內「請假規則」或人事相關規定。</p>
+          </div>
+        )}
+      </section>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
@@ -147,16 +235,8 @@ export default function TeacherLeaveRequest() {
         </section>
 
         <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="font-bold text-slate-800 mb-4">代課與課務</h3>
+          <h3 className="font-bold text-slate-800 mb-4">代課安排與請假區間</h3>
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-2">支薪方式</label>
-              <div className="flex flex-wrap gap-2">
-                {[PayType.HOURLY, PayType.DAILY, PayType.HALF_DAY].map((p) => (
-                  <button key={p} type="button" onClick={() => setPayType(p)} className={`px-4 py-2 rounded-lg text-sm font-medium border ${payType === p ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}>{p}</button>
-                ))}
-              </div>
-            </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-2">代課教師</label>
               <div className="space-y-2">
@@ -176,45 +256,100 @@ export default function TeacherLeaveRequest() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">開始日期 *</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className="w-full px-3 py-2 border border-slate-200 rounded-lg" />
+                <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setWeekIndex(0); }} required className="w-full px-3 py-2 border border-slate-200 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">結束日期 *</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className="w-full px-3 py-2 border border-slate-200 rounded-lg" />
+                <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setWeekIndex(0); }} required className="w-full px-3 py-2 border border-slate-200 rounded-lg" />
               </div>
             </div>
           </div>
         </section>
 
-        <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-slate-800">課務節次</h3>
-            <button type="button" onClick={addSlot} className="flex items-center gap-1 text-indigo-600 text-sm font-medium">
-              <Plus size={18} /> 新增一節
-            </button>
-          </div>
-          {details.length === 0 ? (
-            <p className="text-slate-500 text-sm py-4">請點「新增一節」加入代課節次（日期、節次、科目、班級）。</p>
-          ) : (
-            <div className="space-y-2">
-              {details.map((slot, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center text-sm">
-                  <input type="date" value={slot.date} onChange={(e) => updateSlot(i, 'date', e.target.value)} className="col-span-3 px-2 py-1.5 border border-slate-200 rounded" />
-                  <select value={slot.period} onChange={(e) => updateSlot(i, 'period', e.target.value)} className="col-span-2 px-2 py-1.5 border border-slate-200 rounded">
-                    {PERIOD_OPTIONS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <input type="text" value={slot.subject} onChange={(e) => updateSlot(i, 'subject', e.target.value)} placeholder="科目" className="col-span-2 px-2 py-1.5 border border-slate-200 rounded" />
-                  <input type="text" value={slot.className} onChange={(e) => updateSlot(i, 'className', e.target.value)} placeholder="班級" className="col-span-2 px-2 py-1.5 border border-slate-200 rounded" />
-                  <button type="button" onClick={() => removeSlot(i)} className="col-span-1 p-1.5 text-slate-400 hover:text-rose-600">
-                    <Trash2 size={16} />
+        {/* 週課表 */}
+        {startDate && endDate && (
+          <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-3">週課表（點選請假節次並填寫科目、班級）</h3>
+            {weeks.length === 0 ? (
+              <p className="text-slate-500 text-sm py-4">請假區間內無上課日（週一～五），請調整日期。</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                  <button type="button" onClick={() => setWeekIndex((i) => Math.max(0, i - 1))} disabled={weekIndex <= 0} className="p-2 rounded-lg hover:bg-slate-200 disabled:opacity-40">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <span className="text-sm font-bold text-slate-700">
+                    {currentWeekDays[0]} ~ {currentWeekDays[currentWeekDays.length - 1]}
+                  </span>
+                  <button type="button" onClick={() => setWeekIndex((i) => Math.min(weeks.length - 1, i + 1))} disabled={weekIndex >= weeks.length - 1} className="p-2 rounded-lg hover:bg-slate-200 disabled:opacity-40">
+                    <ChevronRight size={20} />
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full text-center border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th className="p-2 border-b border-r border-slate-200 bg-slate-100 font-bold text-slate-600 w-12">節</th>
+                        {currentWeekDays.map((d) => {
+                          const day = new Date(d + 'T12:00:00');
+                          const wd = ['日','一','二','三','四','五','六'][day.getDay()];
+                          return (
+                            <th key={d} className="p-2 border-b border-r border-slate-200 bg-slate-50 font-bold text-slate-700 min-w-[72px]">
+                              {wd}<br /><span className="text-xs font-normal text-slate-500">{d.slice(5)}</span>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PERIOD_ROWS.map((period) => (
+                        <tr key={period}>
+                          <td className="p-1 border-b border-r border-slate-200 bg-slate-50 font-bold text-slate-600">{period}</td>
+                          {currentWeekDays.map((date) => {
+                            const slot = getSlot(date, period);
+                            const isEditing = editingCell?.date === date && editingCell?.period === period;
+                            return (
+                              <td key={`${date}-${period}`} className="p-1 border-b border-r border-slate-200 align-top min-h-[52px]">
+                                {isEditing ? (
+                                  <div className="bg-indigo-50 rounded p-2 space-y-1">
+                                    <input type="text" value={editSubject} onChange={(e) => setEditSubject(e.target.value)} placeholder="科目" className="w-full px-2 py-1 border border-slate-200 rounded text-xs" autoFocus />
+                                    <input type="text" value={editClassName} onChange={(e) => setEditClassName(e.target.value)} placeholder="班級" className="w-full px-2 py-1 border border-slate-200 rounded text-xs" />
+                                    <div className="flex gap-1 mt-1">
+                                      <button type="button" onClick={handleSaveCell} className="flex-1 py-1 bg-indigo-600 text-white rounded text-xs">確定</button>
+                                      <button type="button" onClick={() => handleRemoveSlot(date, period)} className="py-1 px-2 text-slate-500 hover:text-rose-600 text-xs">刪</button>
+                                    </div>
+                                  </div>
+                                ) : slot ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingCell({ date, period }); setEditSubject(slot.subject); setEditClassName(slot.className); }}
+                                    className="w-full min-h-[48px] rounded bg-indigo-100 border border-indigo-200 text-indigo-800 text-xs p-1 hover:ring-2 hover:ring-indigo-300"
+                                  >
+                                    <div className="font-bold truncate">{slot.subject}</div>
+                                    <div className="truncate opacity-80">{slot.className}</div>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingCell({ date, period }); setEditSubject(''); setEditClassName(''); }}
+                                    className="w-full min-h-[48px] rounded border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50/50 text-lg"
+                                  >
+                                    ＋
+                                  </button>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">已填節數：{details.length} 節</p>
+              </>
+            )}
+          </section>
+        )}
 
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
