@@ -3,6 +3,8 @@ import { HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface InstructionPanelProps {
   title?: string;
+  /** 手機版顯示的短標題（未提供則用 title） */
+  shortTitle?: string;
   children: React.ReactNode;
   isOpenDefault?: boolean;
 }
@@ -29,20 +31,22 @@ export const CollapsibleItem: React.FC<{ title: string; children: React.ReactNod
 
 const InstructionPanel: React.FC<InstructionPanelProps> = ({ 
   title = "使用說明", 
+  shortTitle,
   children, 
   isOpenDefault = false 
 }) => {
   const [isOpen, setIsOpen] = useState(isOpenDefault);
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl mb-6 overflow-hidden transition-all duration-300 shadow-sm">
+    <div className="bg-slate-50 border border-slate-200 rounded-xl mb-4 md:mb-6 overflow-hidden transition-all duration-300 shadow-sm">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-5 py-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-slate-800 font-bold border-b border-slate-100"
+        className="w-full px-4 md:px-5 py-3 md:py-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-slate-800 font-bold border-b border-slate-100 min-h-[44px]"
       >
-        <div className="flex items-center">
-          <HelpCircle size={20} className="mr-3 text-indigo-500" />
-          {title}
+        <div className="flex items-center min-w-0">
+          <HelpCircle size={20} className="mr-2 md:mr-3 text-indigo-500 shrink-0" />
+          <span className="sm:hidden truncate">{shortTitle ?? title}</span>
+          <span className="hidden sm:inline">{title}</span>
         </div>
         <div className="flex items-center text-slate-400 text-xs font-normal">
           <span className="mr-2">{isOpen ? '收合' : '展開'}</span>

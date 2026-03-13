@@ -652,7 +652,7 @@ const Records: React.FC = () => {
   };
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 sm:p-6 md:p-8 h-full flex flex-col" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}>
       <Modal 
         isOpen={modal.isOpen} 
         onClose={closeModal} 
@@ -776,40 +776,37 @@ const Records: React.FC = () => {
       </Modal>
 
       {/* Header Area */}
-      <header className="mb-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-slate-800">代課清冊與憑證</h1>
-                <p className="text-slate-500 mt-2 text-sm md:text-base">查看並匯出每月代課紀錄、清冊與相關憑證</p>
+      <header className="mb-4 md:mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
+            <div className="min-w-0">
+                <h1 className="text-xl md:text-3xl font-bold text-slate-800 truncate">代課清冊與憑證</h1>
+                <p className="text-slate-500 mt-1 md:mt-2 text-sm md:text-base hidden sm:block">查看並匯出每月代課紀錄、清冊與相關憑證</p>
             </div>
             
-            <div className="flex flex-col items-start md:items-end space-y-2 w-full md:w-auto">
-                <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                    <button 
-                        onClick={handleOpenSpreadsheet}
-                        className="px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center space-x-2 text-sm transition-colors flex-1 md:flex-none justify-center"
-                        title="開啟 Google Sheet 以列印清冊或憑證"
-                    >
-                        <ExternalLink size={16} />
-                        <span className="inline">開啟 Sheet</span>
-                    </button>
-                    
-                    <button 
-                        onClick={handleOpenSettings}
-                        className={`p-2 border rounded-lg transition-colors relative flex-1 md:flex-none justify-center flex items-center ${!settings.gasWebAppUrl ? 'border-amber-400 bg-amber-50 text-amber-600 animate-pulse' : 'border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-indigo-600'}`}
-                        title="設定 GAS 連線"
-                    >
-                        <Settings size={20} />
-                        {!settings.gasWebAppUrl && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-white"></span>
-                        )}
-                    </button>
-                </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+                <button 
+                    onClick={handleOpenSpreadsheet}
+                    className="min-h-[44px] flex-1 sm:flex-none px-4 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center justify-center space-x-2 text-sm font-medium transition-colors"
+                    title="開啟 Google Sheet 以列印清冊或憑證"
+                >
+                    <ExternalLink size={18} />
+                    <span>開啟 Sheet</span>
+                </button>
+                <button 
+                    onClick={handleOpenSettings}
+                    className={`min-h-[44px] min-w-[44px] p-2.5 border rounded-lg transition-colors relative flex items-center justify-center ${!settings.gasWebAppUrl ? 'border-amber-400 bg-amber-50 text-amber-600 animate-pulse' : 'border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-indigo-600'}`}
+                    title="設定 GAS 連線"
+                >
+                    <Settings size={20} />
+                    {!settings.gasWebAppUrl && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border border-white"></span>
+                    )}
+                </button>
             </div>
         </div>
       </header>
 
-      <InstructionPanel title="使用說明：代課清冊與憑證">
+      <InstructionPanel title="使用說明：代課清冊與憑證" shortTitle="使用說明">
         <div className="space-y-1">
           <CollapsibleItem title="檢視模式切換">
             <p>可切換「依請假人」或「依代課人」檢視。依請假人適合核對假單；依代課人適合核對薪資與發放清冊。</p>
@@ -830,92 +827,86 @@ const Records: React.FC = () => {
         </div>
       </InstructionPanel>
 
-      {/* Toolbar & Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col xl:flex-row justify-between items-center gap-4">
-          
-          {/* Left: View Mode Toggle */}
-          <div className="flex bg-slate-100 rounded-lg p-1 w-full xl:w-auto justify-center">
+      {/* Toolbar & Filter：手機版直向排列、觸控友善 */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-4 mb-4 md:mb-6 flex flex-col gap-4">
+          {/* 檢視切換 */}
+          <div className="flex bg-slate-100 rounded-lg p-1 w-full">
                 <button 
                     onClick={() => setViewMode('byLeaveTeacher')}
-                    className={`flex-1 xl:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'byLeaveTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 min-h-[44px] px-3 py-2.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'byLeaveTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <Filter size={16} className="mr-1"/> 依請假人
+                    <Filter size={16} className="mr-1 shrink-0"/> <span className="whitespace-nowrap">依請假人</span>
                 </button>
                 <button 
                     onClick={() => setViewMode('bySubstituteTeacher')}
-                    className={`flex-1 xl:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'bySubstituteTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 min-h-[44px] px-3 py-2.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'bySubstituteTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <RefreshCw size={16} className="mr-1"/> 依代課人
+                    <RefreshCw size={16} className="mr-1 shrink-0"/> <span className="whitespace-nowrap">依代課人</span>
                 </button>
            </div>
 
-           {/* Center: Search Bar (New) */}
-           <div className="relative w-full xl:w-64">
+           {/* 搜尋 */}
+           <div className="relative w-full">
              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={18} className="text-slate-400" />
              </div>
              <input
                 type="text"
                 placeholder="搜尋教師、事由、文號..."
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                className="w-full min-h-[44px] pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base md:text-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
              />
            </div>
 
-           {/* Center/Right: Month Selector & Report Actions */}
-           <div className="flex flex-wrap items-center gap-3 justify-center w-full xl:w-auto">
-                
-                {/* Export Buttons */}
-                <button 
-                    onClick={handleBatchGenerateDispatch}
-                    disabled={isGeneratingBatch || filteredRecords.length === 0}
-                    className="px-3 py-2 bg-white border border-slate-300 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
-                    title={selectedRecordIds.size > 0 ? "匯出選取的代課單" : "匯出本月全部代課單"}
-                >
-                     {isGeneratingBatch ? <Loader2 size={16} className="animate-spin mr-2"/> : <FileOutput size={16} className="mr-2"/>}
-                     <span className="font-bold">
-                         {selectedRecordIds.size > 0 ? `匯出選取 (${selectedRecordIds.size})` : '匯出全部'}
-                     </span>
-                </button>
-
-                <button 
-                    onClick={handleOpenExportPicker}
-                    disabled={isGeneratingReport}
-                    className="px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm flex items-center shadow-sm font-medium whitespace-nowrap"
-                    title="匯出本月印領清冊與憑證至 Google Drive"
-                >
-                     {isGeneratingReport ? <Loader2 size={16} className="animate-spin mr-2"/> : <Printer size={16} className="mr-2"/>}
-                     匯出清冊/憑證
-                </button>
-
-                <div className="hidden xl:block h-6 w-px bg-slate-300 mx-1"></div>
-
-                <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">本月總計</span>
-                    <span className="text-lg font-bold text-slate-700">${monthlyTotal.toLocaleString()}</span>
-                </div>
-
-                <div className="flex items-center bg-white border border-slate-300 rounded-lg shadow-sm">
+           {/* 月份與總計 */}
+           <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center bg-white border border-slate-300 rounded-lg shadow-sm shrink-0">
                     <button 
                         onClick={() => handleMonthChange('prev')}
-                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-200"
+                        className="min-h-[44px] min-w-[44px] p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-200 flex items-center justify-center"
                         title="上個月"
                     >
-                        <ChevronLeft size={16} />
+                        <ChevronLeft size={18} />
                     </button>
-                    <div className="px-4 py-2 flex items-center font-bold text-slate-700 min-w-[100px] justify-center whitespace-nowrap">
-                        <CalendarIcon size={16} className="text-slate-400 mr-2" />
+                    <div className="px-3 md:px-4 py-2 flex items-center font-bold text-slate-700 min-w-[90px] md:min-w-[100px] justify-center whitespace-nowrap text-sm md:text-base">
+                        <CalendarIcon size={16} className="text-slate-400 mr-1 md:mr-2 shrink-0" />
                         {selectedMonth}
                     </div>
                     <button 
                         onClick={() => handleMonthChange('next')}
-                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-200"
+                        className="min-h-[44px] min-w-[44px] p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-200 flex items-center justify-center"
                         title="下個月"
                     >
-                        <ChevronRight size={16} />
+                        <ChevronRight size={18} />
                     </button>
                 </div>
+                <div className="flex items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 whitespace-nowrap shrink-0">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide mr-2">本月總計</span>
+                    <span className="text-base md:text-lg font-bold text-slate-700">${monthlyTotal.toLocaleString()}</span>
+                </div>
+           </div>
+
+           {/* 匯出按鈕 */}
+           <div className="flex flex-wrap gap-2">
+                <button 
+                    onClick={handleBatchGenerateDispatch}
+                    disabled={isGeneratingBatch || filteredRecords.length === 0}
+                    className="min-h-[44px] flex-1 min-w-[120px] px-4 py-2.5 bg-white border border-slate-300 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 rounded-lg text-sm flex items-center justify-center shadow-sm transition-colors whitespace-nowrap disabled:opacity-50"
+                    title={selectedRecordIds.size > 0 ? "匯出選取的代課單" : "匯出本月全部代課單"}
+                >
+                     {isGeneratingBatch ? <Loader2 size={16} className="animate-spin mr-2 shrink-0"/> : <FileOutput size={16} className="mr-2 shrink-0"/>}
+                     <span className="font-bold">{selectedRecordIds.size > 0 ? `匯出選取 (${selectedRecordIds.size})` : '匯出全部'}</span>
+                </button>
+                <button 
+                    onClick={handleOpenExportPicker}
+                    disabled={isGeneratingReport}
+                    className="min-h-[44px] flex-1 min-w-[120px] px-4 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm flex items-center justify-center shadow-sm font-medium whitespace-nowrap disabled:opacity-50"
+                    title="匯出本月印領清冊與憑證至 Google Drive"
+                >
+                     {isGeneratingReport ? <Loader2 size={16} className="animate-spin mr-2 shrink-0"/> : <Printer size={16} className="mr-2 shrink-0"/>}
+                     匯出清冊/憑證
+                </button>
            </div>
       </div>
       
@@ -936,16 +927,15 @@ const Records: React.FC = () => {
         </div>
       )}
 
-      {/* Main Table Content */}
+      {/* Main Table Content：表頭不換行、可橫向捲動 */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto -mx-px">
           {viewMode === 'byLeaveTeacher' ? (
-              <table className="w-full text-left">
+              <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    {/* Header Checkbox */}
-                    <th className="px-4 py-4 w-12 text-center">
-                        <div className="flex items-center justify-center cursor-pointer text-indigo-600" onClick={handleSelectAll}>
+                    <th className="px-4 py-4 w-12 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center cursor-pointer text-indigo-600 min-h-[44px]" onClick={handleSelectAll}>
                             {filteredRecords.length > 0 && selectedRecordIds.size === filteredRecords.length ? (
                                 <CheckSquare size={20} />
                             ) : selectedRecordIds.size > 0 ? (
@@ -955,14 +945,14 @@ const Records: React.FC = () => {
                             )}
                         </div>
                     </th>
-                    <th className="px-6 py-4 font-semibold text-slate-700">建立日期</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700">請假教師</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700">假別/事由</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700">期間</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700">代課明細 ({selectedMonth})</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700 text-right">當月總金額</th>
-                    <th className="px-4 py-4 font-semibold text-slate-700 text-center w-32">狀態</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700 text-right">操作</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">建立日期</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">請假教師</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">假別/事由</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">期間</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課明細 ({selectedMonth})</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">當月總金額</th>
+                    <th className="px-4 py-4 font-semibold text-slate-700 text-center w-32 whitespace-nowrap">狀態</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1163,13 +1153,12 @@ const Records: React.FC = () => {
                 </tbody>
               </table>
           ) : (
-            // View by Substitute Teacher (Same as before)
-            <table className="w-full text-left">
+            <table className="w-full text-left min-w-[400px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-4 font-semibold text-slate-700">代課教師</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700">代課詳情 ({selectedMonth})</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700 text-right">本月收入估算</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課教師</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課詳情 ({selectedMonth})</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">本月收入估算</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
