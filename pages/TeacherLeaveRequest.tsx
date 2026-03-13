@@ -9,24 +9,27 @@ import { LeaveType } from '../types';
 import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react';
 
 const PERIOD_ROWS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
-const LEAVE_TYPE_OPTIONS = Object.entries(LeaveType).map(([k, v]) => ({ value: v, label: v }));
+const SIMPLE_LEAVE_TYPES = ['公付', '身心假', '自理'] as const;
+type SimpleLeaveType = (typeof SIMPLE_LEAVE_TYPES)[number];
+
+const LEAVE_TYPE_OPTIONS: { value: SimpleLeaveType; label: string }[] = [
+  { value: '公付', label: '公付（研習、公文派代等）' },
+  { value: '身心假', label: '身心假（病假、身心調適等）' },
+  { value: '自理', label: '自理（事假/其他，自行負責）' },
+];
 
 /** 假別適用情況簡述（依請假規則與常見實務） */
 const LEAVE_TYPE_GUIDE = [
-  { type: LeaveType.PUBLIC_OFFICIAL, text: '公付 (公假)：須有公文且註明派代或奉准公假，例如研習、語文競賽等經核定之公務。' },
-  { type: LeaveType.PUBLIC_GENERAL, text: '公付 (喪病產等)：喪假、病假、產假等依規定核給；喪假日數依親等（如父母/配偶 15 日、祖父母等 5 日），詳見請假規則。' },
-  { type: LeaveType.PUBLIC_MENTAL, text: '公付 (身心)：身心調適等依規定辦理。' },
-  { type: LeaveType.PUBLIC_AFFAIRS, text: '公付 (其他事務費)：其他經核准之公務，須有相關核定。' },
-  { type: LeaveType.PUBLIC_COUNSELING, text: '公付 (學輔事務費)：學輔相關公務經核准。' },
-  { type: LeaveType.PUBLIC_PTA, text: '公派(家長會)：家長會相關活動，依學校規定。' },
-  { type: LeaveType.PERSONAL, text: '自理 (事假/病假)：事假、病假等自理，所遺課務代課費依校內規定。' },
+  { type: '公付', text: '公付：有公文且註明派代、或經學校核定之公務（研習、比賽、召集等）。實際假別與是否核准，由教學組依規定判斷。' },
+  { type: '身心假', text: '身心假：身心調適、就醫、懷孕安胎等情形。實際歸類為病假、身心假等，由管理員依證明文件與規定處理。' },
+  { type: '自理', text: '自理：一般事假、個人安排等不屬公務之情形。若有疑慮，請先詢問教學組再選擇。' },
 ];
 
 type SlotDetail = { date: string; period: string; subject: string; className: string };
 
 export default function TeacherLeaveRequest() {
   const [teacherName, setTeacherName] = useState('');
-  const [leaveType, setLeaveType] = useState<string>(LeaveType.PUBLIC_OFFICIAL);
+  const [leaveType, setLeaveType] = useState<SimpleLeaveType>('公付');
   const [docId, setDocId] = useState('');
   const [reason, setReason] = useState('');
   const [substituteMode, setSubstituteMode] = useState<'need_matching' | 'self_arranged'>('need_matching');

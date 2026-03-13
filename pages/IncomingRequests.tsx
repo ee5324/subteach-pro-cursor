@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { callGasApi } from '../utils/api';
 import { Loader2, Download, UserPlus, FileText, CheckCircle, ExternalLink, Calendar, Info, Archive, RefreshCcw, EyeOff, LayoutList } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
-import { LeaveRecord, Teacher, TeacherType, PayType, TimetableSlot } from '../types';
+import { LeaveRecord, Teacher, TeacherType, PayType, TimetableSlot, LeaveType } from '../types';
 import type { TeacherLeaveRequestDoc } from '../types';
 import { convertSlotsToDetails } from '../utils/calculations';
 import InstructionPanel from '../components/InstructionPanel';
@@ -196,11 +196,12 @@ const IncomingRequests: React.FC = () => {
                 slots.forEach(s => { s.substituteTeacherId = subId; });
             }
             const details = convertSlotsToDetails(slots, teachers, salaryGrades);
+            const categoryNote = req.leaveType ? `【教師勾選：${req.leaveType}】` : "";
             const newRecord: LeaveRecord = {
                 id: crypto.randomUUID(),
                 originalTeacherId: teacherId,
-                leaveType: req.leaveType as LeaveRecord['leaveType'],
-                reason: req.reason,
+                leaveType: LeaveType.PERSONAL,
+                reason: categoryNote + req.reason,
                 docId: req.docId,
                 applicationDate: new Date(req.createdAt).toISOString().split('T')[0],
                 startDate: req.startDate,
