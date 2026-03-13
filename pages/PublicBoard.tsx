@@ -258,25 +258,26 @@ export default function PublicBoard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 pb-32 max-w-7xl mx-auto">
-      <header className="mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center">
-              <span className="mr-2 text-3xl">🏫</span> 代課缺額公告
+    <div className="min-h-screen bg-slate-50 text-slate-800 px-3 py-4 sm:p-4 max-w-7xl mx-auto" style={{ paddingBottom: 'max(8rem, calc(6rem + env(safe-area-inset-bottom, 0px)))' }}>
+      <header className="mb-4 sm:mb-6 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center truncate">
+              <span className="mr-2 text-2xl sm:text-3xl shrink-0">🏫</span>
+              <span className="truncate">代課缺額公告</span>
             </h1>
-            <p className="text-slate-500 text-sm mt-1">
+            <p className="text-slate-500 text-sm mt-1 truncate">
               {selectedTeacher ? `正在檢視：${selectedTeacher} 老師的代課需求` : '請點選下方教師卡片，查看詳細代課時段。'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="shrink-0">
             <button
               type="button"
               onClick={fetchVacancies}
               disabled={loading}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium disabled:opacity-70"
+              className="touch-target-min flex items-center justify-center gap-1 min-h-[44px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 rounded-lg text-sm font-medium disabled:opacity-70 transition-colors"
             >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">重新整理</span>
             </button>
           </div>
@@ -297,7 +298,7 @@ export default function PublicBoard() {
       )}
 
       {!loading && openOnly.length === 0 && (
-        <div className="bg-white p-12 rounded-2xl text-center shadow-sm border border-slate-200">
+        <div className="bg-white p-6 sm:p-12 rounded-2xl text-center shadow-sm border border-slate-200">
           <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
           <p className="text-slate-500">感謝您的關注，所有課程都已安排妥當。</p>
@@ -318,7 +319,7 @@ export default function PublicBoard() {
       )}
 
       {!loading && openOnly.length > 0 && !selectedTeacher && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {teacherGroups.map((g) => (
             <button
               key={g.name}
@@ -328,7 +329,7 @@ export default function PublicBoard() {
                 setCurrentWeekIndex(0);
                 setSelectedIds([]);
               }}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-left hover:border-indigo-400 hover:shadow-md transition-all"
+              className="touch-target-min bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-6 text-left hover:border-indigo-400 hover:shadow-md active:scale-[0.99] transition-all min-h-[120px]"
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center">
@@ -359,51 +360,52 @@ export default function PublicBoard() {
       )}
 
       {!loading && selectedTeacher && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => {
                 setSelectedTeacher(null);
                 setSelectedIds([]);
               }}
-              className="flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-bold bg-white px-4 py-2 rounded-lg border border-slate-200"
+              className="touch-target-min flex items-center gap-1 min-h-[44px] text-slate-500 hover:text-indigo-600 font-bold bg-white px-4 py-2.5 rounded-lg border border-slate-200 active:bg-slate-50"
             >
               <ArrowLeft size={20} /> 返回列表
             </button>
-            <span className="bg-indigo-50 px-4 py-2 rounded-lg text-indigo-800 text-sm font-medium border border-indigo-100">
+            <span className="bg-indigo-50 px-4 py-2 rounded-lg text-indigo-800 text-sm font-medium border border-indigo-100 truncate max-w-[200px] sm:max-w-none">
               {selectedTeacher} 老師代課需求
             </span>
           </div>
 
-          <div className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm border border-slate-200 sticky top-2 z-30">
+          <div className="flex items-center justify-between bg-white p-2 sm:p-3 rounded-xl shadow-sm border border-slate-200 sticky top-0 sm:top-2 z-30">
             <button
               type="button"
               onClick={() => setCurrentWeekIndex((i) => Math.max(0, i - 1))}
               disabled={currentWeekIndex <= 0}
-              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="touch-target-min min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
             >
               <ChevronLeft size={24} className="text-slate-600" />
             </button>
-            <div className="text-center">
-              <div className="text-lg font-bold text-indigo-900">📅 {currentWeekRange}</div>
+            <div className="text-center flex-1 min-w-0 px-2">
+              <div className="text-base sm:text-lg font-bold text-indigo-900 truncate">📅 {currentWeekRange}</div>
               <div className="text-xs text-slate-500 mt-0.5">本週有 {currentWeekVacancies.length} 節缺額</div>
             </div>
             <button
               type="button"
               onClick={() => setCurrentWeekIndex((i) => Math.min(sortedWeekKeys.length - 1, i + 1))}
               disabled={currentWeekIndex >= sortedWeekKeys.length - 1}
-              className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="touch-target-min min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
             >
               <ChevronRight size={24} className="text-slate-600" />
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <p className="text-xs text-slate-400 text-center py-2 sm:hidden">← 可左右滑動查看一週課表 →</p>
             <table className="w-full text-center border-collapse min-w-[800px]">
               <thead>
                 <tr>
-                  <th className="w-20 p-3 bg-slate-50 border-b border-slate-200 text-slate-500 text-sm font-bold sticky left-0">節次</th>
+                  <th className="w-20 p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-500 text-sm font-bold sticky left-0 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">節次</th>
                   {currentWeekDays.map((date, i) => (
                     <th key={i} className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-700 min-w-[140px]">
                       <div className="font-bold">{['週一', '週二', '週三', '週四', '週五'][i]}</div>
@@ -415,12 +417,12 @@ export default function PublicBoard() {
               <tbody>
                 {PERIOD_ORDER.map((period) => (
                   <tr key={period}>
-                    <td className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-600 font-bold text-sm sticky left-0">
+                    <td className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-600 font-bold text-sm sticky left-0 z-[1] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                       {getPeriodLabel(period)}
                     </td>
                     {currentWeekDays.map((date, i) => (
-                      <td key={i} className="p-1 border-b border-r border-slate-100 align-top h-28">
-                        <div className="h-full flex flex-col gap-1.5 p-1">
+                      <td key={i} className="p-1 sm:p-1.5 border-b border-r border-slate-100 align-top min-h-[72px] sm:h-28">
+                        <div className="h-full flex flex-col gap-1 sm:gap-1.5 p-1">
                           {getSlotItems(currentWeekVacancies, date, period).map((item) => {
                             const isSel = selectedIds.includes(item.id);
                             const cnt = applicationCounts[item.id] || 0;
@@ -429,8 +431,8 @@ export default function PublicBoard() {
                                 key={item.id}
                                 type="button"
                                 onClick={() => toggleSelection(item.id)}
-                                className={`relative border rounded-xl p-2.5 text-left w-full shadow-sm transition-all text-sm ${
-                                  isSel ? 'bg-indigo-600 border-indigo-700 text-white' : 'bg-white border-slate-200 hover:border-indigo-400'
+                                className={`touch-target-min relative border rounded-xl p-2 sm:p-2.5 text-left w-full min-h-[52px] shadow-sm transition-all text-sm active:scale-[0.98] ${
+                                  isSel ? 'bg-indigo-600 border-indigo-700 text-white' : 'bg-white border-slate-200 hover:border-indigo-400 active:border-indigo-300'
                                 }`}
                               >
                                 <span
@@ -458,19 +460,22 @@ export default function PublicBoard() {
       )}
 
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-50">
-          <div className="bg-slate-800/90 backdrop-blur text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center border border-slate-600">
-            <div>
-              <div className="font-bold text-lg flex items-center">
-                <span className="bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm font-bold">{selectedIds.length}</span>
-                節課程
+        <div
+          className="fixed left-2 right-2 sm:left-4 sm:right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-50"
+          style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}
+        >
+          <div className="bg-slate-800/95 backdrop-blur text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center gap-4 border border-slate-600">
+            <div className="min-w-0">
+              <div className="font-bold text-base sm:text-lg flex items-center">
+                <span className="bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm font-bold shrink-0">{selectedIds.length}</span>
+                <span>節課程</span>
               </div>
               <div className="text-xs text-slate-300 mt-1">已選取代課時段</div>
             </div>
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-3 rounded-xl font-bold shadow-lg"
+              className="touch-target-min shrink-0 min-h-[44px] bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 text-white px-5 sm:px-6 py-3 rounded-xl font-bold shadow-lg"
             >
               下一步 →
             </button>
@@ -479,22 +484,22 @@ export default function PublicBoard() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="bg-slate-50 px-6 py-4 border-b flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl flex flex-col" style={{ minHeight: 'min(400px, 70vh)' }}>
+            <div className="bg-slate-50 px-4 sm:px-6 py-4 border-b flex justify-between items-center shrink-0">
               <h3 className="font-bold text-slate-800 text-lg">📝 填寫報名資料</h3>
-              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200">
+              <button type="button" onClick={() => setShowModal(false)} className="touch-target-min min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 active:bg-slate-300">
                 ✕
               </button>
             </div>
-            <div className="bg-indigo-50 p-4 border-b text-sm text-indigo-800">
+            <div className="bg-indigo-50 p-4 border-b text-sm text-indigo-800 shrink-0">
               <div className="font-bold text-indigo-900">目前候用狀況</div>
               <div className="mt-1">
                 此時段已有 <strong>{getCurrentMaxQueue()}</strong> 人報名。若您現在報名，將排在第{' '}
                 <strong className="text-xl bg-white px-1.5 rounded">{getCurrentMaxQueue() + 1}</strong> 順位。
               </div>
             </div>
-            <form onSubmit={submitForm} className="p-6 space-y-4">
+            <form onSubmit={submitForm} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               <div>
                 <label className="block text-sm font-bold mb-1 text-slate-700">姓名 *</label>
                 <input
@@ -510,9 +515,11 @@ export default function PublicBoard() {
                 <input
                   required
                   type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-base"
                   placeholder="0912345678"
                 />
               </div>
@@ -526,14 +533,14 @@ export default function PublicBoard() {
                   placeholder="選填"
                 />
               </div>
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50">
+              <div className="pt-4 flex gap-3 pb-safe" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
+                <button type="button" onClick={() => setShowModal(false)} className="touch-target-min flex-1 min-h-[48px] py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 active:bg-slate-100">
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-70 flex items-center justify-center"
+                  className="touch-target-min flex-1 min-h-[48px] py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold shadow-md disabled:opacity-70 flex items-center justify-center"
                 >
                   {submitting ? '送出中...' : '確認報名'}
                 </button>
