@@ -13,8 +13,8 @@
     "gas:deploy": "clasp deploy --description \"自動部署\"",
     "push": "node scripts/push-with-gas.cjs",
     "push:full": "npm run gas:push && npm run gas:deploy && git push",
-    "firebase:deploy": "firebase deploy --only firestore",
-    "firebase:login": "firebase login"
+    "firebase:deploy": "npx firebase deploy --only firestore",
+    "firebase:login": "FIREBASE_CLI_UPDATE_CHECK=false npx firebase login"
   },
   "dependencies": {
     "firebase": "^12.10.0",

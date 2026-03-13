@@ -298,17 +298,18 @@ function doPost(e) {
 
 function doGet(e) {
   var page = e.parameter.page;
-  var htmlOutput;
   if (page === 'request') {
-    htmlOutput = HtmlService.createTemplateFromFile('TeacherRequest').evaluate();
+    var htmlOutput = HtmlService.createTemplateFromFile('TeacherRequest').evaluate();
     htmlOutput.setTitle('教師請假申請 | SubTeach Pro');
-  } else {
-    htmlOutput = HtmlService.createTemplateFromFile('PublicBoard').evaluate();
-    htmlOutput.setTitle('代課缺額公告 | SubTeach Pro');
+    return htmlOutput
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return htmlOutput
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  // 代課缺額公告已改由 Firebase/Vercel 提供，舊 GAS 公開頁已移除，導向新網址
+  var redirectUrl = 'https://subteach-pro-cursor.vercel.app/#/public';
+  return HtmlService.createHtmlOutput(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0;url=' + redirectUrl + '"><title>代課缺額公告</title></head><body><p>代課缺額公告已移至新系統，正在為您導向…</p><p><a href="' + redirectUrl + '">若未自動跳轉請點此</a></p></body></html>'
+  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 // ... (Public Bridge Functions remain unchanged) ...

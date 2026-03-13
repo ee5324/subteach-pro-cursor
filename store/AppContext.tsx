@@ -131,13 +131,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (!auth) {
       setLoading(false);
+      if (import.meta.env.DEV) {
+        setCurrentUser({ uid: 'dev-mock', email: 'dev@test', emailVerified: true } as User);
+      }
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (!user) {
-        // If logged out, stop loading but don't fetch data
+      if (user) {
+        setCurrentUser(user);
+      } else {
         setLoading(false);
+        // 開發模式：免輸入密碼，用模擬使用者進入系統測功能（資料為空）
+        setCurrentUser(import.meta.env.DEV ? ({ uid: 'dev-mock', email: 'dev@test', emailVerified: true } as User) : null);
       }
     });
     return () => unsubscribe();
@@ -151,8 +156,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
-    // Only subscribe if user is logged in
     if (!currentUser) return;
+    // 開發模式模擬使用者不訂閱 Firestore，避免權限錯誤，資料保持空
+    if (currentUser.uid === 'dev-mock') {
+      setLoading(false);
+      return;
+    }
 
     const unsubs: (() => void)[] = [];
 

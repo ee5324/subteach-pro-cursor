@@ -1,11 +1,11 @@
 /**
  * 代課缺額公告（對外公開）
- * 與 GAS 脫鉤，改為從 Firebase 讀取缺額與寫入報名。
+ * 資料來源：Firebase Firestore publicBoard/vacancies（後台「發佈公開」寫入）
  */
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { db } from '../src/lib/firebase';
-import { doc, onSnapshot, collection, getDocs, query, where, addDoc } from 'firebase/firestore';
-import { RefreshCw, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { doc, getDoc, onSnapshot, collection, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { RefreshCw, ChevronLeft, ChevronRight, ArrowLeft, AlertCircle } from 'lucide-react';
 
 const PERIOD_ORDER = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
 
@@ -23,6 +23,28 @@ interface Vacancy {
   allowPartial?: boolean;
 }
 
+function normalizeVacancies(data: unknown): Vacancy[] {
+  if (!data || typeof data !== 'object') return [];
+  const d = data as Record<string, unknown>;
+  const raw = d.vacancies;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((v): v is Record<string, unknown> => v != null && typeof v === 'object')
+    .map((v, i) => ({
+      id: String(v.id ?? `v-${i}`),
+      date: String(v.date ?? ''),
+      period: String(v.period ?? ''),
+      originalTeacherName: String(v.originalTeacherName ?? '未知教師'),
+      subject: String(v.subject ?? ''),
+      className: String(v.className ?? ''),
+      reason: v.reason != null ? String(v.reason) : undefined,
+      payType: v.payType != null ? String(v.payType) : undefined,
+      status: v.status != null ? String(v.status) : '開放報名',
+      recordId: v.recordId != null ? String(v.recordId) : undefined,
+      allowPartial: Boolean(v.allowPartial),
+    })) as Vacancy[];
+}
+
 export default function PublicBoard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -35,36 +57,66 @@ export default function PublicBoard() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', note: '' });
 
-  useEffect(() => {
+  const fetchVacancies = useCallback(async () => {
     if (!db) {
-      setErrorMsg('Firebase 未初始化');
+      setErrorMsg('Firebase 未初始化，無法載入資料。若為 Vercel 部署，請在專案設定中新增 VITE_FIREBASE_API_KEY 等環境變數，並在 Firebase Console 將此網域加入授權網域。');
+      setVacancies([]);
       setLoading(false);
       return;
     }
-    const unsubVac = onSnapshot(doc(db, 'publicBoard', 'vacancies'), (snap) => {
-      const data = snap.data();
-      setVacancies((data?.vacancies || []) as Vacancy[]);
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const snap = await getDoc(doc(db, 'publicBoard', 'vacancies'));
+      const data = snap.exists() ? snap.data() : null;
+      setVacancies(normalizeVacancies(data));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`無法讀取缺額資料：${message}\n\n請確認 Firestore 規則已部署，且此網域已加入 Firebase 授權網域。`);
+      setVacancies([]);
+    } finally {
       setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchVacancies();
+  }, [fetchVacancies]);
+
+  // 即時訂閱：資料更新時自動刷新（可選，避免漏接後台發佈）
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(doc(db, 'publicBoard', 'vacancies'), (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      setVacancies(normalizeVacancies(data));
+      setErrorMsg('');
     }, (err) => {
-      setErrorMsg(err.message);
-      setLoading(false);
+      setErrorMsg(err?.message ?? '即時更新連線錯誤');
     });
-    const unsubApp = onSnapshot(collection(db, 'publicBoardApplications'), (snap) => {
+    return () => unsub();
+  }, []);
+
+  // 報名人數：訂閱 publicBoardApplications
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(collection(db, 'publicBoardApplications'), (snap) => {
       const counts: Record<string, number> = {};
-      snap.docs.forEach(d => {
+      snap.docs.forEach((d) => {
         const vid = (d.data().vacancyId as string) || '';
         counts[vid] = (counts[vid] || 0) + 1;
       });
       setApplicationCounts(counts);
     }, () => {});
-    return () => { unsubVac(); unsubApp(); };
+    return () => unsub();
   }, []);
 
-  const openOnly = vacancies.filter(v => v.status === '開放報名');
+  const openOnly = useMemo(() => {
+    return vacancies.filter((v) => v.status === '開放報名' || !v.status);
+  }, [vacancies]);
 
   const teacherGroups = useMemo(() => {
     const groups: Record<string, { name: string; count: number; hasDaily: boolean; dates: Date[]; subjects: Set<string>; classes: Set<string> }> = {};
-    openOnly.forEach(v => {
+    openOnly.forEach((v) => {
       const name = v.originalTeacherName || '未知教師';
       if (!groups[name]) {
         groups[name] = { name, count: 0, hasDaily: false, dates: [], subjects: new Set(), classes: new Set() };
@@ -76,23 +128,23 @@ export default function PublicBoard() {
       if (v.subject) groups[name].subjects.add(v.subject);
       if (v.className) groups[name].classes.add(String(v.className));
     });
-    return Object.values(groups).map(g => {
-      const sorted = g.dates.sort((a, b) => a.getTime() - b.getTime());
-      const fmt = (d: Date) => (d.getMonth() + 1) + '/' + d.getDate();
-      const start = fmt(sorted[0]);
-      const end = fmt(sorted[sorted.length - 1]);
+    return Object.values(groups).map((g) => {
+      const sorted = [...g.dates].sort((a, b) => a.getTime() - b.getTime());
+      const fmt = (d: Date) => d.getMonth() + 1 + '/' + d.getDate();
+      const start = sorted[0] ? fmt(sorted[0]) : '';
+      const end = sorted[sorted.length - 1] ? fmt(sorted[sorted.length - 1]) : '';
       return {
         ...g,
         dateRange: start === end ? start : `${start} ~ ${end}`,
         subjects: Array.from(g.subjects).join(', '),
-        classes: Array.from(g.classes).sort()
+        classes: Array.from(g.classes).sort(),
       };
     });
   }, [openOnly]);
 
   const filteredVacancies = useMemo(() => {
     if (!selectedTeacher) return [];
-    return openOnly.filter(v => v.originalTeacherName === selectedTeacher);
+    return openOnly.filter((v) => v.originalTeacherName === selectedTeacher);
   }, [openOnly, selectedTeacher]);
 
   const getMonday = (d: Date) => {
@@ -104,7 +156,7 @@ export default function PublicBoard() {
 
   const vacanciesByWeek = useMemo(() => {
     const groups: Record<string, Vacancy[]> = {};
-    filteredVacancies.forEach(v => {
+    filteredVacancies.forEach((v) => {
       const d = new Date((v.date || '').substring(0, 10));
       const mon = getMonday(d);
       const mStr = mon.getFullYear() + '-' + String(mon.getMonth() + 1).padStart(2, '0') + '-' + String(mon.getDate()).padStart(2, '0');
@@ -115,7 +167,7 @@ export default function PublicBoard() {
   }, [filteredVacancies]);
 
   const sortedWeekKeys = Object.keys(vacanciesByWeek).sort();
-  const currentWeekKey = sortedWeekKeys[currentWeekIndex] || sortedWeekKeys[0];
+  const currentWeekKey = sortedWeekKeys[currentWeekIndex] ?? sortedWeekKeys[0];
   const currentWeekVacancies = currentWeekKey ? vacanciesByWeek[currentWeekKey] || [] : [];
   const currentWeekDays = useMemo(() => {
     if (!currentWeekKey) return [];
@@ -127,37 +179,38 @@ export default function PublicBoard() {
     });
   }, [currentWeekKey]);
 
-  const formatDateSimple = (d: Date) => (d.getMonth() + 1) + '/' + d.getDate();
-  const currentWeekRange = currentWeekKey && currentWeekDays.length
-    ? `${formatDateSimple(currentWeekDays[0])} ~ ${formatDateSimple(currentWeekDays[4])}`
-    : '無資料';
+  const formatDateSimple = (d: Date) => d.getMonth() + 1 + '/' + d.getDate();
+  const currentWeekRange =
+    currentWeekKey && currentWeekDays.length
+      ? `${formatDateSimple(currentWeekDays[0])} ~ ${formatDateSimple(currentWeekDays[4])}`
+      : '無資料';
 
-  const getPeriodLabel = (p: string) => p === '早' ? '早自習' : p === '午' ? '午休' : '第 ' + p + ' 節';
+  const getPeriodLabel = (p: string) => (p === '早' ? '早自習' : p === '午' ? '午休' : '第 ' + p + ' 節');
 
   const getSlotItems = (items: Vacancy[], dateObj: Date, period: string) =>
-    items.filter(item => {
+    items.filter((item) => {
       const itemD = new Date((item.date || '').substring(0, 10));
       return itemD.getDate() === dateObj.getDate() && itemD.getMonth() === dateObj.getMonth() && String(item.period) === String(period);
     });
 
   const toggleSelection = (id: string) => {
-    const target = vacancies.find(v => v.id === id);
-    if (!target || target.status !== '開放報名') return;
+    const target = vacancies.find((v) => v.id === id);
+    if (!target) return;
     let ids = [id];
     if (!target.allowPartial && target.recordId) {
-      ids = openOnly.filter(v => v.recordId === target.recordId).map(v => v.id);
+      ids = openOnly.filter((v) => v.recordId === target.recordId).map((v) => v.id);
     }
-    const allSelected = ids.every(i => selectedIds.includes(i));
+    const allSelected = ids.every((i) => selectedIds.includes(i));
     if (allSelected) {
-      setSelectedIds(prev => prev.filter(s => !ids.includes(s)));
+      setSelectedIds((prev) => prev.filter((s) => !ids.includes(s)));
     } else {
-      setSelectedIds(prev => [...prev, ...ids.filter(i => !prev.includes(i))]);
+      setSelectedIds((prev) => [...prev, ...ids.filter((i) => !prev.includes(i))]);
     }
   };
 
   const getCurrentMaxQueue = () => {
     if (selectedIds.length === 0) return 0;
-    return Math.max(0, ...selectedIds.map(id => applicationCounts[id] || 0));
+    return Math.max(0, ...selectedIds.map((id) => applicationCounts[id] || 0));
   };
 
   const submitForm = async (e: React.FormEvent) => {
@@ -172,7 +225,7 @@ export default function PublicBoard() {
           name: form.name.trim(),
           phone: String(form.phone).trim(),
           note: (form.note || '').trim(),
-          createdAt: Date.now()
+          createdAt: Date.now(),
         });
         const q = query(collection(db, 'publicBoardApplications'), where('vacancyId', '==', vid));
         const snap = await getDocs(q);
@@ -182,8 +235,8 @@ export default function PublicBoard() {
       setShowModal(false);
       setSelectedIds([]);
       setForm({ name: '', phone: '', note: '' });
-    } catch (err: any) {
-      alert('送出失敗: ' + (err?.message || err));
+    } catch (err: unknown) {
+      alert('送出失敗: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSubmitting(false);
     }
@@ -192,9 +245,13 @@ export default function PublicBoard() {
   if (!db) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-red-200 text-red-700">
-          <p className="font-bold">無法載入：Firebase 未初始化。</p>
-          <p className="text-sm mt-2">請確認環境變數已設定。</p>
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-red-200 text-red-700 max-w-md">
+          <p className="font-bold flex items-center gap-2">
+            <AlertCircle size={20} /> 無法載入：Firebase 未初始化
+          </p>
+          <p className="text-sm mt-2 text-slate-600">
+            請確認部署環境已設定 VITE_FIREBASE_API_KEY、VITE_FIREBASE_PROJECT_ID 等變數，並在 Firebase Console 將此網域加入授權網域。
+          </p>
         </div>
       </div>
     );
@@ -214,22 +271,25 @@ export default function PublicBoard() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setLoading(true); setLoading(false); }}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium"
+              type="button"
+              onClick={fetchVacancies}
+              disabled={loading}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium disabled:opacity-70"
             >
-              <RefreshCw size={16} />
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">重新整理</span>
             </button>
           </div>
         </div>
         {errorMsg && (
-          <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded border border-red-200 whitespace-pre-line">
-            {errorMsg}
+          <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 whitespace-pre-line flex items-start gap-2">
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
           </div>
         )}
       </header>
 
-      {loading && (
+      {loading && vacancies.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
           <p className="text-slate-400 font-medium">正在載入最新缺額...</p>
@@ -241,17 +301,23 @@ export default function PublicBoard() {
           <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
           <p className="text-slate-500">感謝您的關注，所有課程都已安排妥當。</p>
-          <p className="text-xs text-slate-400 mt-4 max-w-md mx-auto">若您已在後台「發佈公開」仍看不到資料，請確認 Firebase 授權網域已加入此網址，並在後台再按一次發佈。</p>
+          <p className="text-xs text-slate-400 mt-4 max-w-md mx-auto">
+            若您已在後台「發佈公開」仍看不到資料，請確認 Firebase 授權網域已加入此網址，並在後台再按一次發佈。
+          </p>
         </div>
       )}
 
       {!loading && openOnly.length > 0 && !selectedTeacher && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {teacherGroups.map(g => (
+          {teacherGroups.map((g) => (
             <button
               key={g.name}
               type="button"
-              onClick={() => { setSelectedTeacher(g.name); setCurrentWeekIndex(0); setSelectedIds([]); }}
+              onClick={() => {
+                setSelectedTeacher(g.name);
+                setCurrentWeekIndex(0);
+                setSelectedIds([]);
+              }}
               className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-left hover:border-indigo-400 hover:shadow-md transition-all"
             >
               <div className="flex justify-between items-start mb-4">
@@ -287,7 +353,10 @@ export default function PublicBoard() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => { setSelectedTeacher(null); setSelectedIds([]); }}
+              onClick={() => {
+                setSelectedTeacher(null);
+                setSelectedIds([]);
+              }}
               className="flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-bold bg-white px-4 py-2 rounded-lg border border-slate-200"
             >
               <ArrowLeft size={20} /> 返回列表
@@ -300,7 +369,7 @@ export default function PublicBoard() {
           <div className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm border border-slate-200 sticky top-2 z-30">
             <button
               type="button"
-              onClick={() => setCurrentWeekIndex(i => Math.max(0, i - 1))}
+              onClick={() => setCurrentWeekIndex((i) => Math.max(0, i - 1))}
               disabled={currentWeekIndex <= 0}
               className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -312,7 +381,7 @@ export default function PublicBoard() {
             </div>
             <button
               type="button"
-              onClick={() => setCurrentWeekIndex(i => Math.min(sortedWeekKeys.length - 1, i + 1))}
+              onClick={() => setCurrentWeekIndex((i) => Math.min(sortedWeekKeys.length - 1, i + 1))}
               disabled={currentWeekIndex >= sortedWeekKeys.length - 1}
               className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -334,7 +403,7 @@ export default function PublicBoard() {
                 </tr>
               </thead>
               <tbody>
-                {PERIOD_ORDER.map(period => (
+                {PERIOD_ORDER.map((period) => (
                   <tr key={period}>
                     <td className="p-3 bg-slate-50 border-b border-r border-slate-200 text-slate-600 font-bold text-sm sticky left-0">
                       {getPeriodLabel(period)}
@@ -342,7 +411,7 @@ export default function PublicBoard() {
                     {currentWeekDays.map((date, i) => (
                       <td key={i} className="p-1 border-b border-r border-slate-100 align-top h-28">
                         <div className="h-full flex flex-col gap-1.5 p-1">
-                          {getSlotItems(currentWeekVacancies, date, period).map(item => {
+                          {getSlotItems(currentWeekVacancies, date, period).map((item) => {
                             const isSel = selectedIds.includes(item.id);
                             const cnt = applicationCounts[item.id] || 0;
                             return (
@@ -354,16 +423,16 @@ export default function PublicBoard() {
                                   isSel ? 'bg-indigo-600 border-indigo-700 text-white' : 'bg-white border-slate-200 hover:border-indigo-400'
                                 }`}
                               >
-                                <span className={`absolute top-0 right-0 rounded-bl-lg px-1.5 py-0.5 text-[10px] font-bold ${
-                                  isSel ? 'bg-white/20 text-white' : item.payType === '日薪' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'
-                                }`}>
+                                <span
+                                  className={`absolute top-0 right-0 rounded-bl-lg px-1.5 py-0.5 text-[10px] font-bold ${
+                                    isSel ? 'bg-white/20 text-white' : item.payType === '日薪' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'
+                                  }`}
+                                >
                                   {item.payType === '日薪' ? '代導師' : '鐘點'}
                                 </span>
                                 <div className="font-bold truncate pr-14">{item.subject}</div>
                                 <div className="text-xs truncate opacity-80">{item.className}</div>
-                                <div className="mt-1 text-[10px]">
-                                  {cnt > 0 ? `${cnt}人排隊` : '可報名'}
-                                </div>
+                                <div className="mt-1 text-[10px]">{cnt > 0 ? `${cnt}人排隊` : '可報名'}</div>
                               </button>
                             );
                           })}
@@ -404,28 +473,58 @@ export default function PublicBoard() {
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
             <div className="bg-slate-50 px-6 py-4 border-b flex justify-between items-center">
               <h3 className="font-bold text-slate-800 text-lg">📝 填寫報名資料</h3>
-              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200">✕</button>
+              <button type="button" onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200">
+                ✕
+              </button>
             </div>
             <div className="bg-indigo-50 p-4 border-b text-sm text-indigo-800">
               <div className="font-bold text-indigo-900">目前候用狀況</div>
-              <div className="mt-1">此時段已有 <strong>{getCurrentMaxQueue()}</strong> 人報名。若您現在報名，將排在第 <strong className="text-xl bg-white px-1.5 rounded">{getCurrentMaxQueue() + 1}</strong> 順位。</div>
+              <div className="mt-1">
+                此時段已有 <strong>{getCurrentMaxQueue()}</strong> 人報名。若您現在報名，將排在第{' '}
+                <strong className="text-xl bg-white px-1.5 rounded">{getCurrentMaxQueue() + 1}</strong> 順位。
+              </div>
             </div>
             <form onSubmit={submitForm} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-bold mb-1 text-slate-700">姓名 *</label>
-                <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="請輸入您的全名" />
+                <input
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="請輸入您的全名"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold mb-1 text-slate-700">聯絡電話 *</label>
-                <input required type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0912345678" />
+                <input
+                  required
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="0912345678"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold mb-1 text-slate-700">備註留言</label>
-                <textarea value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} rows={2} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="選填" />
+                <textarea
+                  value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  rows={2}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="選填"
+                />
               </div>
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50">取消</button>
-                <button type="submit" disabled={submitting} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-70 flex items-center justify-center">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50">
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md disabled:opacity-70 flex items-center justify-center"
+                >
                   {submitting ? '送出中...' : '確認報名'}
                 </button>
               </div>

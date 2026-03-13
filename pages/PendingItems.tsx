@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter, LayoutGrid, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter, LayoutGrid, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeeklyScheduleModal, { ScheduleGroup } from '../components/WeeklyScheduleModal';
 import { PayType, LeaveType, TeacherType, Teacher } from '../types';
@@ -43,8 +43,42 @@ interface TeacherGroup {
   earliestDate: string; // 用於排序群組
 }
 
+// 與代課總表相同：節次與週一～五
+const PERIOD_ROWS = [
+  { id: '早', label: '早自習' },
+  { id: '1', label: '第一節' },
+  { id: '2', label: '第二節' },
+  { id: '3', label: '第三節' },
+  { id: '4', label: '第四節' },
+  { id: '午', label: '午休' },
+  { id: '5', label: '第五節' },
+  { id: '6', label: '第六節' },
+  { id: '7', label: '第七節' },
+];
+
+const getWeekDays = (baseDate: Date) => {
+  const d = new Date(baseDate);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  const days = [];
+  for (let i = 0; i < 5; i++) {
+    const temp = new Date(monday);
+    temp.setDate(monday.getDate() + i);
+    const y = temp.getFullYear();
+    const m = String(temp.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(temp.getDate()).padStart(2, '0');
+    days.push({
+      dateStr: `${y}-${m}-${dayStr}`,
+      label: `${Number(m)}/${Number(dayStr)}`,
+      dayName: ['週一', '週二', '週三', '週四', '週五'][i]
+    });
+  }
+  return days;
+};
+
 const PendingItems: React.FC = () => {
-  const { records, teachers, updateRecord, salaryGrades, addTeacher, syncToPublicBoard, settings } = useAppStore();
+  const { records, teachers, updateRecord, salaryGrades, addTeacher, syncToPublicBoard, settings, holidays } = useAppStore();
   
   // State for Schedule Modal
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
@@ -61,8 +95,9 @@ const PendingItems: React.FC = () => {
   // Sync state
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // 課程總表（教師空閒一覽）預設收合
+  // 課程總表（與代課總表同一內容、縮小版）預設收合
   const [showScheduleOverview, setShowScheduleOverview] = useState(false);
+  const [scheduleOverviewViewDate, setScheduleOverviewViewDate] = useState(new Date());
 
   // Feedback Modal
   const [feedbackModal, setFeedbackModal] = useState<{ 
@@ -154,41 +189,30 @@ const PendingItems: React.FC = () => {
 
   }, [records, teachers]);
 
-  // 各待聘時段「有空教師」：該 (date, period) 未在其它紀錄中被派代即視為有空
-  const scheduleOverviewSlots = useMemo(() => {
-    const slotKeys = new Set<string>();
-    groupedList.forEach(g => g.items.forEach(i => slotKeys.add(`${i.date}_${i.period}`)));
-
-    const busyBySlot = new Map<string, Set<string>>();
-    records.forEach(r => {
-      if (!r.slots) return;
-      r.slots.forEach(s => {
-        if (!s.substituteTeacherId) return;
-        const key = `${s.date}_${s.period}`;
-        if (!busyBySlot.has(key)) busyBySlot.set(key, new Set());
-        busyBySlot.get(key)!.add(s.substituteTeacherId);
+  // 與代課總表相同：以週為單位的 scheduleData（Date_Period -> 代課/待聘卡片）
+  const scheduleOverviewWeekDays = useMemo(() => getWeekDays(scheduleOverviewViewDate), [scheduleOverviewViewDate]);
+  const scheduleOverviewData = useMemo(() => {
+    const map = new Map<string, { originalName: string; subName: string; subject: string; className: string; isPending: boolean; payType: string; reason: string }[]>();
+    records.forEach(record => {
+      if (!record.slots) return;
+      record.slots.forEach(slot => {
+        const key = `${slot.date}_${slot.period}`;
+        if (!map.has(key)) map.set(key, []);
+        const originalTeacher = teachers.find(t => t.id === record.originalTeacherId);
+        const subTeacher = teachers.find(t => t.id === slot.substituteTeacherId);
+        map.get(key)?.push({
+          originalName: originalTeacher?.name || record.originalTeacherId,
+          subName: subTeacher?.name || slot.substituteTeacherId || '待聘',
+          subject: slot.subject,
+          className: slot.className,
+          isPending: !slot.substituteTeacherId,
+          payType: slot.payType,
+          reason: record.reason
+        });
       });
     });
-
-    const result: { date: string; period: string; freeNames: string[] }[] = [];
-    const periodsOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
-    Array.from(slotKeys)
-      .map(k => {
-        const [date, period] = k.split('_');
-        return { date, period };
-      })
-      .sort((a, b) => {
-        const d = new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (d !== 0) return d;
-        return periodsOrder.indexOf(a.period) - periodsOrder.indexOf(b.period);
-      })
-      .forEach(({ date, period }) => {
-        const busy = busyBySlot.get(`${date}_${period}`) ?? new Set();
-        const freeNames = teachers.filter(t => !busy.has(t.id)).map(t => t.name);
-        result.push({ date, period, freeNames });
-      });
-    return result;
-  }, [groupedList, records, teachers]);
+    return map;
+  }, [records, teachers]);
 
   // --- Handlers for Public Toggle (Record Level) ---
 
@@ -464,7 +488,7 @@ const PendingItems: React.FC = () => {
                     type="button"
                     onClick={() => setShowScheduleOverview(prev => !prev)}
                     className="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center space-x-1.5 transition-colors"
-                    title={showScheduleOverview ? '關閉課程總表' : '展開查看各時段有空教師'}
+                    title={showScheduleOverview ? '關閉課程總表' : '展開代課總表（縮小版，同頁比對）'}
                  >
                     <LayoutGrid size={16} />
                     <span>課程總表</span>
@@ -498,27 +522,68 @@ const PendingItems: React.FC = () => {
         </div>
       </header>
 
-      {/* 課程總表：各時段有空教師一覽，點擊收合、不擋清單 */}
+      {/* 課程總表一覽：與代課總表同一內容，縮小版方便同頁比對 */}
       {showScheduleOverview && groupedList.length > 0 && (
-        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg shadow-inner max-h-[220px] overflow-auto">
-          <div className="text-xs font-bold text-slate-500 mb-2 flex items-center justify-between">
-            <span>各時段有空教師（未在該節被派代者）</span>
+        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg shadow-inner max-h-[320px] overflow-auto">
+          <div className="text-xs font-bold text-slate-500 mb-2 flex items-center justify-between flex-wrap gap-2">
+            <span>代課總表（縮小版）</span>
+            <div className="flex items-center space-x-1">
+              <button type="button" onClick={() => { const d = new Date(scheduleOverviewViewDate); d.setDate(d.getDate() - 7); setScheduleOverviewViewDate(d); }} className="p-1 hover:bg-slate-200 rounded text-slate-600" title="上一週"><ChevronLeft size={14} /></button>
+              <span className="px-2 text-slate-700 font-mono text-[11px] min-w-[100px] text-center" title="點擊回到本週" onClick={() => setScheduleOverviewViewDate(new Date())}>
+                {scheduleOverviewWeekDays[0].label} ~ {scheduleOverviewWeekDays[4].label}
+              </span>
+              <button type="button" onClick={() => { const d = new Date(scheduleOverviewViewDate); d.setDate(d.getDate() + 7); setScheduleOverviewViewDate(d); }} className="p-1 hover:bg-slate-200 rounded text-slate-600" title="下一週"><ChevronRight size={14} /></button>
+            </div>
             <button type="button" onClick={() => setShowScheduleOverview(false)} className="text-slate-400 hover:text-slate-600 p-0.5" title="關閉">×</button>
           </div>
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="text-slate-500 border-b border-slate-200">
-                <th className="py-1 pr-2 font-medium w-24">日期</th>
-                <th className="py-1 pr-2 font-medium w-14">節次</th>
-                <th className="py-1 font-medium">有空教師</th>
+          <table className="w-full border-collapse text-left min-w-[700px]" style={{ fontSize: '10px' }}>
+            <thead className="bg-slate-100 sticky top-0 z-10">
+              <tr>
+                <th className="py-1 px-1 border border-slate-200 w-14 text-center text-slate-600 font-bold">節次</th>
+                {scheduleOverviewWeekDays.map(day => (
+                  <th key={day.dateStr} className={`py-1 px-1 border border-slate-200 text-center min-w-[100px] ${holidays.includes(day.dateStr) ? 'bg-rose-50' : ''}`}>
+                    <div className={`font-bold ${holidays.includes(day.dateStr) ? 'text-rose-600' : 'text-slate-700'}`}>{day.dayName}</div>
+                    <div className="text-[9px] text-slate-400">{day.label}</div>
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="text-slate-700">
-              {scheduleOverviewSlots.map(({ date, period, freeNames }, i) => (
-                <tr key={`${date}_${period}_${i}`} className="border-b border-slate-100 last:border-0">
-                  <td className="py-1 pr-2 font-mono">{date}</td>
-                  <td className="py-1 pr-2">{period === '早' ? '早' : period === '午' ? '午' : `第${period}節`}</td>
-                  <td className="py-1 break-words">{freeNames.length ? freeNames.join('、') : '—'}</td>
+            <tbody>
+              {PERIOD_ROWS.map(period => (
+                <tr key={period.id}>
+                  <td className="py-0.5 px-1 border border-slate-200 text-center font-bold text-slate-600 bg-slate-50/50 sticky left-0 text-[10px]">{period.label}</td>
+                  {scheduleOverviewWeekDays.map(day => {
+                    const key = `${day.dateStr}_${period.id}`;
+                    const items = scheduleOverviewData.get(key) || [];
+                    const isHoliday = holidays.includes(day.dateStr);
+                    return (
+                      <td key={key} className={`p-0.5 border border-slate-100 align-top min-h-[28px] ${isHoliday ? 'bg-rose-50/30' : ''}`}>
+                        <div className="flex flex-col gap-0.5">
+                          {items.map((item, idx) => (
+                            <div key={idx} className={`rounded p-1 border shadow-sm relative group ${item.isPending ? 'bg-red-50 border-red-200' : 'bg-white border-indigo-100'}`}>
+                              <div className="flex items-center justify-between gap-0.5 mb-0">
+                                <span className="font-bold text-slate-700 truncate max-w-[42%] text-[9px]" title={item.originalName}>{item.originalName}</span>
+                                <ArrowRight size={8} className="text-slate-300 shrink-0" />
+                                <span className={`font-bold truncate max-w-[42%] text-[9px] ${item.isPending ? 'text-red-600' : 'text-emerald-600'}`} title={item.subName}>{item.subName}</span>
+                              </div>
+                              <div className="flex items-center text-slate-500 truncate">
+                                <BookOpen size={8} className="mr-0.5 shrink-0" />
+                                <span className="truncate">{item.subject}</span>
+                                <span className="mx-0.5">|</span>
+                                <span className="truncate">{item.className}</span>
+                              </div>
+                              {item.payType === '日薪' && <span className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[8px] px-0.5 rounded-bl font-bold">日薪</span>}
+                              {item.payType === '半日薪' && <span className="absolute top-0 right-0 bg-amber-50 text-amber-600 text-[8px] px-0.5 rounded-bl font-bold">半日</span>}
+                              <div className="absolute left-0 bottom-full mb-0.5 hidden group-hover:block w-40 bg-slate-800 text-white text-[9px] p-1.5 rounded shadow-xl z-20 pointer-events-none">
+                                <div>事由: {item.reason}</div>
+                                <div>狀態: {item.isPending ? '待聘中' : '已安排'}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -548,13 +613,8 @@ const PendingItems: React.FC = () => {
 
       <div className="mb-4 text-right flex items-center justify-end gap-4 flex-wrap">
           <a href="#/public" target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline font-medium flex items-center">
-              <ExternalLink size={12} className="mr-1"/> 公開缺額公告 (Firebase)
+              <ExternalLink size={12} className="mr-1"/> 公開缺額公告
           </a>
-          {settings.gasWebAppUrl && (
-              <a href={settings.gasWebAppUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline flex items-center">
-                  <ExternalLink size={12} className="mr-1"/> 舊版 (GAS)
-              </a>
-          )}
       </div>
 
       {/* Global Public Toggle */}
