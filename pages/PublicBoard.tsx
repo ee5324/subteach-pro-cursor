@@ -241,6 +241,7 @@ export default function PublicBoard() {
           <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
           <p className="text-slate-500">感謝您的關注，所有課程都已安排妥當。</p>
+          <p className="text-xs text-slate-400 mt-4 max-w-md mx-auto">若您已在後台「發佈公開」仍看不到資料，請確認 Firebase 授權網域已加入此網址，並在後台再按一次發佈。</p>
         </div>
       )}
 

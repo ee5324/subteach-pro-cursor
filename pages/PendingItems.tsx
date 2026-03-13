@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter } from 'lucide-react';
+import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter, LayoutGrid, ChevronDown, ChevronUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeeklyScheduleModal, { ScheduleGroup } from '../components/WeeklyScheduleModal';
 import { PayType, LeaveType, TeacherType, Teacher } from '../types';
@@ -60,6 +60,9 @@ const PendingItems: React.FC = () => {
 
   // Sync state
   const [isPublishing, setIsPublishing] = useState(false);
+
+  // 課程總表（教師空閒一覽）預設收合
+  const [showScheduleOverview, setShowScheduleOverview] = useState(false);
 
   // Feedback Modal
   const [feedbackModal, setFeedbackModal] = useState<{ 
@@ -150,6 +153,42 @@ const PendingItems: React.FC = () => {
     return sortedGroups;
 
   }, [records, teachers]);
+
+  // 各待聘時段「有空教師」：該 (date, period) 未在其它紀錄中被派代即視為有空
+  const scheduleOverviewSlots = useMemo(() => {
+    const slotKeys = new Set<string>();
+    groupedList.forEach(g => g.items.forEach(i => slotKeys.add(`${i.date}_${i.period}`)));
+
+    const busyBySlot = new Map<string, Set<string>>();
+    records.forEach(r => {
+      if (!r.slots) return;
+      r.slots.forEach(s => {
+        if (!s.substituteTeacherId) return;
+        const key = `${s.date}_${s.period}`;
+        if (!busyBySlot.has(key)) busyBySlot.set(key, new Set());
+        busyBySlot.get(key)!.add(s.substituteTeacherId);
+      });
+    });
+
+    const result: { date: string; period: string; freeNames: string[] }[] = [];
+    const periodsOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
+    Array.from(slotKeys)
+      .map(k => {
+        const [date, period] = k.split('_');
+        return { date, period };
+      })
+      .sort((a, b) => {
+        const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (d !== 0) return d;
+        return periodsOrder.indexOf(a.period) - periodsOrder.indexOf(b.period);
+      })
+      .forEach(({ date, period }) => {
+        const busy = busyBySlot.get(`${date}_${period}`) ?? new Set();
+        const freeNames = teachers.filter(t => !busy.has(t.id)).map(t => t.name);
+        result.push({ date, period, freeNames });
+      });
+    return result;
+  }, [groupedList, records, teachers]);
 
   // --- Handlers for Public Toggle (Record Level) ---
 
@@ -419,7 +458,19 @@ const PendingItems: React.FC = () => {
             </p>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-wrap gap-2">
+             {groupedList.length > 0 && (
+                 <button
+                    type="button"
+                    onClick={() => setShowScheduleOverview(prev => !prev)}
+                    className="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center space-x-1.5 transition-colors"
+                    title={showScheduleOverview ? '關閉課程總表' : '展開查看各時段有空教師'}
+                 >
+                    <LayoutGrid size={16} />
+                    <span>課程總表</span>
+                    {showScheduleOverview ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                 </button>
+             )}
              <button
                 onClick={handlePublish}
                 disabled={isPublishing}
@@ -446,6 +497,34 @@ const PendingItems: React.FC = () => {
              )}
         </div>
       </header>
+
+      {/* 課程總表：各時段有空教師一覽，點擊收合、不擋清單 */}
+      {showScheduleOverview && groupedList.length > 0 && (
+        <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg shadow-inner max-h-[220px] overflow-auto">
+          <div className="text-xs font-bold text-slate-500 mb-2 flex items-center justify-between">
+            <span>各時段有空教師（未在該節被派代者）</span>
+            <button type="button" onClick={() => setShowScheduleOverview(false)} className="text-slate-400 hover:text-slate-600 p-0.5" title="關閉">×</button>
+          </div>
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="text-slate-500 border-b border-slate-200">
+                <th className="py-1 pr-2 font-medium w-24">日期</th>
+                <th className="py-1 pr-2 font-medium w-14">節次</th>
+                <th className="py-1 font-medium">有空教師</th>
+              </tr>
+            </thead>
+            <tbody className="text-slate-700">
+              {scheduleOverviewSlots.map(({ date, period, freeNames }, i) => (
+                <tr key={`${date}_${period}_${i}`} className="border-b border-slate-100 last:border-0">
+                  <td className="py-1 pr-2 font-mono">{date}</td>
+                  <td className="py-1 pr-2">{period === '早' ? '早' : period === '午' ? '午' : `第${period}節`}</td>
+                  <td className="py-1 break-words">{freeNames.length ? freeNames.join('、') : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <InstructionPanel title="使用說明：待聘課務清單">
         <ul className="list-disc pl-5 space-y-1">
