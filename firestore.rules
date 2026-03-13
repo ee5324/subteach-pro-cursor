@@ -117,6 +117,12 @@ service cloud.firestore {
     match /edutrack_todos/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
+    match /edutrack_exam_papers/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_exam_paper_folders/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
     match /edutrack_allowed_users/{email} {
       allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
       allow create, update, delete: if isEduTrackAdmin();

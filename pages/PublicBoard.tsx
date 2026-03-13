@@ -279,6 +279,17 @@ export default function PublicBoard() {
         )}
       </header>
 
+      {/* 使用說明：簡單易懂 */}
+      <div className="mb-4 sm:mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4 sm:p-5 text-slate-700">
+        <p className="font-bold text-indigo-900 text-base sm:text-sm mb-2">📖 如何使用</p>
+        <ol className="text-sm space-y-1.5 list-decimal list-inside">
+          <li><strong>選老師</strong>：點選下方某位請假老師的卡片，進入該老師的缺額課表。</li>
+          <li><strong>選節次</strong>：在課表中點選您要代課的節次（可多選），該格會變成藍色。</li>
+          <li><strong>填資料並送出</strong>：點「下一步」填寫姓名與聯絡電話，送出後即完成報名。</li>
+        </ol>
+        <p className="text-xs text-slate-500 mt-2">缺額由學校後台發佈，若列表為空表示目前無公開缺額；可稍後按「重新整理」取得最新資料。</p>
+      </div>
+
       {loading && vacancies.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
