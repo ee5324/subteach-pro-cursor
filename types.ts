@@ -157,6 +157,16 @@ export interface SubstituteApplication {
   teacherId?: string;
 }
 
+/** 公開缺額頁（#/public）的報名紀錄：老師點選缺額後填姓名、電話送出 */
+export interface PublicBoardApplication {
+  id: string;
+  vacancyId: string;
+  name: string;
+  phone: string;
+  note?: string;
+  createdAt: number;
+}
+
 /** 報名表「可以任教的項目」選項 */
 export const APPLY_TEACHING_ITEMS = [
   '低年級導師', '中年級導師', '高年級導師',

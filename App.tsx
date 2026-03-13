@@ -54,6 +54,7 @@ import Login from './pages/Login';
 import ApplySubstitute from './pages/ApplySubstitute';
 import SubstituteApplications from './pages/SubstituteApplications';
 import PublicBoard from './pages/PublicBoard';
+import PublicBoardApplicationsPage from './pages/PublicBoardApplicationsPage';
 import { useAppStore } from './store/useAppStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
@@ -95,6 +96,7 @@ const App: React.FC = () => {
           <Route path="overview" element={<SubstituteOverview />} />
           <Route path="pending" element={<PendingItems />} />
           <Route path="requests" element={<IncomingRequests />} />
+          <Route path="public-applications" element={<PublicBoardApplicationsPage />} />
           <Route path="sub-pool" element={<SubPool />} />
           <Route path="substitute-applications" element={<SubstituteApplications />} />
           <Route path="entry" element={<EntryForm />} />

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication } from '../types';
+import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
@@ -55,9 +55,11 @@ interface AppContextType {
   subPool: SubPoolItem[];
   languagePayrolls: LanguagePayroll[];
   substituteApplications: SubstituteApplication[];
+  publicBoardApplications: PublicBoardApplication[];
   loading: boolean;
 
   deleteSubstituteApplication: (id: string) => Promise<void>;
+  deletePublicBoardApplication: (id: string) => Promise<void>;
   approveSubstituteApplication: (id: string, options?: { addToSubPool: boolean }) => Promise<{ teacherId: string }>;
 
   addTeacher: (teacher: Teacher) => Promise<void>;
@@ -124,6 +126,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [subPool, setSubPool] = useState<SubPoolItem[]>([]);
   const [languagePayrolls, setLanguagePayrolls] = useState<LanguagePayroll[]>([]);
   const [substituteApplications, setSubstituteApplications] = useState<SubstituteApplication[]>([]);
+  const [publicBoardApplications, setPublicBoardApplications] = useState<PublicBoardApplication[]>([]);
 
   const [loading, setLoading] = useState(true);
 
@@ -238,6 +241,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     unsubs.push(onSnapshot(collection(db, 'substituteApplications'), (snap) => {
       setSubstituteApplications(snap.docs.map(d => ({ ...d.data(), id: d.id } as SubstituteApplication)));
+    }));
+
+    unsubs.push(onSnapshot(collection(db, 'publicBoardApplications'), (snap) => {
+      setPublicBoardApplications(snap.docs.map(d => {
+        const data = d.data();
+        return { id: d.id, vacancyId: data.vacancyId || '', name: data.name || '', phone: String(data.phone ?? ''), note: data.note, createdAt: data.createdAt || 0 } as PublicBoardApplication;
+      }));
     }));
 
     setLoading(false);
@@ -426,6 +436,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await deleteDoc(doc(db, 'substituteApplications', id));
   };
 
+  const deletePublicBoardApplication = async (id: string) => {
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'publicBoardApplications', id));
+  };
+
   const approveSubstituteApplication = async (id: string, options?: { addToSubPool: boolean }) => {
     if (!db) throw new Error("Firebase not initialized");
     const app = substituteApplications.find(a => a.id === id);
@@ -593,7 +608,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = {
     currentUser,
     teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
-    semesters, activeSemesterId, subPool, languagePayrolls, substituteApplications,
+    semesters, activeSemesterId, subPool, languagePayrolls, substituteApplications, publicBoardApplications,
     loading, 
     addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
@@ -602,7 +617,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addSemester, updateSemester, removeSemester, setSemesterActive,
     updateSettings, addHoliday, removeHoliday, 
     addToSubPool, removeFromSubPool, updateSubPoolItem,
-    deleteSubstituteApplication, approveSubstituteApplication,
+    deleteSubstituteApplication, deletePublicBoardApplication, approveSubstituteApplication,
     addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,
     loadFromGas, migrateToFirebase, syncToPublicBoard, checkGasConnection,
   };
