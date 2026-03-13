@@ -301,6 +301,16 @@ export default function PublicBoard() {
           <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
           <p className="text-slate-500">感謝您的關注，所有課程都已安排妥當。</p>
+          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-left max-w-lg mx-auto">
+            <p className="text-sm font-bold text-amber-800 mb-2">📌 要在哪裡公開，這裡才會看到？</p>
+            <ol className="text-sm text-slate-700 list-decimal list-inside space-y-1">
+              <li>登入代課管理系統後，從左側選單進入 <strong>「待聘清單」</strong>（#/pending）。</li>
+              <li>在待聘清單中，將要對外顯示的課務右側切換為 <strong>「公開中」</strong>（綠色）。</li>
+              <li>點擊頁面上方藍色按鈕 <strong>「發佈公開 (N)」</strong>，將缺額寫入資料庫。</li>
+              <li>重新整理本頁或等待幾秒，即可看到剛發佈的缺額。</li>
+            </ol>
+            <p className="text-xs text-slate-500 mt-3">若沒有任何待聘課程，請先在「請假登錄」建立請假並留下未派代的節次，再至待聘清單設為公開並發佈。</p>
+          </div>
           <p className="text-xs text-slate-400 mt-4 max-w-md mx-auto">
             若您已在後台「發佈公開」仍看不到資料，請確認 Firebase 授權網域已加入此網址，並在後台再按一次發佈。
           </p>
