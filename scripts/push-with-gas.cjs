@@ -24,12 +24,27 @@ function getChangedFiles() {
 
 const files = getChangedFiles();
 const gasChanged = files.some(f => f.replace(/\\/g, '/').startsWith('gas/') || f === '.clasp.json');
+const firebaseChanged = files.some(f => {
+  const n = f.replace(/\\/g, '/');
+  return n === 'firestore.rules' || n === 'firebase.json' || n === '.firebaserc';
+});
 
 if (gasChanged) {
   console.log('偵測到 GAS 變更，先推送到 Apps Script…');
   run('npx clasp push');
 } else {
   console.log('GAS 無變更，略過 clasp push。');
+}
+
+if (firebaseChanged) {
+  console.log('偵測到 Firestore 規則或 Firebase 設定變更，部署至 Firebase…');
+  try {
+    run('npx firebase deploy --only firestore');
+  } catch (e) {
+    console.warn('Firebase 部署失敗（請先執行 npm run firebase:login）：', e.message);
+  }
+} else {
+  console.log('Firebase 設定無變更，略過 firebase deploy。');
 }
 
 run('git add -A');

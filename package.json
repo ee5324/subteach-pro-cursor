@@ -12,7 +12,9 @@
     "gas:push": "clasp push",
     "gas:deploy": "clasp deploy --description \"自動部署\"",
     "push": "node scripts/push-with-gas.cjs",
-    "push:full": "npm run gas:push && npm run gas:deploy && git push"
+    "push:full": "npm run gas:push && npm run gas:deploy && git push",
+    "firebase:deploy": "firebase deploy --only firestore",
+    "firebase:login": "firebase login"
   },
   "dependencies": {
     "firebase": "^12.10.0",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@google/clasp": "^3.0.2",
+    "firebase-tools": "^13.0.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",

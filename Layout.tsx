@@ -7,7 +7,7 @@ const Layout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 z-40 flex items-center px-4 justify-between shadow-sm">
         <div className="font-bold text-lg text-slate-800">SubTeach Pro</div>
