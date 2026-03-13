@@ -827,86 +827,80 @@ const Records: React.FC = () => {
         </div>
       </InstructionPanel>
 
-      {/* Toolbar & Filter：手機版直向排列、觸控友善 */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-4 mb-4 md:mb-6 flex flex-col gap-4">
-          {/* 檢視切換 */}
-          <div className="flex bg-slate-100 rounded-lg p-1 w-full">
+      {/* Toolbar & Filter：橫向緊湊排版 */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col xl:flex-row justify-between items-center gap-4">
+          <div className="flex bg-slate-100 rounded-lg p-1 w-full xl:w-auto justify-center">
                 <button 
                     onClick={() => setViewMode('byLeaveTeacher')}
-                    className={`flex-1 min-h-[44px] px-3 py-2.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'byLeaveTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 xl:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'byLeaveTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <Filter size={16} className="mr-1 shrink-0"/> <span className="whitespace-nowrap">依請假人</span>
+                    <Filter size={16} className="mr-1"/> 依請假人
                 </button>
                 <button 
                     onClick={() => setViewMode('bySubstituteTeacher')}
-                    className={`flex-1 min-h-[44px] px-3 py-2.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'bySubstituteTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex-1 xl:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center justify-center ${viewMode === 'bySubstituteTeacher' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    <RefreshCw size={16} className="mr-1 shrink-0"/> <span className="whitespace-nowrap">依代課人</span>
+                    <RefreshCw size={16} className="mr-1"/> 依代課人
                 </button>
            </div>
 
-           {/* 搜尋 */}
-           <div className="relative w-full">
+           <div className="relative w-full xl:w-64">
              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={18} className="text-slate-400" />
              </div>
              <input
                 type="text"
                 placeholder="搜尋教師、事由、文號..."
-                className="w-full min-h-[44px] pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base md:text-sm"
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
              />
            </div>
 
-           {/* 月份與總計 */}
-           <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center bg-white border border-slate-300 rounded-lg shadow-sm shrink-0">
-                    <button 
-                        onClick={() => handleMonthChange('prev')}
-                        className="min-h-[44px] min-w-[44px] p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-200 flex items-center justify-center"
-                        title="上個月"
-                    >
-                        <ChevronLeft size={18} />
-                    </button>
-                    <div className="px-3 md:px-4 py-2 flex items-center font-bold text-slate-700 min-w-[90px] md:min-w-[100px] justify-center whitespace-nowrap text-sm md:text-base">
-                        <CalendarIcon size={16} className="text-slate-400 mr-1 md:mr-2 shrink-0" />
-                        {selectedMonth}
-                    </div>
-                    <button 
-                        onClick={() => handleMonthChange('next')}
-                        className="min-h-[44px] min-w-[44px] p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-200 flex items-center justify-center"
-                        title="下個月"
-                    >
-                        <ChevronRight size={18} />
-                    </button>
-                </div>
-                <div className="flex items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 whitespace-nowrap shrink-0">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide mr-2">本月總計</span>
-                    <span className="text-base md:text-lg font-bold text-slate-700">${monthlyTotal.toLocaleString()}</span>
-                </div>
-           </div>
-
-           {/* 匯出按鈕 */}
-           <div className="flex flex-wrap gap-2">
+           <div className="flex flex-wrap items-center gap-3 justify-center w-full xl:w-auto">
                 <button 
                     onClick={handleBatchGenerateDispatch}
                     disabled={isGeneratingBatch || filteredRecords.length === 0}
-                    className="min-h-[44px] flex-1 min-w-[120px] px-4 py-2.5 bg-white border border-slate-300 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 rounded-lg text-sm flex items-center justify-center shadow-sm transition-colors whitespace-nowrap disabled:opacity-50"
+                    className="px-3 py-2 bg-white border border-slate-300 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
                     title={selectedRecordIds.size > 0 ? "匯出選取的代課單" : "匯出本月全部代課單"}
                 >
-                     {isGeneratingBatch ? <Loader2 size={16} className="animate-spin mr-2 shrink-0"/> : <FileOutput size={16} className="mr-2 shrink-0"/>}
+                     {isGeneratingBatch ? <Loader2 size={16} className="animate-spin mr-2"/> : <FileOutput size={16} className="mr-2"/>}
                      <span className="font-bold">{selectedRecordIds.size > 0 ? `匯出選取 (${selectedRecordIds.size})` : '匯出全部'}</span>
                 </button>
                 <button 
                     onClick={handleOpenExportPicker}
                     disabled={isGeneratingReport}
-                    className="min-h-[44px] flex-1 min-w-[120px] px-4 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm flex items-center justify-center shadow-sm font-medium whitespace-nowrap disabled:opacity-50"
+                    className="px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm flex items-center shadow-sm font-medium whitespace-nowrap"
                     title="匯出本月印領清冊與憑證至 Google Drive"
                 >
-                     {isGeneratingReport ? <Loader2 size={16} className="animate-spin mr-2 shrink-0"/> : <Printer size={16} className="mr-2 shrink-0"/>}
+                     {isGeneratingReport ? <Loader2 size={16} className="animate-spin mr-2"/> : <Printer size={16} className="mr-2"/>}
                      匯出清冊/憑證
                 </button>
+                <div className="hidden xl:block h-6 w-px bg-slate-300 mx-1"></div>
+                <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">本月總計</span>
+                    <span className="text-lg font-bold text-slate-700">${monthlyTotal.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center bg-white border border-slate-300 rounded-lg shadow-sm">
+                    <button 
+                        onClick={() => handleMonthChange('prev')}
+                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-r border-slate-200"
+                        title="上個月"
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <div className="px-4 py-2 flex items-center font-bold text-slate-700 min-w-[100px] justify-center whitespace-nowrap">
+                        <CalendarIcon size={16} className="text-slate-400 mr-2" />
+                        {selectedMonth}
+                    </div>
+                    <button 
+                        onClick={() => handleMonthChange('next')}
+                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 border-l border-slate-200"
+                        title="下個月"
+                    >
+                        <ChevronRight size={16} />
+                    </div>
+                </div>
            </div>
       </div>
       
