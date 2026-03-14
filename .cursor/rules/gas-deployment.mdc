@@ -7,8 +7,8 @@ alwaysApply: true
 
 ## 目前使用的部署（勿擅自更動）
 
-- **部署作業 ID**：`AKfycbwonpXtF-j2C047CsYL060yD4bKzfw_caDDZw34aaZ6c13dPXknhLAi0nuswY_DRorG`
-- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbwonpXtF-j2C047CsYL060yD4bKzfw_caDDZw34aaZ6c13dPXknhLAi0nuswY_DRorG/exec`
+- **部署作業 ID**：`AKfycbzZ2C-mQkzNjfkixHupdU_VGIJsSOA4zwJIwOkDeLB_M0V-hFOjRaBcqoS1T2Lq7p34`
+- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbzZ2C-mQkzNjfkixHupdU_VGIJsSOA4zwJIwOkDeLB_M0V-hFOjRaBcqoS1T2Lq7p34/exec`
 
 專案內 `config.ts` 的 `GAS_WEB_APP_URL` 與 Vercel 環境變數 `GAS_WEB_APP_URL` 必須與此 URL 一致。
 
