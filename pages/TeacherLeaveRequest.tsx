@@ -2,8 +2,8 @@
  * 教師請假申請（Vercel 表單）— 老師自行填寫，寫入 Firestore 待審，由外部申請頁匯入系統
  * 路由：#/teacher-request（公開，不需登入）
  */
-import React, { useState, useMemo } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
+import React, { useState, useMemo, useEffect } from 'react';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
 import { LeaveType } from '../types';
 import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react';
@@ -45,6 +45,7 @@ export default function TeacherLeaveRequest() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [showLeaveGuide, setShowLeaveGuide] = useState(false);
+  const [scheduleLoadStatus, setScheduleLoadStatus] = useState<'idle' | 'loading' | 'ok' | 'empty' | 'error'>('idle');
 
   const datesInRange = useMemo(() => {
     if (!startDate || !endDate) return [];
@@ -70,6 +71,10 @@ export default function TeacherLeaveRequest() {
 
   const currentWeekDays = useMemo(() => weeks[weekIndex] || [], [weeks, weekIndex]);
 
+  useEffect(() => {
+    setScheduleLoadStatus('idle');
+  }, [teacherName, startDate, endDate]);
+
   const getSlot = (date: string, period: string) => details.find((s) => s.date === date && s.period === period);
 
   const setSlot = (date: string, period: string, subject: string, className: string) => {
@@ -91,6 +96,55 @@ export default function TeacherLeaveRequest() {
   const handleRemoveSlot = (date: string, period: string) => {
     setDetails((prev) => prev.filter((s) => !(s.date === date && s.period === period)));
     setEditingCell(null);
+  };
+
+  /** 依申請人姓名從公開課表帶入請假區間內之課表（比對姓名） */
+  const handleLoadScheduleByName = async () => {
+    const name = teacherName.trim();
+    if (!name) {
+      setError('請先填寫申請人姓名');
+      return;
+    }
+    if (!startDate || !endDate) {
+      setError('請先選擇開始日期與結束日期');
+      return;
+    }
+    if (weekdaysInRange.length === 0) {
+      setError('請假區間內無上課日（週一～五）');
+      return;
+    }
+    setScheduleLoadStatus('loading');
+    setError('');
+    try {
+      const ref = doc(db, 'publicTeacherSchedules', name);
+      const snap = await getDoc(ref);
+      const data = snap.data();
+      const schedule: { day: number; period: string; subject?: string; className?: string }[] = data?.schedule ?? [];
+      if (!Array.isArray(schedule) || schedule.length === 0) {
+        setScheduleLoadStatus('empty');
+        return;
+      }
+      const newDetails: SlotDetail[] = [];
+      for (const dateStr of weekdaysInRange) {
+        const dayOfWeek = new Date(dateStr + 'T12:00:00').getDay(); // 0=Sun, 1=Mon, ..., 5=Fri
+        if (dayOfWeek < 1 || dayOfWeek > 5) continue;
+        for (const slot of schedule) {
+          if (slot.day === dayOfWeek) {
+            newDetails.push({
+              date: dateStr,
+              period: slot.period || '',
+              subject: slot.subject?.trim() || '未定',
+              className: slot.className?.trim() || '未定',
+            });
+          }
+        }
+      }
+      setDetails(newDetails);
+      setScheduleLoadStatus('ok');
+    } catch (e) {
+      setScheduleLoadStatus('error');
+      setError('無法讀取課表，請稍後再試或手動填寫。');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -269,14 +323,33 @@ export default function TeacherLeaveRequest() {
           </div>
         </section>
 
-        {/* 週課表 */}
-        {startDate && endDate && (
-          <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="font-bold text-slate-800 mb-3">週課表（點選請假節次並填寫科目、班級）</h3>
-            {weeks.length === 0 ? (
-              <p className="text-slate-500 text-sm py-4">請假區間內無上課日（週一～五），請調整日期。</p>
-            ) : (
+        {/* 週課表：務必顯示區塊，未選日期時顯示提示 */}
+        <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h3 className="font-bold text-slate-800 mb-3">週課表（點選請假節次並填寫科目、班級）</h3>
+          {!startDate || !endDate ? (
+            <p className="text-amber-700 text-sm py-6 px-4 bg-amber-50 border border-amber-200 rounded-lg">
+              請先在上方選擇「開始日期」與「結束日期」，週課表將顯示於此，再點選請假節次填寫科目、班級。
+            </p>
+          ) : weeks.length === 0 ? (
+            <p className="text-slate-500 text-sm py-4">請假區間內無上課日（週一～五），請調整日期。</p>
+          ) : (
               <>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <button
+                    type="button"
+                    onClick={handleLoadScheduleByName}
+                    disabled={scheduleLoadStatus === 'loading' || !teacherName.trim()}
+                    className="px-4 py-2 rounded-lg bg-indigo-100 text-indigo-800 hover:bg-indigo-200 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                  >
+                    {scheduleLoadStatus === 'loading' ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : null}
+                    依姓名帶入課表
+                  </button>
+                  {scheduleLoadStatus === 'ok' && <span className="text-sm text-green-600">已帶入課表</span>}
+                  {scheduleLoadStatus === 'empty' && <span className="text-sm text-amber-600">查無該姓名之課表，請手動填寫</span>}
+                  {scheduleLoadStatus === 'error' && <span className="text-sm text-red-600">讀取失敗</span>}
+                </div>
                 <div className="flex items-center justify-between mb-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
                   <button type="button" onClick={() => setWeekIndex((i) => Math.max(0, i - 1))} disabled={weekIndex <= 0} className="p-2 rounded-lg hover:bg-slate-200 disabled:opacity-40">
                     <ChevronLeft size={20} />
@@ -350,9 +423,8 @@ export default function TeacherLeaveRequest() {
                 </div>
                 <p className="text-xs text-slate-500 mt-2">已填節數：{details.length} 節</p>
               </>
-            )}
-          </section>
-        )}
+          )}
+        </section>
 
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>

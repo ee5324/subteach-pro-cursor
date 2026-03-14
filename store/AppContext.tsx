@@ -296,13 +296,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await deleteDoc(doc(db, 'languagePayrolls', id));
   };
 
+  /** 同步教師預設課表至公開 collection，供請假表單依姓名帶入課表 */
+  const syncPublicTeacherSchedule = async (teacher: Teacher) => {
+    if (!db || !teacher.name?.trim()) return;
+    const schedule = teacher.defaultSchedule && teacher.defaultSchedule.length > 0
+      ? teacher.defaultSchedule.map(s => ({ day: s.day, period: s.period, subject: s.subject || '', className: s.className || '' }))
+      : [];
+    await setDoc(doc(db, 'publicTeacherSchedules', teacher.name.trim()), { schedule });
+  };
+
   const addTeacher = async (teacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
     await setDoc(doc(db, 'teachers', teacher.id), sanitizeForFirestore(teacher));
+    await syncPublicTeacherSchedule(teacher);
   };
   const updateTeacher = async (updatedTeacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
     await updateDoc(doc(db, 'teachers', updatedTeacher.id), sanitizeForFirestore(updatedTeacher as Record<string, unknown>) as any);
+    await syncPublicTeacherSchedule(updatedTeacher);
   };
   const setAllTeachers = async (newTeachers: Teacher[]) => {
     if (!db) throw new Error("Firebase not initialized");
@@ -311,6 +322,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       batch.set(doc(db, 'teachers', t.id), sanitizeForFirestore(t));
     });
     await batch.commit();
+    for (const t of newTeachers) {
+      await syncPublicTeacherSchedule(t);
+    }
   };
   const deleteTeacher = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -354,6 +368,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       await batch.commit();
+      await syncPublicTeacherSchedule(newTeacher);
   };
 
   const addRecord = async (record: LeaveRecord) => { 

@@ -217,23 +217,17 @@ export const convertSlotsToDetails = (
     if (className) groups[key].classNames.push(className);
   };
 
-  // Grouping
+  // Grouping：每節只歸入一筆明細，避免超課同時算日薪+鐘點造成重複計算
   slots.forEach(slot => {
     if (!slot.substituteTeacherId) return; // Skip pending slots
 
     const isOvertime = slot.isOvertime || false;
     
     if (isOvertime) {
-      // 1. Overtime is always paid hourly (405)
+      // 超課僅以鐘點費計價，不重複列入日薪
       addToGroup(slot.date, slot.substituteTeacherId, PayType.HOURLY, true, slot.period, slot.subject, slot.className);
-      
-      // 2. If it's also marked as DAILY, it MUST also contribute to the DAILY day count
-      // to ensure the day is counted in the main payroll (Substitute Payroll).
-      if (slot.payType === PayType.DAILY) {
-        addToGroup(slot.date, slot.substituteTeacherId, PayType.DAILY, false, slot.period, slot.subject, slot.className);
-      }
     } else {
-      // Regular slot (not overtime)
+      // 一般節次依 payType 歸類
       addToGroup(slot.date, slot.substituteTeacherId, slot.payType, false, slot.period, slot.subject, slot.className);
     }
   });

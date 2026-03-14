@@ -102,6 +102,12 @@ service cloud.firestore {
       allow read, update, delete: if isSignedIn();
     }
 
+    // 16. 公開教師課表（供請假表單依姓名帶入課表：任何人可讀；僅登入可寫）
+    match /publicTeacherSchedules/{teacherName} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     // =========================================================
     // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
     // =========================================================

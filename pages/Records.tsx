@@ -280,12 +280,11 @@ const Records: React.FC = () => {
 
   }, [filteredRecords, viewMode, selectedMonth]);
 
-  // Calculate Monthly Total (Only count details in this month)
+  // Calculate Monthly Total (僅計當月明細，每筆明細只算一次，與憑證匯出一致)
   const monthlyTotal = useMemo(() => {
      return filteredRecords.reduce((sum, r) => {
-         return sum + r.details.reduce((dSum, d) => {
-             // Filter amount by month
-             return d.date.startsWith(selectedMonth) ? dSum + d.calculatedAmount : dSum;
+         return sum + (r.details || []).reduce((dSum, d) => {
+             return d.date && d.date.startsWith(selectedMonth) ? dSum + d.calculatedAmount : dSum;
          }, 0);
      }, 0);
   }, [filteredRecords, selectedMonth]);
@@ -964,12 +963,9 @@ const Records: React.FC = () => {
                     filteredRecords.map(record => {
                       const originalTeacher = teachers.find(t => t.id === record.originalTeacherId);
                       
-                      // 只計算與顯示當月相關的細項
+                      // 只計算與顯示當月相關的細項（每節僅對應一筆明細，總額＝明細加總，含超課）
                       const currentMonthDetails = (record.details || []).filter(d => d.date && d.date.startsWith(selectedMonth));
-                      // Exclude overtime slots from total amount calculation for the main report to avoid double counting
-                      const monthTotalAmount = currentMonthDetails.reduce((sum, d) => {
-                          return d.isOvertime ? sum : sum + d.calculatedAmount;
-                      }, 0);
+                      const monthTotalAmount = currentMonthDetails.reduce((sum, d) => sum + d.calculatedAmount, 0);
                       
                       const isGenerating = generatingId === record.id;
                       const isSelected = selectedRecordIds.has(record.id);

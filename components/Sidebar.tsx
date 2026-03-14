@@ -7,7 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 
 const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
-  const { checkGasConnection, records, loading, currentUser } = useAppStore();
+  const { checkGasConnection, records, loading, currentUser, publicBoardApplications } = useAppStore();
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const navigate = useNavigate();
   
@@ -15,6 +15,9 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const pendingCount = records.reduce((acc, r) => {
       return acc + (r.slots?.filter(s => !s.substituteTeacherId).length || 0);
   }, 0);
+
+  // 公開缺額報名筆數（有新報名時於導覽列顯示提示）
+  const publicApplicationsCount = publicBoardApplications?.length ?? 0;
 
   useEffect(() => {
     if (loading) return;
@@ -99,6 +102,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/public-applications" className={linkClass} onClick={onClose}>
           <Globe size={18} />
           <span>公開缺額報名</span>
+          {publicApplicationsCount > 0 && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm" title={`${publicApplicationsCount} 筆新報名`}>
+              {publicApplicationsCount}
+            </span>
+          )}
         </NavLink>
 
         {/* Group 2: 人力資源 */}
