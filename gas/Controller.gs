@@ -64,7 +64,27 @@ function doPost(e) {
       var teacherMap = {};
       if (teachers) teachers.forEach(function(t) { teacherMap[t.id] = t.name; });
       var formUrl = FormManager.generateSubstituteForm(record, teacherMap);
+      if (CONFIG.OUTPUT_FOLDER_ID && record.startDate) {
+        try {
+          var rootFolder = DriveApp.getFolderById(CONFIG.OUTPUT_FOLDER_ID);
+          var parts = String(record.startDate).split('-');
+          if (parts.length >= 2) {
+            var yFolder = getOrCreateSubFolder(rootFolder, parts[0]);
+            var mFolder = getOrCreateSubFolder(yFolder, parts[1]);
+            var match = formUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (match && match[1]) {
+              DriveApp.getFileById(match[1]).moveTo(mFolder);
+            }
+          }
+        } catch (e) { /* 移動失敗不影響回傳 URL */ }
+      }
       result = { status: 'success', data: { url: formUrl }, message: '代課單產生成功' };
+
+    } else if (action === 'GENERATE_TEACHER_REQUEST_FORM') {
+      var req = data;
+      if (!req || !req.teacherName) throw new Error("缺少申請人姓名");
+      var formUrl = FormManager.generateTeacherRequestForm(req);
+      result = { status: 'success', data: { url: formUrl }, message: '教師自行申請代課單已產生' };
 
     } else if (action === 'BATCH_GENERATE_FORMS') {
       var records = data.records;

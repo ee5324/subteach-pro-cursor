@@ -69,6 +69,8 @@ interface AppContextType {
   setAllTeachers: (newTeachers: Teacher[]) => Promise<void>;
   deleteTeacher: (id: string) => Promise<void>;
   renameTeacher: (oldId: string, newTeacher: Teacher) => Promise<void>;
+  /** 將所有教師的預設課表同步至公開查詢（供請假表單「依姓名帶入課表」使用） */
+  syncAllPublicTeacherSchedules: () => Promise<void>;
 
   addRecord: (record: LeaveRecord) => Promise<void>;
   updateRecord: (updatedRecord: LeaveRecord) => Promise<void>;
@@ -371,6 +373,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await syncPublicTeacherSchedule(newTeacher);
   };
 
+  /** 將目前所有教師的預設課表寫入 publicTeacherSchedules，供請假表單依姓名帶入 */
+  const syncAllPublicTeacherSchedules = async () => {
+    if (!db) throw new Error("Firebase not initialized");
+    for (const t of teachers) {
+      await syncPublicTeacherSchedule(t);
+    }
+  };
+
   const addRecord = async (record: LeaveRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
     await setDoc(doc(db, 'records', record.id), sanitizeForFirestore(record));
@@ -655,7 +665,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     semesters, activeSemesterId, subPool, languagePayrolls,     substituteApplications, publicBoardApplications, teacherLeaveRequests,
     loading,
     updateTeacherLeaveRequestStatus,
-    addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, 
+    addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, syncAllPublicTeacherSchedules, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
     updateFixedOvertimeConfig, removeFixedOvertimeConfig, 
     addGradeEvent, removeGradeEvent,

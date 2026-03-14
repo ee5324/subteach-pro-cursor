@@ -12,7 +12,7 @@ import { callGasApi } from '../utils/api';
 const DEFAULT_IMPORT_HEADER = "年級,班級,導師,節次,時間,星期一,星期二,星期三,星期四,星期五";
 
 export default function TeacherManagement() {
-  const { teachers, addTeacher, updateTeacher, renameTeacher, setAllTeachers, deleteTeacher, settings, salaryGrades } = useAppStore();
+  const { teachers, addTeacher, updateTeacher, renameTeacher, setAllTeachers, deleteTeacher, syncAllPublicTeacherSchedules, settings, salaryGrades } = useAppStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -41,6 +41,7 @@ export default function TeacherManagement() {
   };
   const [previewData, setPreviewData] = useState<PreviewTeacherData[]>([]);
   const [importResult, setImportResult] = useState<{ success: number, failed: number, logs: string[] } | null>(null);
+  const [isSyncingPublicSchedules, setIsSyncingPublicSchedules] = useState(false);
 
   // Document Upload State
   const [isUploading, setIsUploading] = useState(false);
@@ -578,6 +579,25 @@ export default function TeacherManagement() {
             <FileSpreadsheet size={18} />
             <span className="font-medium">匯入</span>
           </button>
+          <button
+            onClick={async () => {
+              setIsSyncingPublicSchedules(true);
+              try {
+                await syncAllPublicTeacherSchedules();
+                showFeedback({ title: '同步完成', message: '已將所有教師的預設課表同步至公開查詢，請假表單「依姓名帶入課表」現在可依姓名帶入。', type: 'success' });
+              } catch (e: any) {
+                showFeedback({ title: '同步失敗', message: e?.message || String(e), type: 'error' });
+              } finally {
+                setIsSyncingPublicSchedules(false);
+              }
+            }}
+            disabled={isSyncingPublicSchedules || teachers.length === 0}
+            className="flex-1 md:flex-none justify-center px-3 py-2 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-lg flex items-center space-x-2 hover:bg-cyan-100 transition-colors disabled:opacity-50"
+            title="供請假表單依姓名帶入課表使用"
+          >
+            {isSyncingPublicSchedules ? <Loader2 size={18} className="animate-spin" /> : <ExternalLink size={18} />}
+            <span className="font-medium">同步課表至公開查詢</span>
+          </button>
           <button onClick={handleBatchRecalculate} className="flex-1 md:flex-none justify-center px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg flex items-center space-x-2 hover:bg-orange-100 transition-colors">
             <RefreshCw size={18} />
             <span className="font-medium">重算</span>
@@ -600,6 +620,7 @@ export default function TeacherManagement() {
           </CollapsibleItem>
           <CollapsibleItem title="匯入課表">
             <p>支援從 Excel 複製課表貼上匯入。匯入時請確保格式包含「教師姓名」、「節次」及週一至週五的課程內容。系統會自動解析並更新該師的預設課表。</p>
+            <p className="mt-2"><strong>請假表單帶入課表：</strong>老師在請假表單依「申請人姓名」帶入課表前，請先在此頁點選「同步課表至公開查詢」，將目前所有教師的預設課表同步至公開查詢後，表單才能依姓名帶入。</p>
           </CollapsibleItem>
           <CollapsibleItem title="入職文件管理">
             <p>可上傳教師相關證件或入職資料。檔案將儲存於 Google Drive，並在系統中提供預覽與下載連結。</p>
