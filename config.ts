@@ -6,7 +6,7 @@
 // 請將您的 Google Apps Script Web App URL 貼在下方引號中
 // 格式應為: "https://script.google.com/macros/s/....../exec"
 // 請使用「部署 → 新部署 → 網頁應用程式」且「誰可以存取：任何人」的那一筆 URL
-export const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwonpXtF-j2C047CsYL060yD4bKzfw_caDDZw34aaZ6c13dPXknhLAi0nuswY_DRorG/exec"; 
+export const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzZ2C-mQkzNjfkixHupdU_VGIJsSOA4zwJIwOkDeLB_M0V-hFOjRaBcqoS1T2Lq7p34/exec"; 
 
 // 注意：
 // 1. 如果您在此處填寫網址，系統會優先使用此網址。
