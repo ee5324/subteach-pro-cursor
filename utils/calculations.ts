@@ -198,6 +198,21 @@ export const convertSlotsToDetails = (
     isOvertime: boolean;
   }> = {};
 
+  // 去重：同一 (日期, 代課教師, 節次) 只保留一筆，優先保留 isOvertime=true，避免同一節被算進「一般」與「超鐘點」兩邊導致重複計算
+  const slotKey = (s: TimetableSlot) => `${s.date}_${s.substituteTeacherId}_${s.period}`;
+  const seen = new Map<string, TimetableSlot>();
+  slots.forEach(slot => {
+    if (!slot.substituteTeacherId) return;
+    const key = slotKey(slot);
+    const existing = seen.get(key);
+    if (existing) {
+      if (slot.isOvertime && !existing.isOvertime) seen.set(key, slot);
+      return;
+    }
+    seen.set(key, slot);
+  });
+  const dedupedSlots = Array.from(seen.values());
+
   // Helper to add to groups
   const addToGroup = (date: string, teacherId: string, payType: PayType, isOvertime: boolean, period: string, subject?: string, className?: string) => {
     const key = `${date}_${teacherId}_${payType}_${isOvertime}`;
@@ -218,7 +233,7 @@ export const convertSlotsToDetails = (
   };
 
   // Grouping：每節只歸入一筆明細，避免超課同時算日薪+鐘點造成重複計算
-  slots.forEach(slot => {
+  dedupedSlots.forEach(slot => {
     if (!slot.substituteTeacherId) return; // Skip pending slots
 
     const isOvertime = slot.isOvertime || false;

@@ -853,8 +853,7 @@ var SheetManager = {
       // 公派(家長會) 整筆只入家長會清冊，不進入依假別分類的一般清冊
       if (record.leaveType === '公派(家長會)') return;
       record.details.forEach(function(detail) {
-        if (detail.isOvertime) return;
-
+        // 超鐘點：前端已單獨為「鐘點費」明細，納入清冊一次，不跳過以免報表少算
         var sheetName = SheetManagerHelpers.getSafeSheetName(detail.date, record.leaveType);
         
         if (!sheetsData[sheetName]) sheetsData[sheetName] = {};
@@ -931,7 +930,7 @@ var SheetManager = {
     records.forEach(function(record) {
       if (!record.details) return;
       record.details.forEach(function(detail) {
-        if (detail.isOvertime) return;
+        // 超鐘點：前端已為鐘點費明細，納入家長會清冊一次
         var ym = detail.date.substring(0, 7);
         var sheetName = ym + '_家長會';
         if (!ptaSheetsData[sheetName]) ptaSheetsData[sheetName] = {};
@@ -1071,16 +1070,17 @@ var SheetManager = {
         summarySheet.getRange("A1").setValue(title);
         if (dataCount > 0) {
             if (dataCount > 1) summarySheet.insertRowsAfter(startRow, dataCount - 1);
-            summarySheet.getRange(startRow, 1, endRow, 19).setValues(rows);
-            var rangeToFormat = summarySheet.getRange(startRow, 1, endRow, 19);
+            // getRange(row, column, numRows, numColumns)：第三參數是「列數」不是結束列號
+            summarySheet.getRange(startRow, 1, dataCount, 19).setValues(rows);
+            var rangeToFormat = summarySheet.getRange(startRow, 1, dataCount, 19);
             rangeToFormat.setBorder(true, true, true, true, true, true);
-            summarySheet.getRange(startRow, 1, endRow, 1).setNumberFormat("@");
+            summarySheet.getRange(startRow, 1, dataCount, 1).setNumberFormat("@");
             rangeToFormat.setVerticalAlignment("middle").setHorizontalAlignment("center");
-            summarySheet.getRange(startRow, 1, endRow, 2).setWrap(true);
+            summarySheet.getRange(startRow, 1, dataCount, 2).setWrap(true);
             summarySheet.getRange(startRow, 8, dataCount, 4).setWrap(true);
             var totalRowIndex = startRow + dataCount;
-            summarySheet.getRange(startRow, 4, endRow + 1, 4).setFontSize(14);
-            summarySheet.getRange(startRow, 12, endRow + 1, 14).setFontSize(14);
+            summarySheet.getRange(startRow, 4, dataCount + 1, 4).setFontSize(14);
+            summarySheet.getRange(startRow, 12, dataCount + 1, 14).setFontSize(14);
             summarySheet.getRange(totalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
             summarySheet.getRange(totalRowIndex, 1, 1, 2).merge().setValue("合計").setHorizontalAlignment("center");
             summarySheet.getRange(totalRowIndex, 5).setValue(sumDays);

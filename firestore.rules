@@ -135,6 +135,14 @@ service cloud.firestore {
     match /edutrack_exam_paper_folders/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
+    // 考卷檢核（教學組）
+    match /edutrack_exam_paper_checks/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    // 學生語言選修登錄（教學組）
+    match /edutrack_language_elective/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
     match /edutrack_allowed_users/{email} {
       allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
       allow create, update, delete: if isEduTrackAdmin();
