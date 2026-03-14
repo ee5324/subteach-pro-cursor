@@ -6,8 +6,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
 import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info, Printer } from 'lucide-react';
-import { callGasApi } from '../utils/api';
-import { GAS_WEB_APP_URL } from '../config';
+import { callGasApiViaProxy } from '../utils/api';
 
 const PERIOD_ROWS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
 const SIMPLE_LEAVE_TYPES = ['公付', '身心假', '自理'] as const;
@@ -174,13 +173,9 @@ export default function TeacherLeaveRequest() {
       setError('請在下方週課表至少點選一節請假課務，並填寫科目、班級');
       return;
     }
-    if (!GAS_WEB_APP_URL?.trim()) {
-      setError('代課單產生功能未設定，請聯絡教學組。');
-      return;
-    }
     setGeneratingForm(true);
     try {
-      const result = await callGasApi(GAS_WEB_APP_URL, 'GENERATE_TEACHER_REQUEST_FORM', {
+      const result = await callGasApiViaProxy('GENERATE_TEACHER_REQUEST_FORM', {
         teacherName: teacherName.trim(),
         leaveType,
         reason: reason.trim(),

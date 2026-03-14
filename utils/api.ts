@@ -87,3 +87,27 @@ export const callGasApi = async (url: string, action: string, payloadData: any =
     throw error;
   }
 };
+
+/**
+ * 經由 Vercel API 代理呼叫 GAS（避免從瀏覽器直連 GAS 時被 CORS 阻擋）
+ * 用於教師請假表單等部署在 Vercel 的公開頁
+ */
+export const callGasApiViaProxy = async (action: string, payloadData: any = {}): Promise<GasResponse> => {
+  const base = typeof window !== 'undefined' ? window.location.origin : '';
+  const url = base ? `${base}/api/gas-proxy` : '';
+  if (!url) throw new Error('無法取得 API 網址');
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, data: payloadData }),
+  });
+  const result: GasResponse = await res.json().catch(() => ({ status: 'error' as const, message: '回應格式錯誤' }));
+  if (!res.ok) {
+    throw new Error(result.message || `請求失敗 (${res.status})`);
+  }
+  if (result.status !== 'success') {
+    throw new Error(result.message || '請求失敗');
+  }
+  return result;
+};

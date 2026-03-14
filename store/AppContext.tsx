@@ -60,6 +60,7 @@ interface AppContextType {
   loading: boolean;
 
   updateTeacherLeaveRequestStatus: (id: string, status: 'pending' | 'imported' | 'archived') => Promise<void>;
+  deleteTeacherLeaveRequest: (id: string) => Promise<void>;
   deleteSubstituteApplication: (id: string) => Promise<void>;
   deletePublicBoardApplication: (id: string) => Promise<void>;
   approveSubstituteApplication: (id: string, options?: { addToSubPool: boolean }) => Promise<{ teacherId: string }>;
@@ -495,6 +496,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await updateDoc(doc(db, 'teacherLeaveRequests', id), { status, updatedAt: Date.now() });
   };
 
+  const deleteTeacherLeaveRequest = async (id: string) => {
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'teacherLeaveRequests', id));
+  };
+
   const approveSubstituteApplication = async (id: string, options?: { addToSubPool: boolean }) => {
     if (!db) throw new Error("Firebase not initialized");
     const app = substituteApplications.find(a => a.id === id);
@@ -664,7 +670,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
     semesters, activeSemesterId, subPool, languagePayrolls,     substituteApplications, publicBoardApplications, teacherLeaveRequests,
     loading,
-    updateTeacherLeaveRequestStatus,
+    updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest,
     addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, syncAllPublicTeacherSchedules, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
     updateFixedOvertimeConfig, removeFixedOvertimeConfig, 

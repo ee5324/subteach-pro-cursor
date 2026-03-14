@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { callGasApi } from '../utils/api';
-import { Loader2, Download, UserPlus, FileText, CheckCircle, ExternalLink, Calendar, Info, Archive, RefreshCcw, EyeOff, LayoutList } from 'lucide-react';
+import { Loader2, Download, UserPlus, FileText, CheckCircle, ExternalLink, Calendar, Info, Archive, RefreshCcw, EyeOff, LayoutList, Trash2 } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import { LeaveRecord, Teacher, TeacherType, PayType, TimetableSlot, LeaveType } from '../types';
 import type { TeacherLeaveRequestDoc } from '../types';
@@ -32,7 +32,7 @@ interface IncomingRequest {
 type TabType = 'pending' | 'archived';
 
 const IncomingRequests: React.FC = () => {
-    const { settings, teachers, addRecord, addTeacher, salaryGrades, teacherLeaveRequests, updateTeacherLeaveRequestStatus } = useAppStore();
+    const { settings, teachers, addRecord, addTeacher, salaryGrades, teacherLeaveRequests, updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest } = useAppStore();
     const [requests, setRequests] = useState<IncomingRequest[]>([]);
     const [loading, setLoading] = useState(false);
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -328,6 +328,7 @@ const IncomingRequests: React.FC = () => {
                             <li>切換至「已歸檔」分頁可查看歷史紀錄，並可隨時還原至待處理列表。</li>
                         </ul>
                     </li>
+                    <li><strong>刪除：</strong>本系統表單送出的申請可點擊右側垃圾桶圖示刪除（會先顯示確認視窗）。適用於測試資料或誤填申請，刪除後無法還原。</li>
                 </ul>
             </InstructionPanel>
 
@@ -394,14 +395,62 @@ const IncomingRequests: React.FC = () => {
                                     <p className="text-xs text-slate-400 text-right mt-1 pt-1 border-t border-slate-200">申請時間: {new Date(req.createdAt).toLocaleString()}</p>
                                 </div>
                                 <div className="mt-auto pt-4 border-t border-slate-200">
-                                    <div className="flex space-x-3">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         {currentTab === 'pending' ? (
                                             <>
-                                                <button onClick={() => handleImportFirestore(req)} className="flex-1 px-4 py-2 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center" disabled={isImported}>{isImported ? <><CheckCircle size={18} className="mr-2"/>已匯入</> : <><Download size={18} className="mr-2"/>匯入系統</>}</button>
+                                                <button onClick={() => handleImportFirestore(req)} className="flex-1 min-w-0 px-4 py-2 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center" disabled={isImported}>{isImported ? <><CheckCircle size={18} className="mr-2"/>已匯入</> : <><Download size={18} className="mr-2"/>匯入系統</>}</button>
                                                 <button onClick={() => handleArchiveFirestore(req)} disabled={isProcessing} className="px-4 py-2 bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg font-bold flex items-center justify-center">{isProcessing ? <Loader2 size={18} className="animate-spin"/> : <><EyeOff size={18} className="mr-2"/><span className="hidden md:inline">隱藏/歸檔</span></>}</button>
+                                                <button
+                                                    onClick={() => showModal({
+                                                        title: '確認刪除此筆申請',
+                                                        message: `確定要刪除此筆外部申請嗎？\n\n申請人：${req.teacherName}\n請假區間：${req.startDate} ~ ${req.endDate}\n\n此操作無法復原，刪除後將無法還原。`,
+                                                        type: 'warning',
+                                                        mode: 'confirm',
+                                                        onConfirm: async () => {
+                                                            try {
+                                                                await deleteTeacherLeaveRequest(req.id);
+                                                                closeModal();
+                                                                showModal({ title: '已刪除', message: '該筆申請已刪除。', type: 'success' });
+                                                            } catch (e: any) {
+                                                                closeModal();
+                                                                showModal({ title: '刪除失敗', message: e?.message || '請稍後再試', type: 'error' });
+                                                            }
+                                                        }
+                                                    })}
+                                                    disabled={isProcessing}
+                                                    className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-200 transition-colors"
+                                                    title="刪除此筆申請"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
                                             </>
                                         ) : (
-                                            <button onClick={() => handleRestoreFirestore(req)} disabled={isProcessing} className="w-full px-4 py-2 bg-white border border-slate-300 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg font-bold flex items-center justify-center">{isProcessing ? <Loader2 size={18} className="animate-spin mr-2"/> : <><RefreshCcw size={18} className="mr-2"/>還原至待處理</>}</button>
+                                            <>
+                                                <button onClick={() => handleRestoreFirestore(req)} disabled={isProcessing} className="flex-1 min-w-0 px-4 py-2 bg-white border border-slate-300 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg font-bold flex items-center justify-center">{isProcessing ? <Loader2 size={18} className="animate-spin mr-2"/> : <><RefreshCcw size={18} className="mr-2"/>還原至待處理</>}</button>
+                                                <button
+                                                    onClick={() => showModal({
+                                                        title: '確認刪除此筆申請',
+                                                        message: `確定要刪除此筆已歸檔的申請嗎？\n\n申請人：${req.teacherName}\n請假區間：${req.startDate} ~ ${req.endDate}\n\n此操作無法復原。`,
+                                                        type: 'warning',
+                                                        mode: 'confirm',
+                                                        onConfirm: async () => {
+                                                            try {
+                                                                await deleteTeacherLeaveRequest(req.id);
+                                                                closeModal();
+                                                                showModal({ title: '已刪除', message: '該筆申請已刪除。', type: 'success' });
+                                                            } catch (e: any) {
+                                                                closeModal();
+                                                                showModal({ title: '刪除失敗', message: e?.message || '請稍後再試', type: 'error' });
+                                                            }
+                                                        }
+                                                    })}
+                                                    disabled={isProcessing}
+                                                    className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-200 transition-colors"
+                                                    title="刪除此筆申請"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                 </div>
