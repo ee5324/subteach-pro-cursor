@@ -1,6 +1,11 @@
 
 // 4. FormManager.gs
 // 負責代課單產生
+//
+// 【列印邊界 0.5 cm】GAS/Sheets API 無法以程式設定列印邊界，請在「派代單範本」手動設定一次：
+// 1. 開啟 CONFIG 指定的試算表，切到工作表「派代單範本」
+// 2. 檔案 > 列印（或 Ctrl+P）> 邊界 > 自訂，上/下/左/右皆設為 0.5 cm
+// 3. 關閉列印預覽即可（不需真的列印）。之後由此範本複製產生的代課單都會沿用 0.5 cm 邊界。
 
 var FormManager = {
   /**
@@ -116,7 +121,7 @@ var FormManager = {
     var templateName = CONFIG.DISPATCH_TEMPLATE_SHEET_NAME || CONFIG.TEMPLATE_SHEET_NAME || '派代單範本';
     var sourceSS = getSpreadsheet();
     var templateSheet = sourceSS.getSheetByName(templateName);
-    
+    // 列印邊界：複製時會沿用範本的列印設定，請在範本設 檔案>列印>邊界 為 0.5 cm
     if (!templateSheet) throw new Error("找不到名為 '" + templateName + "' 的工作表");
 
     var isSingleMode = false;
