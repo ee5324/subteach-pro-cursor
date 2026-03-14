@@ -1,8 +1,9 @@
-
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter, LayoutGrid, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, AlertCircle, ArrowRight, User, Clock, BookOpen, Printer, CheckSquare, Square, Users, X, Save, CheckCircle, Share2, Loader2, ExternalLink, ToggleLeft, ToggleRight, Globe, Lock, ListFilter, LayoutGrid, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../src/lib/firebase';
 import WeeklyScheduleModal, { ScheduleGroup } from '../components/WeeklyScheduleModal';
 import { PayType, LeaveType, TeacherType, Teacher } from '../types';
 import SearchableSelect, { SelectOption } from '../components/SearchableSelect';
@@ -77,7 +78,13 @@ const getWeekDays = (baseDate: Date) => {
 };
 
 const PendingItems: React.FC = () => {
-  const { records, teachers, updateRecord, salaryGrades, addTeacher, syncToPublicBoard, settings, holidays } = useAppStore();
+  const { records, teachers, updateRecord, salaryGrades, addTeacher, syncToPublicBoard, releaseVacanciesToTier2, settings, holidays } = useAppStore();
+
+  // 釋出給第二層 modal
+  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  const [tier1Vacancies, setTier1Vacancies] = useState<{ id: string; date?: string; period?: string; originalTeacherName?: string; subject?: string; className?: string; tier?: number }[]>([]);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseSelectedIds, setReleaseSelectedIds] = useState<Set<string>>(new Set());
   
   // State for Schedule Modal
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
@@ -455,6 +462,64 @@ const PendingItems: React.FC = () => {
   const totalPendingCount = groupedList.reduce((acc, group) => acc + group.items.length, 0);
   const totalPublicCount = groupedList.reduce((acc, group) => acc + group.items.filter(i => i.isPublic).length, 0);
 
+  useEffect(() => {
+    if (!releaseModalOpen || !db) return;
+    let cancelled = false;
+    setReleaseLoading(true);
+    setReleaseSelectedIds(new Set());
+    getDoc(doc(db, 'publicBoard', 'vacancies'))
+      .then((snap) => {
+        if (cancelled) return;
+        const data = snap.exists() ? snap.data() : null;
+        const raw = data?.vacancies;
+        const list = Array.isArray(raw)
+          ? raw
+              .filter((v: any) => v != null && typeof v === 'object' && v.tier === 1)
+              .map((v: any) => ({
+                id: String(v.id),
+                date: v.date,
+                period: v.period,
+                originalTeacherName: v.originalTeacherName,
+                subject: v.subject,
+                className: v.className,
+                tier: v.tier,
+              }))
+          : [];
+        setTier1Vacancies(list);
+      })
+      .catch(() => { if (!cancelled) setTier1Vacancies([]); })
+      .finally(() => { if (!cancelled) setReleaseLoading(false); });
+    return () => { cancelled = true; };
+  }, [releaseModalOpen]);
+
+  const handleReleaseToTier2 = async () => {
+    const ids = Array.from(releaseSelectedIds);
+    if (ids.length === 0) {
+      setFeedbackModal({ isOpen: true, title: '請勾選項目', message: '請至少勾選一筆要釋出給第二層的缺額。', type: 'warning' });
+      return;
+    }
+    setReleaseLoading(true);
+    try {
+      await releaseVacanciesToTier2(ids);
+      setFeedbackModal({ isOpen: true, title: '已釋出', message: `已將 ${ids.length} 筆缺額釋出至對外公開頁面，第二層老師現在可看到並填寫。`, type: 'success' });
+      setReleaseSelectedIds(new Set());
+      setReleaseModalOpen(false);
+    } catch (e: any) {
+      setFeedbackModal({ isOpen: true, title: '釋出失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setReleaseLoading(false);
+    }
+  };
+
+  const toggleReleaseSelect = (id: string) => {
+    setReleaseSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="p-8 pb-32">
       <Modal
@@ -466,6 +531,43 @@ const PendingItems: React.FC = () => {
         type={feedbackModal.type}
         mode={feedbackModal.mode}
       />
+
+      <Modal
+        isOpen={releaseModalOpen}
+        onClose={() => setReleaseModalOpen(false)}
+        title="釋出給第二層"
+        type="info"
+        mode="alert"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">以下為目前僅「第一層（校內/常配合）」可見的缺額。勾選後點「釋出選取至第二層」，對外公開頁面也會顯示，第二層老師即可填寫。</p>
+          {releaseLoading && tier1Vacancies.length === 0 ? (
+            <div className="flex items-center justify-center py-6"><Loader2 size={24} className="animate-spin text-slate-400" /></div>
+          ) : tier1Vacancies.length === 0 ? (
+            <p className="text-slate-500 text-sm py-4">目前沒有僅第一層可見的缺額（可能尚未發佈或已全部釋出）。</p>
+          ) : (
+            <>
+              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1.5">
+                {tier1Vacancies.map((v) => (
+                  <label key={v.id} className="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" checked={releaseSelectedIds.has(v.id)} onChange={() => toggleReleaseSelect(v.id)} className="rounded border-slate-300" />
+                    <span className="text-sm text-slate-700 truncate">
+                      {v.date} {v.period} {v.originalTeacherName} {v.subject} {v.className}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setReleaseModalOpen(false)} className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-medium">關閉</button>
+                <button type="button" onClick={handleReleaseToTier2} disabled={releaseLoading || releaseSelectedIds.size === 0} className="px-4 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 text-sm font-medium flex items-center gap-1">
+                  {releaseLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  釋出選取至第二層 ({releaseSelectedIds.size})
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
 
       <WeeklyScheduleModal
         isOpen={scheduleModalOpen}
@@ -502,10 +604,19 @@ const PendingItems: React.FC = () => {
                 onClick={handlePublish}
                 disabled={isPublishing}
                 className={`bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center space-x-2 transition-colors ${isPublishing ? 'opacity-70 cursor-not-allowed' : ''}`}
-                title="將標記為「公開」的項目更新至網站"
+                title="將標記為「公開」的項目以「僅第一層」發佈（校內/常配合優先填寫）"
              >
                 {isPublishing ? <Loader2 size={18} className="animate-spin" /> : <Share2 size={18} />}
                 <span>發佈公開 ({totalPublicCount})</span>
+             </button>
+             <button
+                type="button"
+                onClick={() => setReleaseModalOpen(true)}
+                className="bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center space-x-2 transition-colors"
+                title="將已發佈且僅第一層可見的缺額釋出給對外填寫"
+             >
+                <Send size={18} />
+                <span>釋出給第二層</span>
              </button>
 
              {totalPendingCount > 0 && (
@@ -601,7 +712,8 @@ const PendingItems: React.FC = () => {
              <ul className="list-circle pl-5 mt-1 text-slate-500">
                <li>點擊「公開中/已隱藏」切換按鈕，可設定該筆紀錄是否顯示於外部公開看板。</li>
                <li>使用右上方的「全部設為公開/隱藏」可快速批次設定。</li>
-               <li>設定完成後，請點擊「發佈公開」將狀態同步至網站。</li>
+               <li>設定完成後，請點擊「發佈公開」將缺額以<strong>第一層（僅校內/常配合可見）</strong>同步至網站；將專用連結提供給校內或常配合代課老師優先填寫。</li>
+               <li>若第一層仍找不到人，點擊「釋出給第二層」勾選要開放的缺額，對外公開頁面即會顯示，第二層老師可填寫。</li>
              </ul>
           </li>
           <li><strong>批次派代：</strong>

@@ -108,6 +108,7 @@ interface AppContextType {
   loadFromGas: () => Promise<{ teacherCount: number; recordCount: number }>;
   migrateToFirebase: () => Promise<void>;
   syncToPublicBoard: (vacancies: any[]) => Promise<any>;
+  releaseVacanciesToTier2: (vacancyIds: string[]) => Promise<void>;
   checkGasConnection: () => Promise<boolean>;
 }
 
@@ -653,7 +654,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const syncToPublicBoard = async (vacancies: any[]) => {
       if (db) {
-          const withStatus = (vacancies || []).map((v: any) => ({ ...v, status: '開放報名' }));
+          const withStatus = (vacancies || []).map((v: any) => ({ ...v, status: '開放報名', tier: 1 }));
           await setDoc(doc(db, 'publicBoard', 'vacancies'), {
               vacancies: sanitizeForFirestore(withStatus),
               updatedAt: Date.now()
@@ -663,6 +664,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
       if (!targetUrl) throw new Error("未設定 Google Apps Script URL，且 Firebase 未啟用。");
       return await callGasApi(targetUrl, 'SYNC_PUBLIC_VACANCIES', { vacancies });
+  };
+
+  const releaseVacanciesToTier2 = async (vacancyIds: string[]) => {
+      if (!db || vacancyIds.length === 0) return;
+      const snap = await getDoc(doc(db, 'publicBoard', 'vacancies'));
+      const data = snap.exists() ? snap.data() : null;
+      const raw = data?.vacancies;
+      if (!Array.isArray(raw)) return;
+      const idSet = new Set(vacancyIds);
+      const updated = raw.map((v: any) => {
+          const id = v?.id != null ? String(v.id) : '';
+          return idSet.has(id) ? { ...v, tier: 2 } : v;
+      });
+      await setDoc(doc(db, 'publicBoard', 'vacancies'), {
+          vacancies: sanitizeForFirestore(updated),
+          updatedAt: Date.now()
+      });
   };
 
   const value = {
@@ -680,7 +698,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addToSubPool, removeFromSubPool, updateSubPoolItem,
     deleteSubstituteApplication, deletePublicBoardApplication, approveSubstituteApplication,
     addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,
-    loadFromGas, migrateToFirebase, syncToPublicBoard, checkGasConnection,
+    loadFromGas, migrateToFirebase, syncToPublicBoard, releaseVacanciesToTier2, checkGasConnection,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
