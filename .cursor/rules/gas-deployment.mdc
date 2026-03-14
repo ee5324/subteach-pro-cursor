@@ -14,11 +14,11 @@ alwaysApply: true
 
 專案內 `config.ts` 的 `GAS_WEB_APP_URL` 與 Vercel 環境變數 `GAS_WEB_APP_URL` 必須與此 URL 一致。
 
-## 例行部署（只更新程式、不換網址）
+## 例行部署（只更新程式、不換網址，以網頁應用程式蓋過目前）
 
-1. 只執行：`npx clasp push --force`（從專案根目錄）。
-2. **不要**建議或執行「新部署」。
-3. 提醒使用者：到 GAS「部署 → 管理部署作業」對**現有那一筆**點編輯，將**版本**改為「標頭」或最新版本後儲存。
+1. 執行：`npx clasp push --force`（從專案根目錄）。
+2. 接著執行：`npx clasp deploy -i AKfycbwnt93NSFT9Sf7-hYWibbp-QxY7mLGT5IrJ6JqLxo2w4ayNmiAAF9wVACWnOAZxO40E`，將**現有**該筆網頁應用程式部署更新為最新版本（不新增部署、網址不變）。
+3. **不要**建議或執行「新部署」；勿手動到網頁改版本，以 clasp deploy -i 一次完成。
 
 ## 若使用者明確要求「新部署」或更換網址
 
