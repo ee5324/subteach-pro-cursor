@@ -6,7 +6,7 @@ import html2canvas from 'html2canvas';
 import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
-import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth } from '../utils/calculations';
+import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
@@ -253,7 +253,7 @@ const Records: React.FC = () => {
 
     const allDetails: (SubstituteDetail & { originalTeacherId: string, recordId: string, slots: TimetableSlot[] })[] = [];
     filteredRecords.forEach(r => {
-        r.details.forEach(d => {
+        deduplicateDetails(r.details || []).forEach(d => {
             // Only include details that fall within the selected month
             if (d.substituteTeacherId && d.date.startsWith(selectedMonth)) {
                 const matchingSlots = r.slots ? r.slots.filter(s => 
@@ -280,10 +280,11 @@ const Records: React.FC = () => {
 
   }, [filteredRecords, viewMode, selectedMonth]);
 
-  // Calculate Monthly Total (僅計當月明細，每筆明細只算一次，與憑證匯出一致)
+  // Calculate Monthly Total (僅計當月明細，每筆明細只算一次；去重避免同一邏輯明細重複加總)
   const monthlyTotal = useMemo(() => {
      return filteredRecords.reduce((sum, r) => {
-         return sum + (r.details || []).reduce((dSum, d) => {
+         const deduped = deduplicateDetails(r.details || []);
+         return sum + deduped.reduce((dSum, d) => {
              return d.date && d.date.startsWith(selectedMonth) ? dSum + d.calculatedAmount : dSum;
          }, 0);
      }, 0);
@@ -463,8 +464,9 @@ const Records: React.FC = () => {
 
       setIsGeneratingReport(true);
       try {
+          const recordsWithDedupedDetails = filteredRecords.map(r => ({ ...r, details: deduplicateDetails(r.details || []) }));
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_REPORTS', {
-              records: filteredRecords,
+              records: recordsWithDedupedDetails,
               teachers: teachers,
               exportOptions: {
                   ledgers: Array.from(selectedLedgerTypes),
@@ -517,16 +519,17 @@ const Records: React.FC = () => {
           return;
       }
 
-      // 決定要匯出的資料集：若有選取則只匯出選取，否則匯出全部
+      // 決定要匯出的資料集：若有選取則只匯出選取，否則匯出全部；明細去重避免重複
       let targetRecords = filteredRecords;
       if (selectedRecordIds.size > 0) {
           targetRecords = filteredRecords.filter(r => selectedRecordIds.has(r.id));
       }
+      const targetRecordsDeduped = targetRecords.map(r => ({ ...r, details: deduplicateDetails(r.details || []) }));
 
       setIsGeneratingBatch(true);
       try {
           const result = await callGasApi(settings.gasWebAppUrl, 'BATCH_GENERATE_FORMS', {
-              records: targetRecords,
+              records: targetRecordsDeduped,
               teachers: teachers,
               yearMonth: selectedMonth
           });
@@ -968,8 +971,9 @@ const Records: React.FC = () => {
                     filteredRecords.map(record => {
                       const originalTeacher = teachers.find(t => t.id === record.originalTeacherId);
                       
-                      // 只計算與顯示當月相關的細項（每節僅對應一筆明細，總額＝明細加總，含超課）
-                      const currentMonthDetails = (record.details || []).filter(d => d.date && d.date.startsWith(selectedMonth));
+                      // 只計算與顯示當月相關的細項；去重避免重複明細（含非超鐘點造成的重複）
+                      const dedupedDetails = deduplicateDetails(record.details || []);
+                      const currentMonthDetails = dedupedDetails.filter(d => d.date && d.date.startsWith(selectedMonth));
                       const monthTotalAmount = currentMonthDetails.reduce((sum, d) => sum + d.calculatedAmount, 0);
                       
                       const isGenerating = generatingId === record.id;

@@ -278,6 +278,23 @@ export const convertSlotsToDetails = (
 };
 
 /**
+ * 同一筆紀錄內明細去重：同一 (日期, 代課師, 支薪方式, 是否超鐘點, 節次組合) 只保留一筆，避免加總或 GAS 報表重複計算（含非超鐘點造成的重複）
+ */
+export function deduplicateDetails(details: SubstituteDetail[]): SubstituteDetail[] {
+  if (!details || details.length === 0) return details;
+  const seen = new Set<string>();
+  const out: SubstituteDetail[] = [];
+  for (const d of details) {
+    const periodsKey = (d.selectedPeriods || []).slice().sort().join(',');
+    const key = `${d.date}_${d.substituteTeacherId}_${d.payType}_${d.isOvertime ? 1 : 0}_${periodsKey}_${d.periodCount}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(d);
+  }
+  return out;
+}
+
+/**
  * 固定兼課時段：優先使用教師設定的課表（教師管理之預設課表），無則使用固定兼課設定的 scheduleSlots
  */
 export function getEffectiveFixedOvertimeSlots(teacher: Teacher | undefined, config: FixedOvertimeConfig): { day: number; period: string }[] {
