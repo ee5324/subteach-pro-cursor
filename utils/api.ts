@@ -6,37 +6,12 @@ export interface GasResponse {
   processedCount?: number;
 }
 
-/** 經同源 proxy 呼叫 GAS（由 proxy 代轉，避免 CORS） */
-async function callGasApiViaProxy(url: string, action: string, payloadData: any): Promise<GasResponse> {
-  const base = typeof window !== 'undefined' ? window.location.origin : '';
-  const proxyUrl = base ? `${base}/api/gas-proxy` : '';
-  if (!proxyUrl) throw new Error('無法取得 API 網址');
-  const res = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, data: payloadData, url: url || undefined }),
-  });
-  const result: GasResponse = await res.json().catch(() => ({ status: 'error' as const, message: '回應格式錯誤' }));
-  if (!res.ok) throw new Error(result.message || `請求失敗 (${res.status})`);
-  if (result.status !== 'success') throw new Error(result.message || '請求失敗');
-  return result;
-}
-
 /**
- * 呼叫 Google Apps Script Web App API
- * 從 Vercel 等非 localhost 時改走同源 /api/gas-proxy（解決 CORS）；本機仍直連
+ * 呼叫 Google Apps Script Web App API（直連 GAS）
  */
 export const callGasApi = async (url: string, action: string, payloadData: any = {}): Promise<GasResponse> => {
   if (!url) {
     throw new Error('Web App URL 未設定');
-  }
-
-  const isBrowser = typeof window !== 'undefined';
-  const origin = isBrowser ? window.location.origin : '';
-  const useProxy = isBrowser && origin && !/localhost|127\.0\.0\.1/.test(origin);
-
-  if (useProxy) {
-    return callGasApiViaProxy(url, action, payloadData);
   }
 
   let targetUrl = url.trim();
