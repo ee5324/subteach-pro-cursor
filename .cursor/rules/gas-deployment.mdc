@@ -9,15 +9,15 @@ alwaysApply: true
 
 ## 目前使用的部署（勿擅自更動）
 
-- **部署作業 ID**：`AKfycbwnt93NSFT9Sf7-hYWibbp-QxY7mLGT5IrJ6JqLxo2w4ayNmiAAF9wVACWnOAZxO40E`
-- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbwnt93NSFT9Sf7-hYWibbp-QxY7mLGT5IrJ6JqLxo2w4ayNmiAAF9wVACWnOAZxO40E/exec`
+- **部署作業 ID**：`AKfycbzpX3QPMqxHCfYfa5kQTMfn4NboE2F9YT3z4CxtsOAENgLjGKGSZxevmS3j_E9oDGky`
+- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbzpX3QPMqxHCfYfa5kQTMfn4NboE2F9YT3z4CxtsOAENgLjGKGSZxevmS3j_E9oDGky/exec`
 
 專案內 `config.ts` 的 `GAS_WEB_APP_URL` 與 Vercel 環境變數 `GAS_WEB_APP_URL` 必須與此 URL 一致。
 
 ## 例行部署（只更新程式、不換網址，以網頁應用程式蓋過目前）
 
 1. 執行：`npx clasp push --force`（從專案根目錄）。
-2. 接著執行：`npx clasp deploy -i AKfycbwnt93NSFT9Sf7-hYWibbp-QxY7mLGT5IrJ6JqLxo2w4ayNmiAAF9wVACWnOAZxO40E`，將**現有**該筆網頁應用程式部署更新為最新版本（不新增部署、網址不變）。
+2. 接著執行：`npx clasp deploy -i AKfycbzpX3QPMqxHCfYfa5kQTMfn4NboE2F9YT3z4CxtsOAENgLjGKGSZxevmS3j_E9oDGky`，將**現有**該筆網頁應用程式部署更新為最新版本（不新增部署、網址不變）。
 3. **不要**建議或執行「新部署」；勿手動到網頁改版本，以 clasp deploy -i 一次完成。
 
 ## 若使用者明確要求「新部署」或更換網址
