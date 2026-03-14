@@ -64,10 +64,13 @@ export default async function handler(req, res) {
     try {
       result = JSON.parse(text);
     } catch (e) {
+      const preview = text.length > 80 ? text.slice(0, 80) + '…' : text;
+      const isHtml = text.trim().toLowerCase().startsWith('<');
       res.setHeader('Access-Control-Allow-Origin', origin || '*');
       return res.status(502).json({
         status: 'error',
-        message: 'GAS 回傳非 JSON。請確認部署權限為 Anyone、網址正確。',
+        message: 'GAS 回傳非 JSON。請到 GAS 專案：部署 → 管理部署 → 編輯該部署 →「誰可以存取」改為「任何人」後重新部署。',
+        detail: isHtml ? 'GAS 回傳了 HTML（可能是登入頁），表示目前僅限登入者存取。' : `HTTP ${response.status}，回傳開頭: ${preview || '(空)'}`,
       });
     }
     res.setHeader('Access-Control-Allow-Origin', origin || '*');

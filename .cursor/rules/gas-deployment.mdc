@@ -1,0 +1,32 @@
+---
+description: GAS 部署原則：維持單一筆網頁應用程式部署、不亂新增
+alwaysApply: true
+---
+
+# GAS Web App 部署原則
+
+當使用者要求「部署」或推送 GAS 時，必須遵守以下原則。
+
+## 目前使用的部署（勿擅自更動）
+
+- **部署作業 ID**：`AKfycbwnt93NSFT9Sf7-hYWibbp-QxY7mLGT5IrJ6JqLxo2w4ayNmiAAF9wVACWnOAZxO40E`
+- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbwnt93NSFT9Sf7-hYWibbp-QxY7mLGT5IrJ6JqLxo2w4ayNmiAAF9wVACWnOAZxO40E/exec`
+
+專案內 `config.ts` 的 `GAS_WEB_APP_URL` 與 Vercel 環境變數 `GAS_WEB_APP_URL` 必須與此 URL 一致。
+
+## 例行部署（只更新程式、不換網址）
+
+1. 只執行：`npx clasp push --force`（從專案根目錄）。
+2. **不要**建議或執行「新部署」。
+3. 提醒使用者：到 GAS「部署 → 管理部署作業」對**現有那一筆**點編輯，將**版本**改為「標頭」或最新版本後儲存。
+
+## 若使用者明確要求「新部署」或更換網址
+
+1. 提醒：先到「管理部署作業」將**舊的部署封存**，再建立新部署，避免「進行中」累積多筆。
+2. 新部署時**類型必須選「網頁應用程式」**（才能得到對外可用的 exec 網址）；對外使用時「誰可以存取」選「任何人」。
+3. 新 URL 產生後，必須同步更新：`config.ts` 的 `GAS_WEB_APP_URL`、以及本規則檔與 `gas/部署整理與更新方式.md` 中的 URL/部署 ID，並提醒使用者在 Vercel 更新 `GAS_WEB_APP_URL`。
+
+## 禁止
+
+- 不得在未經使用者要求新部署時，建議建立新部署或更換部署 URL。
+- 不得將 `GAS_WEB_APP_URL` 改為非上列 URL，除非使用者明確提供新的部署網址並要求更新。
