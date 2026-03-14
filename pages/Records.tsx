@@ -298,6 +298,21 @@ const Records: React.FC = () => {
       updateRecord(updatedRecord);
   };
 
+  const handleDeleteRecord = (record: LeaveRecord) => {
+      const originalName = teachers.find(t => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
+      const dateRange = (record.startDate && record.endDate) ? `${record.startDate}～${record.endDate}` : '（無日期）';
+      showModal({
+          title: '確認刪除',
+          message: `確定要刪除此筆代課清冊與憑證嗎？\n\n請假教師：${originalName}\n日期：${dateRange}\n\n此動作無法復原。`,
+          type: 'warning',
+          mode: 'confirm',
+          onConfirm: () => {
+              deleteRecord(record.id);
+              showModal({ title: '已刪除', message: '該筆代課清冊與憑證已刪除。', type: 'success' });
+          }
+      });
+  };
+
   // Selection Logic
   const handleToggleSelect = (id: string) => {
       const next = new Set(selectedRecordIds);
@@ -1162,7 +1177,7 @@ const Records: React.FC = () => {
                                <button onClick={() => handleEditRecord(record.id)} className="text-indigo-500 hover:text-indigo-700 p-2" title="編輯">
                                  <Edit2 size={18} />
                                </button>
-                               <button onClick={() => deleteRecord(record.id)} className="text-red-400 hover:text-red-600 p-2" title="刪除">
+                               <button onClick={() => handleDeleteRecord(record)} className="text-red-400 hover:text-red-600 p-2" title="刪除">
                                  <Trash2 size={18} />
                                </button>
                              </div>
