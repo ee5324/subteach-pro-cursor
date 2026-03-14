@@ -80,12 +80,6 @@ function doPost(e) {
       }
       result = { status: 'success', data: { url: formUrl }, message: '代課單產生成功' };
 
-    } else if (action === 'GENERATE_TEACHER_REQUEST_FORM') {
-      var req = data;
-      if (!req || !req.teacherName) throw new Error("缺少申請人姓名");
-      var formUrl = FormManager.generateTeacherRequestForm(req);
-      result = { status: 'success', data: { url: formUrl }, message: '教師自行申請代課單已產生' };
-
     } else if (action === 'BATCH_GENERATE_FORMS') {
       var records = data.records;
       var teachers = data.teachers;

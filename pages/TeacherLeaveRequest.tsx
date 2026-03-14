@@ -5,8 +5,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
-import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info, Printer } from 'lucide-react';
-import { callGasApiViaProxy } from '../utils/api';
+import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react';
 
 const PERIOD_ROWS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
 const SIMPLE_LEAVE_TYPES = ['公付', '身心假', '自理'] as const;
@@ -46,7 +45,6 @@ export default function TeacherLeaveRequest() {
   const [error, setError] = useState('');
   const [showLeaveGuide, setShowLeaveGuide] = useState(false);
   const [scheduleLoadStatus, setScheduleLoadStatus] = useState<'idle' | 'loading' | 'ok' | 'empty' | 'error'>('idle');
-  const [generatingForm, setGeneratingForm] = useState(false);
 
   const datesInRange = useMemo(() => {
     if (!startDate || !endDate) return [];
@@ -145,56 +143,6 @@ export default function TeacherLeaveRequest() {
     } catch (e) {
       setScheduleLoadStatus('error');
       setError('無法讀取課表，請稍後再試或手動填寫。');
-    }
-  };
-
-  /** 產生代課單檔案（存於 Google Drive「教師自行申請代課單」資料夾，同師同日起迄會覆蓋舊檔） */
-  const handlePrintForm = async () => {
-    setError('');
-    if (!teacherName.trim()) {
-      setError('請填寫申請人姓名');
-      return;
-    }
-    if (!reason.trim()) {
-      setError('請填寫請假事由');
-      return;
-    }
-    if (!startDate || !endDate) {
-      setError('請選擇開始與結束日期');
-      return;
-    }
-    const subName = substituteMode === 'self_arranged' ? substituteTeacher.trim() : '教學組媒合';
-    if (substituteMode === 'self_arranged' && !subName) {
-      setError('請輸入代課教師姓名');
-      return;
-    }
-    const validDetails = details.filter((d) => d.date && d.period && d.subject.trim());
-    if (validDetails.length === 0) {
-      setError('請在下方週課表至少點選一節請假課務，並填寫科目、班級');
-      return;
-    }
-    setGeneratingForm(true);
-    try {
-      const result = await callGasApiViaProxy('GENERATE_TEACHER_REQUEST_FORM', {
-        teacherName: teacherName.trim(),
-        leaveType,
-        reason: reason.trim(),
-        docId: docId.trim() || undefined,
-        startDate,
-        endDate,
-        details: validDetails,
-        substituteTeacher: subName,
-        applicationDate: new Date().toISOString().slice(0, 10),
-      });
-      if (result?.data?.url) {
-        window.open(String(result.data.url), '_blank');
-      } else {
-        setError('已產生但未取得連結，請至 Google Drive「教師自行申請代課單」資料夾查看。');
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '產生代課單失敗，請稍後再試。');
-    } finally {
-      setGeneratingForm(false);
     }
   };
 
@@ -490,24 +438,12 @@ export default function TeacherLeaveRequest() {
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            type="button"
-            onClick={handlePrintForm}
-            disabled={generatingForm}
-            className="flex-1 py-3 bg-cyan-600 text-white rounded-xl font-bold hover:bg-cyan-700 disabled:opacity-70 flex items-center justify-center gap-2"
-          >
-            {generatingForm ? <Loader2 size={20} className="animate-spin" /> : <Printer size={20} />}
-            {generatingForm ? '產生中...' : '列印／產生代課單'}
-          </button>
-          <button type="submit" disabled={loading} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-70 flex items-center justify-center gap-2">
+        <div className="flex justify-center">
+          <button type="submit" disabled={loading} className="w-full sm:w-auto min-w-[200px] py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-70 flex items-center justify-center gap-2">
             {loading ? <Loader2 size={20} className="animate-spin" /> : null}
             {loading ? '送出中...' : '送出申請'}
           </button>
         </div>
-        <p className="text-xs text-slate-500 text-center">
-          代課單會存於 Google Drive「教師自行申請代課單」資料夾；同一教師、同一請假起始日再次產生時會覆蓋舊檔。
-        </p>
       </form>
     </div>
   );

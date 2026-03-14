@@ -1,6 +1,5 @@
 /**
  * Vercel Serverless：代為呼叫 GAS Web App，避免瀏覽器 CORS 阻擋
- * 教師請假表單「列印／產生代課單」從 Vercel 呼叫 GAS 時會經由此 proxy
  */
 const GAS_URL = process.env.GAS_WEB_APP_URL || '';
 

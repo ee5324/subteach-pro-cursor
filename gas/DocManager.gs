@@ -16,63 +16,6 @@ var FormManager = {
   },
 
   /**
-   * 教師自行申請代課單：使用與派代單相同邏輯，但存於「教師自行申請代課單」資料夾，
-   * 且同一教師、同一請假起始日之舊檔會先刪除。
-   * @param {Object} data - { teacherName, leaveType, reason, docId, startDate, endDate, details: [{date,period,subject,className}], substituteTeacher, applicationDate? }
-   * @returns {string} 代課單試算表 URL
-   */
-  generateTeacherRequestForm: function(data) {
-    var teacherName = (data.teacherName || '').trim() || '未填姓名';
-    var startDate = data.startDate || '';
-    var endDate = data.endDate || startDate;
-    var details = Array.isArray(data.details) ? data.details : [];
-    var substituteTeacher = (data.substituteTeacher || '教學組媒合').trim();
-
-    var record = {
-      originalTeacherId: '__teacher_request__',
-      startDate: startDate,
-      endDate: endDate,
-      leaveType: data.leaveType || '公付',
-      reason: data.reason || '',
-      docId: data.docId || '',
-      applicationDate: data.applicationDate || startDate,
-      slots: details.map(function(d) {
-        return {
-          date: d.date,
-          period: d.period || '',
-          subject: d.subject || '',
-          className: d.className || '',
-          substituteTeacherId: 'pending',
-          payType: '鐘點費'
-        };
-      })
-    };
-    var teacherMap = { '__teacher_request__': teacherName };
-
-    var rootFolderId = CONFIG.OUTPUT_FOLDER_ID;
-    if (!rootFolderId) throw new Error('未設定 OUTPUT_FOLDER_ID');
-    var rootFolder = DriveApp.getFolderById(rootFolderId);
-    var teacherRequestFolder = getOrCreateSubFolder(rootFolder, '教師自行申請代課單');
-
-    var prefixToRemove = startDate + '_' + teacherName + '_';
-    var filesToTrash = [];
-    var iter = teacherRequestFolder.getFiles();
-    while (iter.hasNext()) {
-      var f = iter.next();
-      if (f.getName().indexOf(prefixToRemove) === 0) filesToTrash.push(f);
-    }
-    filesToTrash.forEach(function(f) { f.setTrashed(true); });
-
-    var formUrl = this._createFormInSpreadsheet(null, record, teacherMap);
-    var match = formUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (match && match[1]) {
-      var newFile = DriveApp.getFileById(match[1]);
-      newFile.moveTo(teacherRequestFolder);
-    }
-    return formUrl;
-  },
-
-  /**
    * 批次產生代課單
    */
   batchGenerateForms: function(records, teacherMap, yearMonthStr) { 
