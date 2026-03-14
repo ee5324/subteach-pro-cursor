@@ -237,7 +237,7 @@ export default function TeacherLeaveRequest() {
       await addDoc(collection(db, 'teacherLeaveRequests'), {
         teacherName: teacherName.trim(),
         leaveType,
-        docId: docId.trim() || undefined,
+        ...(docId.trim() ? { docId: docId.trim() } : {}),
         reason: reason.trim(),
         payType: '鐘點費',
         substituteTeacher: subName,
