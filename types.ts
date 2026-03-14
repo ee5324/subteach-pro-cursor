@@ -269,6 +269,8 @@ export interface LeaveRecord {
   createdAt: number;
   allowPartial?: boolean; // 是否允許分段代課 (預設 false: 全代)
   processingStatus?: ProcessingStatus; // 行政處理狀態
+  /** 管理備註（例：已列印 3/8、未印、跑章中等，方便辨識該筆是否已列印紙本） */
+  adminNote?: string;
   /** 家長會支出鐘點：鐘點費由家長會支出，入家長會清冊 */
   ptaPaysHourly?: boolean;
   /** 家長會支出導師費(半天)：僅半日導師費入家長會清冊 */

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search } from 'lucide-react';
+import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -817,6 +817,10 @@ const Records: React.FC = () => {
             <p><strong>匯出清冊/憑證：</strong>產生當月的印領清冊與黏貼憑證 (Google Doc/Sheet)，用於核銷。</p>
             <p><strong>匯出彙整表：</strong>產生代課單彙整表 (Excel/Sheet)，方便進行大數據分析或存檔。</p>
           </CollapsibleItem>
+          <CollapsibleItem title="備註與列印提醒">
+            <p><strong>備註：</strong>每筆紀錄有「備註」欄，點擊即可填寫或修改（例：已列印 3/8、未印、跑章中），方便辨識該筆是否已列印紙本代課單。</p>
+            <p><strong>狀態：</strong>列印紙本後請將狀態改為「已印代課單」，可搭配備註記錄列印日期，避免重複列印或遺漏。</p>
+          </CollapsibleItem>
           <CollapsibleItem title="重新計算金額">
             <p>若代課教師的薪級有變動 (例如補登證書或薪級)，可點擊列表右側的「計算機圖示」按鈕，系統將依據最新薪級重新計算該筆紀錄的代課費。</p>
           </CollapsibleItem>
@@ -945,13 +949,14 @@ const Records: React.FC = () => {
                     <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課明細 ({selectedMonth})</th>
                     <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">當月總金額</th>
                     <th className="px-4 py-4 font-semibold text-slate-700 text-center w-32 whitespace-nowrap">狀態</th>
+                    <th className="px-4 py-4 font-semibold text-slate-700 text-center w-28 whitespace-nowrap">備註</th>
                     <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {filteredRecords.length === 0 ? (
                     <tr>
-                       <td colSpan={9} className="text-center py-16 text-slate-400 flex flex-col items-center justify-center w-full">
+                       <td colSpan={10} className="text-center py-16 text-slate-400 flex flex-col items-center justify-center w-full">
                            <div className="bg-slate-50 p-4 rounded-full mb-3">
                                <CalendarIcon size={32} className="text-slate-300" />
                            </div>
@@ -1105,6 +1110,28 @@ const Records: React.FC = () => {
                                   <option value="跑章中">跑章中</option>
                                   <option value="結案待算">結案待算</option>
                               </select>
+                              {status === '待處理' && (
+                                <p className="text-[10px] text-amber-600 mt-1 whitespace-nowrap" title="列印紙本後請改為「已印代課單」並可填備註">列印後請改狀態</p>
+                              )}
+                          </td>
+
+                          {/* 備註：點擊可編輯，方便記錄是否已列印紙本 */}
+                          <td className="px-2 py-4 text-center max-w-[140px]">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const value = window.prompt('備註（例：已列印 3/8、未印、跑章中）', record.adminNote || '');
+                                if (value !== null) updateRecord({ ...record, adminNote: value.trim() || undefined });
+                              }}
+                              className="w-full text-left px-2 py-1 rounded border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-xs text-slate-600 min-h-[32px] flex items-center justify-center gap-1"
+                              title="點擊填寫或修改備註"
+                            >
+                              {record.adminNote ? (
+                                <span className="truncate block w-full">{record.adminNote}</span>
+                              ) : (
+                                <span className="text-slate-400 flex items-center gap-1"><MessageSquare size={12} />填備註</span>
+                              )}
+                            </button>
                           </td>
 
                           <td className="px-6 py-4 text-right">

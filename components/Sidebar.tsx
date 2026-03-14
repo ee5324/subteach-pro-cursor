@@ -7,14 +7,17 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 
 const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
-  const { checkGasConnection, records, loading, currentUser, publicBoardApplications } = useAppStore();
+  const { checkGasConnection, records, loading, currentUser, publicBoardApplications, teacherLeaveRequests } = useAppStore();
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const navigate = useNavigate();
   
-  // Calculate pending items count
+  // Calculate pending items count (待聘清單)
   const pendingCount = records.reduce((acc, r) => {
       return acc + (r.slots?.filter(s => !s.substituteTeacherId).length || 0);
   }, 0);
+
+  // 外部申請待處理筆數（教師請假申請 status 為 pending）
+  const externalRequestsCount = (teacherLeaveRequests || []).filter(r => r.status === 'pending').length;
 
   // 公開缺額報名筆數（有新報名時於導覽列顯示提示）
   const publicApplicationsCount = publicBoardApplications?.length ?? 0;
@@ -97,6 +100,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/requests" className={linkClass} onClick={onClose}>
           <Inbox size={18} />
           <span>外部申請</span>
+          {externalRequestsCount > 0 && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm" title={`${externalRequestsCount} 筆待處理`}>
+              {externalRequestsCount}
+            </span>
+          )}
         </NavLink>
 
         <NavLink to="/public-applications" className={linkClass} onClick={onClose}>
