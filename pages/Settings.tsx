@@ -116,7 +116,8 @@ const Settings: React.FC = () => {
             <p>在設定頁可開啟「PIN 測試登入」並設定 PIN；登入頁會顯示快速進入（匿名）。不需要時取消勾選即可關閉。設定存在本機瀏覽器，不會同步到其他電腦。</p>
           </CollapsibleItem>
           <CollapsibleItem title="Google Apps Script (GAS) 連線">
-            <p>設定 GAS 的 Web App URL。此連線用於：1. 產生 Excel/Word 報表 2. 存取 Google Drive 檔案 3. 從舊版試算表匯入資料。</p>
+            <p><strong>日常資料</strong>（代課紀錄、教師、請假申請等）皆存於 <strong>Firebase</strong>，不需 GAS 即可正常使用。</p>
+            <p><strong>需 GAS 的功能</strong>（請先設定 Web App URL 且連線成功）：代課清冊「產生報表／代課單／批次匯出」、超鐘點／固定超鐘點報表、客語／族語印領清冊、語言教師匯出、額外憑證、教師檔案上傳、從舊版試算表載入資料。詳見 <code>docs/資料存放與GAS功能說明.md</code>。</p>
           </CollapsibleItem>
           <CollapsibleItem title="資料遷移與備份">
             <p>若您有舊版試算表資料，請先設定 GAS URL，點擊「從 GAS 載入舊資料」進行預覽，確認無誤後再點擊「遷移至 Firebase」完成雲端化。</p>
@@ -332,7 +333,7 @@ const Settings: React.FC = () => {
                     </button>
                 </div>
                 <p className="text-xs text-slate-400">
-                    此網址用於檔案生成（如薪資單）及舊資料匯入。
+                    日常資料存於 Firebase；此網址用於匯出報表、代課單、各類清冊／憑證產生及舊資料匯入。
                 </p>
                 {/* 顯示目前實際使用的網址（設定或 config fallback） */}
                 <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">

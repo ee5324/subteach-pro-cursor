@@ -294,7 +294,11 @@ const LanguageSalary: React.FC = () => {
   };
 
   const handleGenerateIndigenous = async () => {
-      if (!indigenousPreviewData || !selectedTeacherId || !settings.gasWebAppUrl) return;
+      if (!indigenousPreviewData || !selectedTeacherId) return;
+      if (!settings.gasWebAppUrl) {
+          showModal({ title: '請先設定 GAS', message: '產生族語專職印領清冊需使用 GAS，請至「系統設定」設定 GAS Web App URL。', type: 'warning' });
+          return;
+      }
       
       setIsGenerating(true);
       try {
@@ -551,7 +555,11 @@ const LanguageSalary: React.FC = () => {
   };
 
   const handleConfirmGenerate = async () => {
-      if (!previewData || !settings.gasWebAppUrl) return;
+      if (!previewData) return;
+      if (!settings.gasWebAppUrl) {
+          showModal({ title: '請先設定 GAS', message: '產生客語領據需使用 GAS，請至「系統設定」設定 GAS Web App URL。', type: 'warning' });
+          return;
+      }
 
       setIsGenerating(true);
       try {

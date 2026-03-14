@@ -9,7 +9,6 @@ import SearchableSelect, { SelectOption } from '../components/SearchableSelect';
 import { convertSlotsToDetails } from '../utils/calculations';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel from '../components/InstructionPanel';
-import { callGasApi } from '../utils/api';
 
 // 定義顏色主題循環，讓不同老師有不同顏色區塊
 const COLOR_THEMES = [

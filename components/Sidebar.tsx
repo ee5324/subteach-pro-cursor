@@ -7,10 +7,11 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 
 const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
-  const { checkGasConnection, records, loading, currentUser, publicBoardApplications, teacherLeaveRequests } = useAppStore();
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const { settings, checkGasConnection, records, loading, currentUser, publicBoardApplications, teacherLeaveRequests } = useAppStore();
+  const hasGasUrl = Boolean(settings?.gasWebAppUrl?.trim());
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline' | 'unset'>(hasGasUrl ? 'checking' : 'unset');
   const navigate = useNavigate();
-  
+
   // Calculate pending items count (待聘清單)
   const pendingCount = records.reduce((acc, r) => {
       return acc + (r.slots?.filter(s => !s.substituteTeacherId).length || 0);
@@ -24,7 +25,10 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
   useEffect(() => {
     if (loading) return;
-
+    if (!hasGasUrl) {
+      setConnectionStatus('unset');
+      return;
+    }
     let mounted = true;
     const verify = async () => {
         const isConnected = await checkGasConnection();
@@ -34,7 +38,7 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
     };
     verify();
     return () => { mounted = false; };
-  }, [loading]);
+  }, [loading, hasGasUrl]);
 
   const handleLogout = async () => {
     try {
@@ -175,8 +179,14 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       </nav>
 
       <div className="p-4 border-t border-slate-800 space-y-3 bg-slate-900/50 sticky bottom-0">
-        {/* Connection Status Indicator */}
+        {/* GAS 狀態：未設定時不檢查連線，僅在已設定時顯示已連線／未連線 */}
         <div className="flex items-center space-x-2 px-3 py-2 text-xs rounded bg-slate-800/80 border border-slate-700/50">
+            {connectionStatus === 'unset' && (
+                <>
+                    <div className="w-2 h-2 rounded-full bg-slate-500"></div>
+                    <span className="text-slate-400">GAS 選用（未設定）</span>
+                </>
+            )}
             {connectionStatus === 'checking' && (
                 <>
                     <Loader2 size={12} className="animate-spin text-slate-400" />
@@ -186,13 +196,13 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             {connectionStatus === 'online' && (
                 <>
                     <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
-                    <span className="text-emerald-400 font-medium">GAS 系統已連線</span>
+                    <span className="text-emerald-400 font-medium">GAS 已連線</span>
                 </>
             )}
             {connectionStatus === 'offline' && (
                 <>
-                    <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]"></div>
-                    <span className="text-rose-400 font-medium">GAS 未連線</span>
+                    <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                    <span className="text-amber-400 font-medium">GAS 未連線（報表/匯出需 GAS）</span>
                 </>
             )}
         </div>

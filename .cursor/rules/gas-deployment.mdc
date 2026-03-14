@@ -1,32 +1,28 @@
 ---
-description: GAS 部署原則：維持單一筆網頁應用程式部署、不亂新增
+description: GAS 網址與部署原則：不代為 deploy，不覆蓋原檔
 alwaysApply: true
 ---
 
-# GAS Web App 部署原則
-
-當使用者要求「部署」或推送 GAS 時，必須遵守以下原則。
+# GAS Web App 原則
 
 ## 目前使用的部署（勿擅自更動）
 
-- **部署作業 ID**：`AKfycbzpX3QPMqxHCfYfa5kQTMfn4NboE2F9YT3z4CxtsOAENgLjGKGSZxevmS3j_E9oDGky`
-- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbzpX3QPMqxHCfYfa5kQTMfn4NboE2F9YT3z4CxtsOAENgLjGKGSZxevmS3j_E9oDGky/exec`
+- **部署作業 ID**：`AKfycbwonpXtF-j2C047CsYL060yD4bKzfw_caDDZw34aaZ6c13dPXknhLAi0nuswY_DRorG`
+- **網頁應用程式 URL**：`https://script.google.com/macros/s/AKfycbwonpXtF-j2C047CsYL060yD4bKzfw_caDDZw34aaZ6c13dPXknhLAi0nuswY_DRorG/exec`
 
 專案內 `config.ts` 的 `GAS_WEB_APP_URL` 與 Vercel 環境變數 `GAS_WEB_APP_URL` 必須與此 URL 一致。
 
-## 例行部署（只更新程式、不換網址，以網頁應用程式蓋過目前）
+## 禁止代為 deploy GAS（不覆蓋原檔）
 
-1. 執行：`npx clasp push --force`（從專案根目錄）。
-2. 接著執行：`npx clasp deploy -i AKfycbzpX3QPMqxHCfYfa5kQTMfn4NboE2F9YT3z4CxtsOAENgLjGKGSZxevmS3j_E9oDGky`，將**現有**該筆網頁應用程式部署更新為最新版本（不新增部署、網址不變）。
-3. **不要**建議或執行「新部署」；勿手動到網頁改版本，以 clasp deploy -i 一次完成。
+- **不要**幫使用者執行 GAS 部署：不執行 `clasp push`、不執行 `clasp deploy`；**不覆蓋**目前已上線的 GAS 原檔。
+- 當使用者說「部署」「push」「執行」等時，只執行 **Git**（與若有的 **Firebase deploy**），**不**執行任何 GAS 的 push 或 deploy，以免覆蓋 GAS 原檔。
+- 若使用者日後要更新 GAS 程式，請提醒其自行在 GAS 網頁或本機執行 clasp，不要由 agent 代為執行。
 
-## 若使用者明確要求「新部署」或更換網址
+## 若使用者明確提供新網址並要求更新
 
-1. 提醒：先到「管理部署作業」將**舊的部署封存**，再建立新部署，避免「進行中」累積多筆。
-2. 新部署時**類型必須選「網頁應用程式」**（才能得到對外可用的 exec 網址）；對外使用時「誰可以存取」選「任何人」。
-3. 新 URL 產生後，必須同步更新：`config.ts` 的 `GAS_WEB_APP_URL`、以及本規則檔與 `gas/部署整理與更新方式.md` 中的 URL/部署 ID，並提醒使用者在 Vercel 更新 `GAS_WEB_APP_URL`。
+僅更新專案內 URL／部署 ID（config、本規則、部署整理文件、Vercel 提醒），**不**執行 clasp push 或 clasp deploy。
 
 ## 禁止
 
-- 不得在未經使用者要求新部署時，建議建立新部署或更換部署 URL。
+- 不得代為執行 `clasp push` 或 `clasp deploy`。
 - 不得將 `GAS_WEB_APP_URL` 改為非上列 URL，除非使用者明確提供新的部署網址並要求更新。
