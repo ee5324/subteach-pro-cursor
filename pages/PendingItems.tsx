@@ -269,6 +269,25 @@ const PendingItems: React.FC = () => {
       }
   };
 
+  /** 單節下架／上架：只改該節的 isPublic 並同步看板 */
+  const handleToggleItemPublic = async (recordId: string, date: string, period: string, currentPublic: boolean) => {
+      const record = records.find(r => r.id === recordId);
+      if (!record || !record.slots) return;
+      const slotIndex = record.slots.findIndex(s => s.date === date && s.period === period);
+      if (slotIndex === -1) return;
+      const newSlots = record.slots.map((s, i) =>
+          i === slotIndex ? { ...s, isPublic: !currentPublic } : s
+      );
+      updateRecord({ ...record, slots: newSlots });
+      const virtualRecords = records.map(r => r.id === recordId ? { ...record, slots: newSlots } : r);
+      const payload = buildPublicPayloadFromRecords(virtualRecords);
+      try {
+          await syncToPublicBoard(payload);
+      } catch (_e) {
+          setFeedbackModal({ isOpen: true, title: '同步公開看板失敗', message: '已更新狀態，請稍後點「發佈公開」重試。', type: 'warning' });
+      }
+  };
+
   const handleSetAllPublic = async (status: boolean) => {
       const updatesByRecord: Record<string, any[]> = {};
 
@@ -361,7 +380,7 @@ const PendingItems: React.FC = () => {
       setBulkTeacherId(val);
   };
 
-  const applyBulkAssignment = () => {
+  const applyBulkAssignment = async () => {
       if (selectedItems.size === 0) return;
       if (!bulkTeacherId) {
           setFeedbackModal({ isOpen: true, title: '錯誤', message: '請選擇要指定的代課教師', type: 'error' });
@@ -396,22 +415,14 @@ const PendingItems: React.FC = () => {
       Object.entries(updatesByRecord).forEach(([recordId, targets]) => {
           const record = records.find(r => r.id === recordId);
           if (!record || !record.slots) return;
-
           const updatedSlots = record.slots.map(slot => {
               const isTarget = targets.some(t => t.date === slot.date && t.period === slot.period);
               if (isTarget) {
-                  processedCount++;
-                  return {
-                      ...slot,
-                      substituteTeacherId: bulkTeacherId,
-                      payType: bulkPayType
-                  };
+                  return { ...slot, substituteTeacherId: bulkTeacherId, payType: bulkPayType };
               }
               return slot;
           });
-
           const newDetails = convertSlotsToDetails(updatedSlots, teachers, salaryGrades);
-
           updateRecord({
               ...record,
               slots: updatedSlots,
@@ -420,6 +431,22 @@ const PendingItems: React.FC = () => {
               homeroomFeeByPta: bulkHomeroomFeeByPta
           });
       });
+
+      const virtualRecords = records.map(r => {
+          const targets = updatesByRecord[r.id];
+          if (!targets || !r.slots) return r;
+          const updatedSlots = r.slots.map(slot => {
+              const isTarget = targets.some(t => t.date === slot.date && t.period === slot.period);
+              return isTarget ? { ...slot, substituteTeacherId: bulkTeacherId, payType: bulkPayType } : slot;
+          });
+          return { ...r, slots: updatedSlots };
+      });
+      const payload = buildPublicPayloadFromRecords(virtualRecords);
+      try {
+          await syncToPublicBoard(payload);
+      } catch (_e) {
+          setFeedbackModal({ isOpen: true, title: '同步公開看板失敗', message: '派代已儲存，但公開看板未即時更新，請稍後點「發佈公開」重試。', type: 'warning' });
+      }
 
       setFeedbackModal({ 
           isOpen: true, 
@@ -671,17 +698,6 @@ const PendingItems: React.FC = () => {
                  </>
              )}
         </div>
-
-        {/* 公開缺額連結：兩個連結都放在頁面頂部，方便複製與開啟 */}
-        <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center gap-3">
-            <span className="text-sm font-bold text-slate-600 shrink-0">公開缺額連結：</span>
-            <a href="#/public?layer=1" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium hover:bg-emerald-100 transition-colors text-sm">
-                <ExternalLink size={16} /> 校內／常配合專用連結
-            </a>
-            <a href="#/public" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 font-medium hover:bg-indigo-100 transition-colors text-sm">
-                <ExternalLink size={16} /> 對外公開缺額頁面
-            </a>
-        </div>
       </header>
 
       {/* 課程總表一覽：與代課總表同一內容，縮小版方便同頁比對 */}
@@ -761,6 +777,7 @@ const PendingItems: React.FC = () => {
                <li>點擊「公開中/已隱藏」切換按鈕，可設定該筆紀錄是否顯示於外部公開看板。</li>
                <li>使用右上方的「全部設為公開/隱藏」可快速批次設定。</li>
                <li>設定完成後，點擊「發佈公開」將缺額同步至網站；下方可複製<strong>校內／常配合專用連結</strong>給校內或常配合老師優先填寫。</li>
+               <li>單節可點「下架」從公開看板移除此節；本頁<strong>派代成功後會自動更新</strong>公開看板（已派代的缺額會自動關閉）。若在清冊或其他頁面已派代，請再點一次「發佈公開」以更新看板。</li>
                <li>若仍找不到人，點擊「釋出至對外公開」勾選要開放的缺額，對外公開頁面即會顯示，所有人可填寫。</li>
              </ul>
           </li>
@@ -966,6 +983,26 @@ const PendingItems: React.FC = () => {
                                                                 <span>{item.className}</span>
                                                             </td>
                                                             <td className="px-4 py-2 text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                {item.isPublic ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleToggleItemPublic(item.recordId, item.date, item.period, true); }}
+                                                                        className="text-amber-600 hover:text-amber-800 text-xs font-bold"
+                                                                        title="從公開看板下架此節"
+                                                                    >
+                                                                        下架
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleToggleItemPublic(item.recordId, item.date, item.period, false); }}
+                                                                        className="text-slate-500 hover:text-indigo-600 text-xs"
+                                                                        title="上架至公開看板"
+                                                                    >
+                                                                        上架
+                                                                    </button>
+                                                                )}
                                                                 <Link 
                                                                     to={`/entry/${item.recordId}`}
                                                                     onClick={(e) => e.stopPropagation()}
@@ -973,6 +1010,7 @@ const PendingItems: React.FC = () => {
                                                                 >
                                                                     排課 &rarr;
                                                                 </Link>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );
