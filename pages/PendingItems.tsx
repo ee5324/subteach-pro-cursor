@@ -671,6 +671,17 @@ const PendingItems: React.FC = () => {
                  </>
              )}
         </div>
+
+        {/* 公開缺額連結：兩個連結都放在頁面頂部，方便複製與開啟 */}
+        <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center gap-3">
+            <span className="text-sm font-bold text-slate-600 shrink-0">公開缺額連結：</span>
+            <a href="#/public?layer=1" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium hover:bg-emerald-100 transition-colors text-sm">
+                <ExternalLink size={16} /> 校內／常配合專用連結
+            </a>
+            <a href="#/public" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 font-medium hover:bg-indigo-100 transition-colors text-sm">
+                <ExternalLink size={16} /> 對外公開缺額頁面
+            </a>
+        </div>
       </header>
 
       {/* 課程總表一覽：與代課總表同一內容，縮小版方便同頁比對 */}
