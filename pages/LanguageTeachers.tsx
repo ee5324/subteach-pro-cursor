@@ -378,12 +378,20 @@ const LanguageTeachers: React.FC = () => {
     setCurrentPayroll({ ...currentPayroll, entries: updatedEntries });
   };
 
+  const [deleteEntryConfirm, setDeleteEntryConfirm] = useState<string | null>(null);
+
   const handleDeleteEntry = (id: string) => {
     if (!currentPayroll) return;
+    setDeleteEntryConfirm(id);
+  };
+
+  const confirmDeleteEntry = () => {
+    if (!currentPayroll || !deleteEntryConfirm) return;
     setCurrentPayroll({
       ...currentPayroll,
-      entries: currentPayroll.entries.filter(e => e.id !== id)
+      entries: currentPayroll.entries.filter(e => e.id !== deleteEntryConfirm)
     });
+    setDeleteEntryConfirm(null);
   };
 
   const handleSavePayroll = () => {
@@ -507,14 +515,26 @@ const LanguageTeachers: React.FC = () => {
       </InstructionPanel>
 
       {/* Message Modal */}
-      <Modal 
-        isOpen={messageModal.isOpen} 
-        onClose={closeMessage} 
+      <Modal
+        isOpen={messageModal.isOpen}
+        onClose={closeMessage}
         onConfirm={messageModal.onConfirm}
         title={messageModal.title}
-        message={messageModal.message} 
+        message={messageModal.message}
         type={messageModal.type}
         mode={messageModal.mode}
+      />
+
+      <Modal
+        isOpen={!!deleteEntryConfirm}
+        onClose={() => setDeleteEntryConfirm(null)}
+        onConfirm={confirmDeleteEntry}
+        title="確認刪除此筆上課紀錄"
+        message="確定要刪除此筆紀錄嗎？"
+        type="warning"
+        mode="confirm"
+        confirmText="刪除"
+        cancelText="取消"
       />
 
       {activeTab === 'teachers' && (

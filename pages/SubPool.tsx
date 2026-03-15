@@ -27,6 +27,7 @@ const SubPool: React.FC = () => {
   const [modal, setModal] = useState<{
       isOpen: boolean; title: string; message: string; type: ModalType
   }>({ isOpen: false, title: '', message: '', type: 'info' });
+  const [deleteFromPoolTeacherId, setDeleteFromPoolTeacherId] = useState<string | null>(null);
 
   // IME 組字期間不更新父層 state，避免中文輸入被中斷（key: teacherId_fieldName）
   const [imeState, setImeState] = useState<{ composingKey: string; localValue: string } | null>(null);
@@ -121,6 +122,17 @@ const SubPool: React.FC = () => {
   return (
     <div className="p-8 h-full flex flex-col">
       <Modal isOpen={modal.isOpen} onClose={() => setModal({ ...modal, isOpen: false })} title={modal.title} message={modal.message} type={modal.type} />
+      <Modal
+        isOpen={!!deleteFromPoolTeacherId}
+        onClose={() => setDeleteFromPoolTeacherId(null)}
+        onConfirm={() => { if (deleteFromPoolTeacherId) { removeFromSubPool(deleteFromPoolTeacherId); setDeleteFromPoolTeacherId(null); } }}
+        title="確認從人力庫移除"
+        message={deleteFromPoolTeacherId ? `確定要將「${teachers.find(t => t.id === deleteFromPoolTeacherId)?.name ?? deleteFromPoolTeacherId}」從代課人力庫移除嗎？` : ''}
+        type="warning"
+        mode="confirm"
+        confirmText="移除"
+        cancelText="取消"
+      />
 
       <header className="mb-6 flex justify-between items-center">
         <div>
@@ -401,7 +413,8 @@ const SubPool: React.FC = () => {
 
                                   <td className="px-2 py-3 text-center align-middle">
                                       <button 
-                                          onClick={() => removeFromSubPool(item.teacherId)}
+                                          type="button"
+                                          onClick={() => setDeleteFromPoolTeacherId(item.teacherId)}
                                           className="text-slate-300 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"
                                           title="從人力庫移除"
                                       >

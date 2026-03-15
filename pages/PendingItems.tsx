@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
 import WeeklyScheduleModal, { ScheduleGroup } from '../components/WeeklyScheduleModal';
-import { PayType, LeaveType, TeacherType, Teacher } from '../types';
+import { PayType, LeaveType, TeacherType, Teacher, LeaveRecord } from '../types';
 import SearchableSelect, { SelectOption } from '../components/SearchableSelect';
 import { convertSlotsToDetails } from '../utils/calculations';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
@@ -80,7 +80,7 @@ const getWeekDays = (baseDate: Date) => {
 const PendingItems: React.FC = () => {
   const { records, teachers, updateRecord, salaryGrades, addTeacher, syncToPublicBoard, releaseVacanciesToTier2, settings, holidays } = useAppStore();
 
-  // 釋出給第二層 modal
+  // 釋出至對外公開 modal
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [tier1Vacancies, setTier1Vacancies] = useState<{ id: string; date?: string; period?: string; originalTeacherName?: string; subject?: string; className?: string; tier?: number }[]>([]);
   const [releaseLoading, setReleaseLoading] = useState(false);
@@ -220,30 +220,56 @@ const PendingItems: React.FC = () => {
     return map;
   }, [records, teachers]);
 
+  /** 從指定的 records 組出「僅公開」的發佈用 payload，用於隱藏/公開後立即同步看板 */
+  const buildPublicPayloadFromRecords = (recordsList: LeaveRecord[]): Array<{ id: string; date: string; period: string; originalTeacherName: string; subject: string; className: string; reason?: string; payType?: string; recordId: string; allowPartial?: boolean }> => {
+      const payload: Array<{ id: string; date: string; period: string; originalTeacherName: string; subject: string; className: string; reason?: string; payType?: string; recordId: string; allowPartial?: boolean }> = [];
+      for (const r of recordsList) {
+          if (!r.slots) continue;
+          const originalTeacher = teachers.find(t => t.id === r.originalTeacherId);
+          const teacherName = originalTeacher?.name || '未知教師';
+          for (const s of r.slots) {
+              if (s.substituteTeacherId || !s.isPublic) continue;
+              payload.push({
+                  id: `${r.id}_${s.date}_${s.period}`,
+                  recordId: r.id,
+                  date: s.date,
+                  period: s.period,
+                  subject: s.subject,
+                  className: s.className,
+                  reason: r.reason,
+                  payType: s.payType,
+                  allowPartial: r.allowPartial,
+                  originalTeacherName: teacherName
+              });
+          }
+      }
+      return payload;
+  };
+
   // --- Handlers for Public Toggle (Record Level) ---
 
-  const handleToggleRecordPublic = (recordId: string, currentPublicState: boolean) => {
+  const handleToggleRecordPublic = async (recordId: string, currentPublicState: boolean) => {
       const record = records.find(r => r.id === recordId);
       if (!record || !record.slots) return;
 
-      // Toggle Logic: 
-      // If currently displayed as Public (true), turn ALL slots OFF.
-      // If currently displayed as Hidden (false), turn ALL pending slots ON.
       const newStatus = !currentPublicState;
-
       const newSlots = record.slots.map(s => {
-          // Only modify slots that are pending (no sub teacher)
-          if (!s.substituteTeacherId) {
-              return { ...s, isPublic: newStatus };
-          }
+          if (!s.substituteTeacherId) return { ...s, isPublic: newStatus };
           return s;
       });
 
       updateRecord({ ...record, slots: newSlots });
+
+      const virtualRecords = records.map(r => r.id === recordId ? { ...record, slots: newSlots } : r);
+      const payload = buildPublicPayloadFromRecords(virtualRecords);
+      try {
+          await syncToPublicBoard(payload);
+      } catch (_e) {
+          setFeedbackModal({ isOpen: true, title: '同步公開看板失敗', message: '已更新隱藏狀態，但公開看板未即時收回，請再點一次「發佈公開」重試。', type: 'warning' });
+      }
   };
 
-  const handleSetAllPublic = (status: boolean) => {
-      // Batch update logic
+  const handleSetAllPublic = async (status: boolean) => {
       const updatesByRecord: Record<string, any[]> = {};
 
       groupedList.forEach(group => {
@@ -255,7 +281,6 @@ const PendingItems: React.FC = () => {
                           updatesByRecord[item.recordId] = [...record.slots];
                       }
                   }
-                  
                   const slots = updatesByRecord[item.recordId];
                   if (slots) {
                       const slotIndex = slots.findIndex(s => s.date === item.date && s.period === item.period);
@@ -273,6 +298,18 @@ const PendingItems: React.FC = () => {
               updateRecord({ ...record, slots: updatesByRecord[recordId] });
           }
       });
+
+      const virtualRecords = records.map(r => {
+          const updated = updatesByRecord[r.id];
+          if (!updated) return r;
+          return { ...r, slots: updated };
+      });
+      const payload = status ? buildPublicPayloadFromRecords(virtualRecords) : [];
+      try {
+          await syncToPublicBoard(payload);
+      } catch (_e) {
+          setFeedbackModal({ isOpen: true, title: '同步公開看板失敗', message: status ? '已設為公開，但看板未即時更新，請再點「發佈公開」。' : '已設為隱藏，但看板未即時收回，請再點「發佈公開」重試。', type: 'warning' });
+      }
   };
 
   // --- Selection Handlers ---
@@ -495,13 +532,13 @@ const PendingItems: React.FC = () => {
   const handleReleaseToTier2 = async () => {
     const ids = Array.from(releaseSelectedIds);
     if (ids.length === 0) {
-      setFeedbackModal({ isOpen: true, title: '請勾選項目', message: '請至少勾選一筆要釋出給第二層的缺額。', type: 'warning' });
+      setFeedbackModal({ isOpen: true, title: '請勾選項目', message: '請至少勾選一筆要釋出至對外公開的缺額。', type: 'warning' });
       return;
     }
     setReleaseLoading(true);
     try {
       await releaseVacanciesToTier2(ids);
-      setFeedbackModal({ isOpen: true, title: '已釋出', message: `已將 ${ids.length} 筆缺額釋出至對外公開頁面，第二層老師現在可看到並填寫。`, type: 'success' });
+      setFeedbackModal({ isOpen: true, title: '已釋出', message: `已將 ${ids.length} 筆缺額釋出至對外公開頁面，所有人現在可看到並填寫。`, type: 'success' });
       setReleaseSelectedIds(new Set());
       setReleaseModalOpen(false);
     } catch (e: any) {
@@ -535,16 +572,16 @@ const PendingItems: React.FC = () => {
       <Modal
         isOpen={releaseModalOpen}
         onClose={() => setReleaseModalOpen(false)}
-        title="釋出給第二層"
+        title="釋出至對外公開"
         type="info"
         mode="alert"
       >
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">以下為目前僅「第一層（校內/常配合）」可見的缺額。勾選後點「釋出選取至第二層」，對外公開頁面也會顯示，第二層老師即可填寫。</p>
+          <p className="text-sm text-slate-600">以下為目前僅「校內／常配合老師」可見的缺額。勾選後點「釋出選取」，對外公開頁面也會顯示，所有人即可填寫。</p>
           {releaseLoading && tier1Vacancies.length === 0 ? (
             <div className="flex items-center justify-center py-6"><Loader2 size={24} className="animate-spin text-slate-400" /></div>
           ) : tier1Vacancies.length === 0 ? (
-            <p className="text-slate-500 text-sm py-4">目前沒有僅第一層可見的缺額（可能尚未發佈或已全部釋出）。</p>
+            <p className="text-slate-500 text-sm py-4">目前沒有僅校內／常配合可見的缺額（可能尚未發佈或已全部釋出）。</p>
           ) : (
             <>
               <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1.5">
@@ -561,7 +598,7 @@ const PendingItems: React.FC = () => {
                 <button type="button" onClick={() => setReleaseModalOpen(false)} className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-medium">關閉</button>
                 <button type="button" onClick={handleReleaseToTier2} disabled={releaseLoading || releaseSelectedIds.size === 0} className="px-4 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 text-sm font-medium flex items-center gap-1">
                   {releaseLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  釋出選取至第二層 ({releaseSelectedIds.size})
+                  釋出選取 ({releaseSelectedIds.size})
                 </button>
               </div>
             </>
@@ -604,7 +641,7 @@ const PendingItems: React.FC = () => {
                 onClick={handlePublish}
                 disabled={isPublishing}
                 className={`bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center space-x-2 transition-colors ${isPublishing ? 'opacity-70 cursor-not-allowed' : ''}`}
-                title="將標記為「公開」的項目以「僅第一層」發佈（校內/常配合優先填寫）"
+                title="將標記為「公開」的項目發佈至校內／常配合專用頁面（可再釋出至對外公開）"
              >
                 {isPublishing ? <Loader2 size={18} className="animate-spin" /> : <Share2 size={18} />}
                 <span>發佈公開 ({totalPublicCount})</span>
@@ -613,10 +650,10 @@ const PendingItems: React.FC = () => {
                 type="button"
                 onClick={() => setReleaseModalOpen(true)}
                 className="bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center space-x-2 transition-colors"
-                title="將已發佈且僅第一層可見的缺額釋出給對外填寫"
+                title="將已發佈且僅校內／常配合可見的缺額釋出至對外公開頁面"
              >
                 <Send size={18} />
-                <span>釋出給第二層</span>
+                <span>釋出至對外公開</span>
              </button>
 
              {totalPendingCount > 0 && (
@@ -712,8 +749,8 @@ const PendingItems: React.FC = () => {
              <ul className="list-circle pl-5 mt-1 text-slate-500">
                <li>點擊「公開中/已隱藏」切換按鈕，可設定該筆紀錄是否顯示於外部公開看板。</li>
                <li>使用右上方的「全部設為公開/隱藏」可快速批次設定。</li>
-               <li>設定完成後，請點擊「發佈公開」將缺額以<strong>第一層（僅校內/常配合可見）</strong>同步至網站；將專用連結提供給校內或常配合代課老師優先填寫。</li>
-               <li>若第一層仍找不到人，點擊「釋出給第二層」勾選要開放的缺額，對外公開頁面即會顯示，第二層老師可填寫。</li>
+               <li>設定完成後，點擊「發佈公開」將缺額同步至網站；下方可複製<strong>校內／常配合專用連結</strong>給校內或常配合老師優先填寫。</li>
+               <li>若仍找不到人，點擊「釋出至對外公開」勾選要開放的缺額，對外公開頁面即會顯示，所有人可填寫。</li>
              </ul>
           </li>
           <li><strong>批次派代：</strong>
@@ -727,8 +764,11 @@ const PendingItems: React.FC = () => {
       </InstructionPanel>
 
       <div className="mb-4 text-right flex items-center justify-end gap-4 flex-wrap">
+          <a href="#/public?layer=1" target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline font-medium flex items-center">
+              <ExternalLink size={12} className="mr-1"/> 校內／常配合專用連結
+          </a>
           <a href="#/public" target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline font-medium flex items-center">
-              <ExternalLink size={12} className="mr-1"/> 公開缺額公告
+              <ExternalLink size={12} className="mr-1"/> 對外公開缺額頁面
           </a>
       </div>
 

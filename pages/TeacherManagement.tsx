@@ -62,6 +62,10 @@ export default function TeacherManagement() {
     mode: 'alert'
   });
 
+  const [deleteTeacherConfirm, setDeleteTeacherConfirm] = useState<Teacher | null>(null);
+  const [deleteSlotConfirm, setDeleteSlotConfirm] = useState<{ day: number; period: string } | null>(null);
+  const [deleteReductionConfirm, setDeleteReductionConfirm] = useState<number | null>(null);
+
   const closeFeedbackModal = () => setFeedbackModal(prev => ({ ...prev, isOpen: false }));
   const showFeedback = (props: Partial<typeof feedbackModal>) => {
       setFeedbackModal({
@@ -254,10 +258,8 @@ export default function TeacherManagement() {
       const existingIndex = currentSchedule.findIndex(s => s.day === day && s.period === period);
 
       if (existingIndex >= 0) {
-          // Remove existing slot
-          const newSchedule = [...currentSchedule];
-          newSchedule.splice(existingIndex, 1);
-          setFormData({ ...formData, defaultSchedule: newSchedule });
+          setDeleteSlotConfirm({ day, period });
+          return;
       } else {
           // Add new slot
           if (!editorSubject) {
@@ -532,13 +534,71 @@ export default function TeacherManagement() {
   return (
     <div className="p-8">
       <Modal 
-        isOpen={feedbackModal.isOpen} 
-        onClose={closeFeedbackModal} 
+        isOpen={feedbackModal.isOpen}
+        onClose={closeFeedbackModal}
         onConfirm={feedbackModal.onConfirm}
         title={feedbackModal.title}
         message={feedbackModal.message}
         type={feedbackModal.type}
         mode={feedbackModal.mode}
+      />
+
+      {/* 刪除教師確認 */}
+      <Modal
+        isOpen={!!deleteTeacherConfirm}
+        onClose={() => setDeleteTeacherConfirm(null)}
+        onConfirm={() => {
+          if (deleteTeacherConfirm) {
+            deleteTeacher(deleteTeacherConfirm.id);
+            setDeleteTeacherConfirm(null);
+            setIsModalOpen(false);
+          }
+        }}
+        title="確認刪除教師"
+        message={deleteTeacherConfirm ? `確定要刪除「${deleteTeacherConfirm.name}」嗎？此操作無法復原，相關代課紀錄與設定可能受影響。` : ''}
+        type="warning"
+        mode="confirm"
+        confirmText="刪除"
+        cancelText="取消"
+      />
+
+      {/* 刪除預設課表節次確認 */}
+      <Modal
+        isOpen={!!deleteSlotConfirm}
+        onClose={() => setDeleteSlotConfirm(null)}
+        onConfirm={() => {
+          if (deleteSlotConfirm) {
+            const currentSchedule = formData.defaultSchedule || [];
+            const newSchedule = currentSchedule.filter(s => !(s.day === deleteSlotConfirm.day && s.period === deleteSlotConfirm.period));
+            setFormData({ ...formData, defaultSchedule: newSchedule });
+            setDeleteSlotConfirm(null);
+          }
+        }}
+        title="確認刪除此節課"
+        message={deleteSlotConfirm ? `確定要刪除預設課表中的「週${['一','二','三','四','五'][deleteSlotConfirm.day]} 第${deleteSlotConfirm.period}節」嗎？` : ''}
+        type="warning"
+        mode="confirm"
+        confirmText="刪除"
+        cancelText="取消"
+      />
+
+      {/* 刪除減授項目確認 */}
+      <Modal
+        isOpen={deleteReductionConfirm !== null}
+        onClose={() => setDeleteReductionConfirm(null)}
+        onConfirm={() => {
+          if (deleteReductionConfirm !== null && formData.reductions) {
+            const newReductions = formData.reductions.filter((_, i) => i !== deleteReductionConfirm);
+            setFormData({ ...formData, reductions: newReductions });
+            setDeleteReductionConfirm(null);
+          }
+        }}
+        title="確認刪除減授項目"
+        message="確定要刪除此筆減授設定嗎？"
+        type="warning"
+        mode="confirm"
+        confirmText="刪除"
+        cancelText="取消"
       />
 
       {/* Import Schedule Modal (Wizard Style) */}
@@ -815,7 +875,7 @@ export default function TeacherManagement() {
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <button type="button" onClick={() => handleOpenModal(teacher, false)} title="編輯" className="text-indigo-600 hover:text-indigo-900 p-1"><Edit2 size={18} /></button>
-                    <button onClick={() => deleteTeacher(teacher.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={18} /></button>
+                    <button onClick={() => setDeleteTeacherConfirm(teacher)} className="text-red-500 hover:text-red-700 p-1" title="刪除教師"><Trash2 size={18} /></button>
                   </td>
                 </tr>
               )})}
@@ -1011,11 +1071,9 @@ export default function TeacherManagement() {
                                   />
                                   <button 
                                       type="button"
-                                      onClick={() => {
-                                          const newReductions = formData.reductions?.filter((_, i) => i !== index);
-                                          setFormData({...formData, reductions: newReductions});
-                                      }}
+                                      onClick={() => setDeleteReductionConfirm(index)}
                                       className="text-red-500 hover:bg-red-50 p-1 rounded"
+                                      title="刪除此減授項目"
                                   >
                                       <Trash2 size={16} />
                                   </button>

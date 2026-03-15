@@ -6,7 +6,7 @@ import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
 import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound } from 'lucide-react';
-import Modal, { ModalType } from '../components/Modal';
+import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
 const Settings: React.FC = () => {
@@ -25,6 +25,7 @@ const Settings: React.FC = () => {
   const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: ModalType }>({
       isOpen: false, title: '', message: '', type: 'info'
   });
+  const [deleteHolidayDate, setDeleteHolidayDate] = useState<string | null>(null);
 
   const handleAddHoliday = () => {
     if (!newHoliday) return;
@@ -94,6 +95,17 @@ const Settings: React.FC = () => {
         title={modal.title} 
         message={modal.message} 
         type={modal.type} 
+      />
+      <Modal
+        isOpen={!!deleteHolidayDate}
+        onClose={() => setDeleteHolidayDate(null)}
+        onConfirm={() => { if (deleteHolidayDate) { removeHoliday(deleteHolidayDate); setDeleteHolidayDate(null); } }}
+        title="確認移除假日"
+        message={deleteHolidayDate ? `確定要將「${deleteHolidayDate}」從假日清單中移除嗎？` : ''}
+        type="warning"
+        mode="confirm"
+        confirmText="移除"
+        cancelText="取消"
       />
 
       <header className="mb-8">
@@ -220,7 +232,8 @@ const Settings: React.FC = () => {
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                     <button 
-                                        onClick={() => removeHoliday(date)}
+                                        type="button"
+                                        onClick={() => setDeleteHolidayDate(date)}
                                         className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors"
                                         title="移除"
                                     >

@@ -42,6 +42,7 @@ const LanguageSalary: React.FC = () => {
   const [hourlyRate, setHourlyRate] = useState<number>(400);
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [deletePreviewSessionConfirm, setDeletePreviewSessionConfirm] = useState<{ monthIndex: number; sessionId: string } | null>(null);
   const [previewData, setPreviewData] = useState<{
       teacherName: string;
       hourlyRate: number;
@@ -666,6 +667,22 @@ const LanguageSalary: React.FC = () => {
             type={modal.type} 
             mode={modal.mode} 
           />
+          <Modal
+            isOpen={!!deletePreviewSessionConfirm}
+            onClose={() => setDeletePreviewSessionConfirm(null)}
+            onConfirm={() => {
+              if (deletePreviewSessionConfirm) {
+                removePreviewSession(deletePreviewSessionConfirm.monthIndex, deletePreviewSessionConfirm.sessionId);
+                setDeletePreviewSessionConfirm(null);
+              }
+            }}
+            title="確認刪除此筆上課紀錄"
+            message="確定要從預覽中移除此筆上課紀錄嗎？"
+            type="warning"
+            mode="confirm"
+            confirmText="刪除"
+            cancelText="取消"
+          />
 
           {/* Preview Modal */}
           {isPreviewOpen && previewData && (
@@ -736,8 +753,10 @@ const LanguageSalary: React.FC = () => {
                                                   </td>
                                                   <td className="px-4 py-2 text-center">
                                                       <button 
-                                                          onClick={() => removePreviewSession(mIdx, s.id)}
+                                                          type="button"
+                                                          onClick={() => setDeletePreviewSessionConfirm({ monthIndex: mIdx, sessionId: s.id })}
                                                           className="text-red-400 hover:text-red-600"
+                                                          title="刪除此筆"
                                                       >
                                                           <Trash2 size={16} />
                                                       </button>

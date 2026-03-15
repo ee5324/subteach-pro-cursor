@@ -654,7 +654,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const syncToPublicBoard = async (vacancies: any[]) => {
       if (db) {
-          const withStatus = (vacancies || []).map((v: any) => ({ ...v, status: '開放報名', tier: 1 }));
+          const snap = await getDoc(doc(db, 'publicBoard', 'vacancies'));
+          const existing = snap.exists() ? snap.data() : null;
+          const existingList = Array.isArray(existing?.vacancies) ? existing.vacancies : [];
+          const tierById: Record<string, number> = {};
+          existingList.forEach((v: any) => {
+              const id = v?.id != null ? String(v.id) : '';
+              if (id && (v.tier === 1 || v.tier === 2)) tierById[id] = v.tier;
+          });
+          const withStatus = (vacancies || []).map((v: any) => ({
+              ...v,
+              status: '開放報名',
+              tier: tierById[String(v?.id)] ?? 1
+          }));
           await setDoc(doc(db, 'publicBoard', 'vacancies'), {
               vacancies: sanitizeForFirestore(withStatus),
               updatedAt: Date.now()

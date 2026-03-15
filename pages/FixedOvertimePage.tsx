@@ -7,7 +7,7 @@ import { FixedOvertimeConfig, Teacher, HOURLY_RATE, GradeEvent, PayType } from '
 import { callGasApi } from '../utils/api';
 import SearchableSelect from '../components/SearchableSelect';
 import { Plus, Trash2, Calendar, FileText, Loader2, Calculator, AlertCircle, X, CloudUpload, Flag, Clock, FileOutput, Settings, BookOpen, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react';
-import Modal, { ModalType } from '../components/Modal';
+import Modal, { ModalType, ModalMode } from '../components/Modal';
 import { Link } from 'react-router-dom';
 import { getStandardBase, parseLocalDate, getEffectiveFixedOvertimeSlots, getEffectiveFixedOvertimePeriods } from '../utils/calculations';
 import InstructionPanel from '../components/InstructionPanel';
@@ -159,6 +159,9 @@ const FixedOvertimePage: React.FC = () => {
   const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: React.ReactNode; type: ModalType }>({
       isOpen: false, title: '', message: '', type: 'info'
   });
+
+  const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
+  const [deleteConfigTeacherId, setDeleteConfigTeacherId] = useState<string | null>(null);
 
   const [scheduleModal, setScheduleModal] = useState<{
       isOpen: boolean;
@@ -780,6 +783,34 @@ const FixedOvertimePage: React.FC = () => {
     <div className="p-8 pb-32">
         <Modal isOpen={modal.isOpen} onClose={() => setModal({ ...modal, isOpen: false })} title={modal.title} message={modal.message} type={modal.type} />
 
+        <Modal
+          isOpen={!!deleteEventId}
+          onClose={() => setDeleteEventId(null)}
+          onConfirm={() => { if (deleteEventId) { removeGradeEvent(deleteEventId); setDeleteEventId(null); } }}
+          title="確認刪除此活動"
+          message={deleteEventId ? '確定要刪除此筆年級活動（校外教學/畢旅等）嗎？' : ''}
+          type="warning"
+          mode="confirm"
+          confirmText="刪除"
+          cancelText="取消"
+        />
+        <Modal
+          isOpen={!!deleteConfigTeacherId}
+          onClose={() => setDeleteConfigTeacherId(null)}
+          onConfirm={() => {
+            if (deleteConfigTeacherId) {
+              removeFixedOvertimeConfig(deleteConfigTeacherId);
+              setDeleteConfigTeacherId(null);
+            }
+          }}
+          title="確認移除兼課設定"
+          message={deleteConfigTeacherId ? `確定要移除此教師的固定兼課設定嗎？` : ''}
+          type="warning"
+          mode="confirm"
+          confirmText="移除"
+          cancelText="取消"
+        />
+
         {activeTeacher && activeConfig && (
             <FixedScheduleModal
                 isOpen={scheduleModal.isOpen}
@@ -886,7 +917,7 @@ const FixedOvertimePage: React.FC = () => {
                     <p className="text-xs text-slate-500 text-center">新增活動後，受影響教師的<strong>「增減節數」</strong>欄位會顯示活動扣除與勾選方塊（需教師有填寫任課班級）</p>
                 </div>
             ) : (
-                <div className="flex flex-wrap gap-2">{currentMonthEvents.map(event => (<div key={event.id} className="bg-rose-50 border border-rose-100 px-3 py-2 rounded-lg flex items-center shadow-sm"><div className="mr-3"><div className="text-xs font-bold text-rose-800">{event.date}</div><div className="text-sm font-bold text-rose-600">{event.title}</div><div className="text-[10px] text-rose-400">年級: {event.targetGrades.join(', ')}</div></div><button onClick={() => removeGradeEvent(event.id)} className="text-rose-300 hover:text-rose-500"><Trash2 size={16} /></button></div>))}</div>
+                <div className="flex flex-wrap gap-2">{currentMonthEvents.map(event => (<div key={event.id} className="bg-rose-50 border border-rose-100 px-3 py-2 rounded-lg flex items-center shadow-sm"><div className="mr-3"><div className="text-xs font-bold text-rose-800">{event.date}</div><div className="text-sm font-bold text-rose-600">{event.title}</div><div className="text-[10px] text-rose-400">年級: {event.targetGrades.join(', ')}</div></div><button type="button" onClick={() => setDeleteEventId(event.id)} className="text-rose-300 hover:text-rose-500" title="刪除此活動"><Trash2 size={16} /></button></div>))}</div>
             )}
         </div>
 
@@ -1064,7 +1095,7 @@ const FixedOvertimePage: React.FC = () => {
                                         >
                                             <GripVertical size={16} />
                                         </button>
-                                        <button onClick={() => removeFixedOvertimeConfig(row.teacherId)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="移除"><Trash2 size={16} /></button>
+                                        <button type="button" onClick={() => setDeleteConfigTeacherId(row.teacherId)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="移除"><Trash2 size={16} /></button>
                                     </div>
                                 </td>
                             </tr>

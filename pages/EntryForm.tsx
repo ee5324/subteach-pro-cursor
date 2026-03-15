@@ -317,6 +317,19 @@ const EntryForm: React.FC = () => {
      setEditingSlot(null);
   };
 
+  const handleDeleteSlotClick = () => {
+    if (!editingSlot) return;
+    showModal({
+      title: '確認刪除此節課',
+      message: `確定要刪除「${editingSlot.date} ${editingSlot.period}」${editingSlot.subject} ${editingSlot.className} 嗎？`,
+      type: 'warning',
+      mode: 'confirm',
+      confirmText: '刪除',
+      cancelText: '取消',
+      onConfirm: () => { handleDeleteSlot(); closeModal(); }
+    });
+  };
+
   const getSlotInfo = (date: string, period: string) => slots.find(s => s.date === date && s.period === period);
 
   // Import Default Schedule Logic
@@ -565,7 +578,7 @@ const EntryForm: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                <div className="bg-slate-50 px-6 py-4 border-t flex justify-between"><button onClick={handleDeleteSlot} className="text-red-500 text-sm flex items-center"><Trash2 size={16} className="mr-1"/> 刪除</button><div className="flex gap-2"><button onClick={() => setEditingSlot(null)} className="px-4 py-2 border rounded text-sm">取消</button><button onClick={handleSaveEditedSlot} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-bold">儲存</button></div></div>
+                <div className="bg-slate-50 px-6 py-4 border-t flex justify-between"><button type="button" onClick={handleDeleteSlotClick} className="text-red-500 text-sm flex items-center"><Trash2 size={16} className="mr-1"/> 刪除</button><div className="flex gap-2"><button onClick={() => setEditingSlot(null)} className="px-4 py-2 border rounded text-sm">取消</button><button onClick={handleSaveEditedSlot} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-bold">儲存</button></div></div>
              </div>
          </div>
       )}

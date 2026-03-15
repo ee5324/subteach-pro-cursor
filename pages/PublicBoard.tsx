@@ -22,7 +22,7 @@ interface Vacancy {
   status?: string;
   recordId?: string;
   allowPartial?: boolean;
-  /** 1=僅第一層（校內/常配合）可見，2=已釋出對外可見 */
+  /** 1=僅校內/常配合可見，2=已釋出對外可見 */
   tier?: 1 | 2;
 }
 
@@ -287,17 +287,10 @@ export default function PublicBoard() {
         )}
       </header>
 
-      {/* 第一層 / 第二層說明 */}
-      {isLayer1 ? (
-        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-emerald-800 text-sm">
-          <strong>校內／常配合代課老師優先填寫</strong>：此頁面可看到所有已發佈缺額（含尚未對外釋出者），請優先由此填寫。
-        </div>
-      ) : (
-        <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-700 text-sm">
-          <strong>對外公開頁面</strong>：僅顯示已釋出之缺額。若您為校內或常配合代課老師，請改用專用連結以優先填寫 →{' '}
-          <a href="#/public?layer=1" className="text-indigo-600 font-medium underline hover:no-underline">校內/常配合專用連結</a>
-        </div>
-      )}
+      {/* 頁面說明（不向老師顯示層級，僅提供中性指引） */}
+      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-700 text-sm">
+        請選擇下方缺額並填寫報名。
+      </div>
 
       {/* 使用說明：簡單易懂 */}
       <div className="mb-4 sm:mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4 sm:p-5 text-slate-700">
@@ -322,9 +315,6 @@ export default function PublicBoard() {
           <div className="inline-block p-4 bg-green-50 rounded-full mb-4">✓</div>
           <h3 className="text-xl sm:text-xl font-bold text-slate-800 mb-2">目前沒有代課缺額</h3>
           <p className="text-slate-500 text-base">感謝您的關注，所有課程都已安排妥當。</p>
-          {!isLayer1 && (
-            <p className="text-slate-500 text-sm mt-2">若您為校內或常配合代課老師，可改用<a href="#/public?layer=1" className="text-indigo-600 font-medium underline ml-1">專用連結</a>查看是否有僅對您開放的缺額。</p>
-          )}
           <div className="mt-4 sm:mt-6 p-4 sm:p-5 bg-amber-50 border border-amber-200 rounded-xl text-left max-w-lg mx-auto">
             <p className="text-base font-bold text-amber-800 mb-2">📌 這裡才會看到缺額？</p>
             <p className="text-sm text-slate-700 sm:hidden">後台進入 <strong>待聘清單</strong> → 設為 <strong>公開中</strong> → 點 <strong>發佈公開</strong>。</p>
