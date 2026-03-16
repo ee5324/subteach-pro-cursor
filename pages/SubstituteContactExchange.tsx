@@ -1,8 +1,9 @@
 /**
  * 代課聯絡資訊交換
  * 僅在「添加」時列出項目，渲染為可列印的雙方通知單。
+ * 通知單內容（教室、備註）存於 record；已加入清單存 localStorage，過期即刪除不顯示。
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LeaveRecord, TimetableSlot } from '../types';
@@ -29,10 +30,44 @@ const addMonths = (ym: string, delta: number): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const STORAGE_KEY_ADDED = 'substituteContactNoticeAddedKeys';
+
+/** 從 slot key 取出日期（key 格式為 recordId_date_period） */
+const getDateFromKey = (key: string): string => {
+  const m = key.match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : '';
+};
+
 export default function SubstituteContactExchange() {
   const { records, teachers, updateRecord } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(getDefaultMonth);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
+  const [loadedFromStorage, setLoadedFromStorage] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_ADDED);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+      const valid = list.filter((k) => getDateFromKey(k) >= todayStr);
+      setAddedKeys(new Set(valid));
+      if (valid.length !== list.length) localStorage.setItem(STORAGE_KEY_ADDED, JSON.stringify(valid));
+    } catch (_e) {}
+    setLoadedFromStorage(true);
+  }, []);
+
+  const persistAddedKeys = useCallback((keys: Set<string>) => {
+    const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+    const valid = Array.from(keys).filter((k) => getDateFromKey(k) >= todayStr);
+    try {
+      localStorage.setItem(STORAGE_KEY_ADDED, JSON.stringify(valid));
+    } catch (_e) {}
+  }, []);
+
+  useEffect(() => {
+    if (!loadedFromStorage) return;
+    persistAddedKeys(addedKeys);
+  }, [addedKeys, loadedFromStorage, persistAddedKeys]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('');
   const [editingSlot, setEditingSlot] = useState<{ recordId: string; date: string; period: string } | null>(null);
@@ -134,7 +169,10 @@ export default function SubstituteContactExchange() {
       return next;
     });
 
-  const addedRows = useMemo(() => allRows.filter((r) => addedKeys.has(r.key)), [allRows, addedKeys]);
+  const addedRows = useMemo(
+    () => allRows.filter((r) => addedKeys.has(r.key) && r.slot.date >= today),
+    [allRows, addedKeys, today]
+  );
 
   const addedGroups = useMemo((): ContactGroup[] => {
     const map = new Map<string, ContactRow[]>();
