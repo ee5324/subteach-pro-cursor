@@ -18,8 +18,14 @@ interface ContactRow {
   substituteTeacherPhone: string;
 }
 
+const getDefaultMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export default function SubstituteContactExchange() {
   const { records, teachers, updateRecord } = useAppStore();
+  const [selectedMonth, setSelectedMonth] = useState(getDefaultMonth);
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [searchKeyword, setSearchKeyword] = useState('');
   const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('');
@@ -51,7 +57,15 @@ export default function SubstituteContactExchange() {
     return out.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || String(a.slot.period).localeCompare(String(b.slot.period)));
   }, [records, teachers]);
 
-  const availableRows = useMemo(() => allRows.filter((r) => !addedKeys.has(r.key)), [allRows, addedKeys]);
+  const monthFilteredRows = useMemo(
+    () => allRows.filter((r) => r.slot.date.startsWith(selectedMonth)),
+    [allRows, selectedMonth]
+  );
+
+  const availableRows = useMemo(
+    () => monthFilteredRows.filter((r) => !addedKeys.has(r.key)),
+    [monthFilteredRows, addedKeys]
+  );
 
   const keywordLower = searchKeyword.trim().toLowerCase();
   const filteredAvailableRows = useMemo(() => {
@@ -146,6 +160,20 @@ export default function SubstituteContactExchange() {
             <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 flex items-center gap-2">
               <Plus size={16} /> 加入至通知單
             </h2>
+            <div className="flex flex-wrap items-center gap-4 mb-3">
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <span>篩選年月：</span>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
+              </label>
+              <span className="text-slate-500 text-sm">
+                {selectedMonth} 共 {monthFilteredRows.length} 筆已派代
+              </span>
+            </div>
             <p className="text-slate-500 text-sm mb-3">點「加入」後，該筆會出現在下方通知單並可列印。</p>
             <div className="relative mb-3">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -163,8 +191,10 @@ export default function SubstituteContactExchange() {
               )}
             </div>
             <ul className="space-y-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white p-3">
-              {availableRows.length === 0 ? (
-                <li className="text-slate-400 text-sm py-2">已全部加入；可從下方通知單移除後再重新加入。</li>
+              {monthFilteredRows.length === 0 ? (
+                <li className="text-slate-400 text-sm py-2">此月份沒有已派代的代課節次，請切換其他年月。</li>
+              ) : availableRows.length === 0 ? (
+                <li className="text-slate-400 text-sm py-2">此月份已全部加入；可從下方通知單移除後再重新加入。</li>
               ) : filteredAvailableRows.length === 0 ? (
                 <li className="text-slate-400 text-sm py-2">沒有符合「{searchKeyword.trim()}」的項目。</li>
               ) : (
