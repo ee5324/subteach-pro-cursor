@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -119,6 +119,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
               {publicApplicationsCount}
             </span>
           )}
+        </NavLink>
+
+        <NavLink to="/contact-exchange" className={linkClass} onClick={onClose}>
+          <MessageSquare size={18} />
+          <span>代課聯絡資訊交換</span>
         </NavLink>
 
         {/* Group 2: 人力資源 */}

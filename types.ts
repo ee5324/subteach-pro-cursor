@@ -249,6 +249,8 @@ export interface TimetableSlot {
   payType: PayType;
   isPublic?: boolean; // 新增：是否發佈至公開看板 (預設 false)
   isOvertime?: boolean; // 新增：是否為超鐘點時段
+  /** 教室（代課聯絡資訊交換用） */
+  classroom?: string;
 }
 
 export interface SubstituteDetail {
@@ -284,6 +286,8 @@ export interface LeaveRecord {
   ptaPaysHourly?: boolean;
   /** 家長會支出導師費(半天)：僅半日導師費入家長會清冊 */
   homeroomFeeByPta?: boolean;
+  /** 給代課老師與請假老師的聯絡備註（教室、教材位置、聯繫方式等） */
+  contactNoteForSubstitute?: string;
 }
 
 // 新增：超鐘點紀錄
