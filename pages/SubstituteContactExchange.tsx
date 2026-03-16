@@ -431,7 +431,7 @@ export default function SubstituteContactExchange() {
                         <h3 className="text-center font-bold text-slate-800 text-lg mb-4 print:text-base">
                           代課聯絡通知單
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-6">
                           <div className="border border-slate-200 rounded-xl p-4 print:rounded-lg">
                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給請假老師（{group.originalTeacherName}）</div>
                             <p className="text-sm text-slate-600 mb-1">
@@ -545,7 +545,7 @@ export default function SubstituteContactExchange() {
           @page { size: A4; margin: 12mm; }
           body * { visibility: hidden; }
           .print-area, .print-area * { visibility: visible !important; }
-          .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+          .print-area { position: relative; width: 100%; padding: 0; }
           .print-area .a4-notice {
             width: 100%;
             min-height: 273mm;
