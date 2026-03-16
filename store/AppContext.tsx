@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc } from '../types';
+import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc, SubteachAllowedUser } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
@@ -58,6 +58,15 @@ interface AppContextType {
   publicBoardApplications: PublicBoardApplication[];
   teacherLeaveRequests: TeacherLeaveRequestDoc[];
   loading: boolean;
+  /** 已登入但不在白名單內，無法存取主系統 */
+  notAllowed: boolean;
+  /** 白名單清單（admin 可見全部，一般使用者僅自己的 doc） */
+  subteachAllowedUsers: SubteachAllowedUser[];
+  /** 是否為代課系統管理員（可管理白名單） */
+  isSubteachAdmin: boolean;
+  addSubteachAllowedUser: (email: string, role: 'admin' | 'user', displayName?: string) => Promise<void>;
+  updateSubteachAllowedUser: (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName'>>) => Promise<void>;
+  removeSubteachAllowedUser: (email: string) => Promise<void>;
 
   updateTeacherLeaveRequestStatus: (id: string, status: 'pending' | 'imported' | 'archived') => Promise<void>;
   deleteTeacherLeaveRequest: (id: string) => Promise<void>;
@@ -134,8 +143,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [substituteApplications, setSubstituteApplications] = useState<SubstituteApplication[]>([]);
   const [publicBoardApplications, setPublicBoardApplications] = useState<PublicBoardApplication[]>([]);
   const [teacherLeaveRequests, setTeacherLeaveRequests] = useState<TeacherLeaveRequestDoc[]>([]);
+  const [notAllowed, setNotAllowed] = useState(false);
+  const [subteachAllowedUsers, setSubteachAllowedUsers] = useState<SubteachAllowedUser[]>([]);
 
   const [loading, setLoading] = useState(true);
+
+  const isSubteachAdmin = Boolean(currentUser?.email && subteachAllowedUsers.find(u => u.email === currentUser?.email)?.role === 'admin');
 
   // --- Auth Listener ---
   useEffect(() => {
@@ -149,8 +162,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
+        setNotAllowed(false);
       } else {
         setLoading(false);
+        setNotAllowed(false);
         // 開發模式：免輸入密碼，用模擬使用者進入系統測功能（資料為空）
         setCurrentUser(import.meta.env.DEV ? ({ uid: 'dev-mock', email: 'dev@test', emailVerified: true } as User) : null);
       }
@@ -173,12 +188,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
+    setNotAllowed(false);
     const unsubs: (() => void)[] = [];
 
-    // Teachers
-    unsubs.push(onSnapshot(collection(db, 'teachers'), (snap) => {
-      setTeachers(snap.docs.map(d => d.data() as Teacher));
-    }));
+    // Teachers（若權限不足會觸發 error，表示未在白名單內）
+    unsubs.push(onSnapshot(
+      collection(db, 'teachers'),
+      (snap) => {
+        setTeachers(snap.docs.map(d => d.data() as Teacher));
+      },
+      (err: any) => {
+        if (err?.code === 'permission-denied') {
+          setNotAllowed(true);
+          setLoading(false);
+        }
+      }
+    ));
+
+    // 白名單（僅白名單內使用者可讀；admin 可讀全部）
+    unsubs.push(onSnapshot(collection(db, 'subteach_allowed_users'), (snap) => {
+      setSubteachAllowedUsers(snap.docs.map(d => ({ email: d.id, ...d.data() } as SubteachAllowedUser)));
+    }, () => {}));
 
     // Records
     unsubs.push(onSnapshot(collection(db, 'records'), (snap) => {
@@ -695,11 +725,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
   };
 
+  const addSubteachAllowedUser = async (email: string, role: 'admin' | 'user', displayName?: string) => {
+    if (!db) throw new Error('Firebase 未初始化');
+    const ref = doc(db, 'subteach_allowed_users', email);
+    await setDoc(ref, sanitizeForFirestore({
+      email,
+      enabled: true,
+      role,
+      displayName: displayName || null,
+      updatedAt: Date.now()
+    }));
+  };
+
+  const updateSubteachAllowedUser = async (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName'>>) => {
+    if (!db) throw new Error('Firebase 未初始化');
+    const ref = doc(db, 'subteach_allowed_users', email);
+    await updateDoc(ref, sanitizeForFirestore({ ...data, updatedAt: Date.now() }) as any);
+  };
+
+  const removeSubteachAllowedUser = async (email: string) => {
+    if (!db) throw new Error('Firebase 未初始化');
+    await deleteDoc(doc(db, 'subteach_allowed_users', email));
+  };
+
   const value = {
     currentUser,
     teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
     semesters, activeSemesterId, subPool, languagePayrolls,     substituteApplications, publicBoardApplications, teacherLeaveRequests,
     loading,
+    notAllowed, subteachAllowedUsers, isSubteachAdmin, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser,
     updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest,
     addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, syncAllPublicTeacherSchedules, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 

@@ -75,3 +75,20 @@ VITE_GAS_WEB_APP_URL=您的新Web_App_URL
 ```
 
 完成以上步驟後，您的應用程式將會使用 Firebase 作為主要資料庫，並使用 GAS 處理檔案生成任務。
+
+---
+
+## 8. 白名單與第一位管理員
+
+本系統僅允許**白名單內**且已驗證 Email 的帳號登入使用。第一位管理員必須在 Firestore 手動建立：
+
+1.  開啟 [Firebase Console](https://console.firebase.google.com/) → 您的專案 → **Firestore Database**。
+2.  若尚無 `subteach_allowed_users` 集合，點擊「**新增集合**」，集合 ID 輸入：`subteach_allowed_users`。
+3.  在該集合下點「**新增文件**」：
+    - **文件 ID**：管理員的 Email（例如：`y.chengju@gmail.com`）。
+    - **欄位**：
+      - `email`（字串）：`y.chengju@gmail.com`
+      - `enabled`（布林）：`true`
+      - `role`（字串）：`admin`
+      - （選用）`updatedAt`（數字）：例如 `Date.now()` 的毫秒值
+4.  儲存後，該帳號即可登入並在「系統設定」的「白名單管理」中新增／編輯其他使用者。

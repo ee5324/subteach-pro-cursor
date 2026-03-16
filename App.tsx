@@ -57,14 +57,34 @@ import PublicBoard from './pages/PublicBoard';
 import PublicBoardApplicationsPage from './pages/PublicBoardApplicationsPage';
 import TeacherLeaveRequest from './pages/TeacherLeaveRequest';
 import { useAppStore } from './store/useAppStore';
+import { signOut } from 'firebase/auth';
+import { auth } from './src/lib/firebase';
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
-  const { currentUser, loading } = useAppStore();
+  const { currentUser, loading, notAllowed } = useAppStore();
   
   if (loading) return <div className="h-screen flex items-center justify-center bg-slate-100 text-slate-400">載入中...</div>;
   
   if (!currentUser) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (notAllowed) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 p-6">
+        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 max-w-md text-center">
+          <h1 className="text-xl font-bold text-slate-800 mb-3">無法使用本系統</h1>
+          <p className="text-slate-600 mb-6">您沒有權限使用本系統，請聯絡管理員將您的帳號加入白名單。</p>
+          <button
+            type="button"
+            onClick={() => signOut(auth)}
+            className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700"
+          >
+            登出
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return children;

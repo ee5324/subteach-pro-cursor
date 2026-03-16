@@ -1,161 +1,120 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // 輔助函式：檢查使用者是否已登入 (包含 Email 登入與匿名登入)
-    function isSignedIn() {
+
+    // ========== 既有系統：管理員與登入判斷 ==========
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'y.chengju@gmail.com';
+    }
+    function isAuth() {
       return request.auth != null;
     }
 
-    function isEduTrackAllowedUser() {
-      return isSignedIn()
+    // 系統設定：所有人可讀 (為了維護遮罩)，僅管理員可寫
+    match /config/system {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // 學生名單：所有人可讀 (登入驗證用)，僅管理員可寫
+    match /students/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    // 交易紀錄：學生可讀取自己的 (透過 query)，管理員可全讀寫
+    match /transactions/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    // 獎品資訊：學生可 update 扣庫存，管理員可全權處理
+    match /prizes/{docId} {
+      allow read: if isAuth();
+      allow update: if isAuth();
+      allow write: if isAdmin();
+    }
+    // 分數提報：學生可新增，管理員可審核
+    match /submissions/{docId} {
+      allow create: if isAuth();
+      allow read, update, delete: if isAdmin();
+      allow read: if isAuth() && resource.data.studentName == request.query.studentName;
+    }
+    // 預約紀錄：學生可新增與讀取自己的，管理員可處理
+    match /reservations/{docId} {
+      allow create: if isAuth();
+      allow read, update: if isAuth();
+      allow delete: if isAdmin();
+    }
+
+    // ========== 代課系統 (Subteach)：白名單制 ==========
+    // 須為 Email 登入且已驗證，且列於 subteach_allowed_users 且 enabled
+    function isWhitelisted() {
+      return request.auth != null
+        && request.auth.token.email != null
         && request.auth.token.email_verified == true
-        && exists(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email))
-        && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.enabled == true;
+        && exists(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.enabled == true;
+    }
+    function isSubteachAdmin() {
+      return isWhitelisted()
+        && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.role == 'admin';
     }
 
-    function isEduTrackAdmin() {
-      return isEduTrackAllowedUser()
-        && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.role == 'admin';
-    }
-
-    // =========================================================
-    // 應用程式資料集合 (Collections)
-    // =========================================================
-
-    // 1. 教師資料 (Teachers)
     match /teachers/{teacherId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 2. 請假紀錄 (Records)
     match /records/{recordId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 3. 超鐘點紀錄 (Overtime Records)
     match /overtimeRecords/{recordId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 4. 專案活動 (Special Activities)
     match /specialActivities/{activityId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 5. 薪級表 (Salary Grades)
     match /salaryGrades/{gradeId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 6. 固定兼課設定 (Fixed Overtime Config)
     match /fixedOvertimeConfig/{configId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 7. 年級活動設定 (Grade Events)
     match /gradeEvents/{eventId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 8. 學期設定 (Semesters)
     match /semesters/{semesterId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 9. 代課人力庫 (Sub Pool)
     match /subPool/{teacherId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 10. 語言教師薪資 (Language Payrolls)
     match /languagePayrolls/{payrollId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 11. 系統設定 (System Settings)
-    // 包含 settings, holidays, metadata 等文件
+    // 代課系統專用 system 集合 (settings, holidays, metadata)，與既有 /config/system 不同
     match /system/{docId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isWhitelisted();
     }
-
-    // 12. 代課教師報名（對外表單：未登入可建立，僅登入可讀/改/刪）
     match /substituteApplications/{appId} {
       allow create: if true;
-      allow read, update, delete: if isSignedIn();
+      allow read, update, delete: if isWhitelisted();
     }
-
-    // 13. 公開缺額看板（對外：任何人可讀；僅登入可寫。與 GS 脫鉤，改由 Firebase 提供）
     match /publicBoard/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isWhitelisted();
     }
-    // 14. 公開缺額報名紀錄（對外：未登入可建立；僅登入可讀）
     match /publicBoardApplications/{appId} {
       allow create: if true;
-      allow read, update, delete: if isSignedIn();
+      allow read, update, delete: if isWhitelisted();
     }
-
-    // 15. 教師請假申請（Vercel 表單：未登入可建立；僅登入可讀/改/刪）
     match /teacherLeaveRequests/{requestId} {
       allow create: if true;
-      allow read, update, delete: if isSignedIn();
+      allow read, update, delete: if isWhitelisted();
     }
-
-    // 16. 公開教師課表（供請假表單依姓名帶入課表：任何人可讀；僅登入可寫）
     match /publicTeacherSchedules/{teacherName} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isWhitelisted();
     }
-
-    // =========================================================
-    // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
-    // =========================================================
-    match /edutrack_courses/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_students/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_awards/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_vendors/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_archive/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_todos/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_exam_papers/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_exam_paper_folders/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    // 考卷檢核（教學組）
-    match /edutrack_exam_paper_checks/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    // 學生語言選修登錄（教學組）
-    match /edutrack_language_elective/{id} {
-      allow read, write: if isEduTrackAllowedUser();
-    }
-    match /edutrack_allowed_users/{email} {
-      allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
-      allow create, update, delete: if isEduTrackAdmin();
-    }
-
-    // =========================================================
-    // 預設規則
-    // =========================================================
-    
-    // 為了安全起見，拒絕所有未明確定義的路徑存取
-    // 如果未來新增了集合但忘記加規則，會導致權限錯誤，提醒您更新規則
-    match /{document=**} {
-      allow read, write: if false;
+    match /subteach_allowed_users/{email} {
+      allow read: if isWhitelisted() && (request.auth.token.email == email || isSubteachAdmin());
+      allow create, update, delete: if isSubteachAdmin();
     }
   }
 }

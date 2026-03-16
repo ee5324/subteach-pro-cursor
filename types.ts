@@ -24,6 +24,15 @@ export enum LeaveType {
 // 新增：處理狀態
 export type ProcessingStatus = '待處理' | '已印代課單' | '跑章中' | '結案待算';
 
+/** 代課系統白名單：文件 ID = email，僅 admin 可寫入；白名單內可讀自己 */
+export interface SubteachAllowedUser {
+  email: string;   // 與文件 ID 一致
+  enabled: boolean;
+  role?: 'admin' | 'user';
+  displayName?: string;
+  updatedAt?: number;
+}
+
 export interface SalaryGrade {
   id: string; // Added ID field
   points: number; // 俸點 (例如 190)

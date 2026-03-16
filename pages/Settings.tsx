@@ -5,13 +5,16 @@ import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
-import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound } from 'lucide-react';
+import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus } from 'lucide-react';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
 const Settings: React.FC = () => {
-  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase } = useAppStore();
+  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser } = useAppStore();
   const [newHoliday, setNewHoliday] = useState('');
+  const [whitelistEmail, setWhitelistEmail] = useState('');
+  const [whitelistRole, setWhitelistRole] = useState<'admin' | 'user'>('user');
+  const [whitelistSaving, setWhitelistSaving] = useState(false);
   const [tempUrl, setTempUrl] = useState(settings.gasWebAppUrl);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'loading' | 'migrating' | 'success' | 'error'>('idle');
@@ -26,6 +29,22 @@ const Settings: React.FC = () => {
       isOpen: false, title: '', message: '', type: 'info'
   });
   const [deleteHolidayDate, setDeleteHolidayDate] = useState<string | null>(null);
+  const [removeWhitelistEmail, setRemoveWhitelistEmail] = useState<string | null>(null);
+
+  const handleAddWhitelist = async () => {
+    const email = whitelistEmail.trim().toLowerCase();
+    if (!email) return;
+    setWhitelistSaving(true);
+    try {
+      await addSubteachAllowedUser(email, whitelistRole);
+      setWhitelistEmail('');
+      setModal({ isOpen: true, title: '已加入白名單', message: `已將 ${email} 加入白名單。`, type: 'success' });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '加入失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setWhitelistSaving(false);
+    }
+  };
 
   const handleAddHoliday = () => {
     if (!newHoliday) return;
@@ -107,6 +126,27 @@ const Settings: React.FC = () => {
         confirmText="移除"
         cancelText="取消"
       />
+      <Modal
+        isOpen={!!removeWhitelistEmail}
+        onClose={() => setRemoveWhitelistEmail(null)}
+        onConfirm={async () => {
+          if (removeWhitelistEmail) {
+            try {
+              await removeSubteachAllowedUser(removeWhitelistEmail);
+              setModal({ isOpen: true, title: '已移除', message: `已從白名單移除 ${removeWhitelistEmail}。`, type: 'success' });
+            } catch (e: any) {
+              setModal({ isOpen: true, title: '移除失敗', message: e?.message || '請稍後再試', type: 'error' });
+            }
+            setRemoveWhitelistEmail(null);
+          }
+        }}
+        title="確認移除白名單"
+        message={removeWhitelistEmail ? `確定要將「${removeWhitelistEmail}」從白名單移除？對方將無法再登入使用本系統。` : ''}
+        type="warning"
+        mode="confirm"
+        confirmText="移除"
+        cancelText="取消"
+      />
 
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-slate-800 flex items-center">
@@ -137,11 +177,111 @@ const Settings: React.FC = () => {
           <CollapsibleItem title="Firebase 雲端儲存">
             <p>本系統使用 Firebase 雲端資料庫，所有變更都會即時同步至雲端。即使更換電腦，只要登入相同帳號即可存取最新資料。</p>
           </CollapsibleItem>
+          <CollapsibleItem title="白名單（僅允許名單內帳號使用）">
+            <p>僅加入白名單且已驗證 Email 的帳號可登入使用主系統。第一位管理員需在 Firebase Console 手動建立 <code>subteach_allowed_users/您的Email</code> 文件，欄位 <code>enabled: true</code>、<code>role: &quot;admin&quot;</code>；之後管理員可在「系統設定」的「白名單管理」區塊新增／編輯／移除其他帳號。</p>
+          </CollapsibleItem>
         </div>
       </InstructionPanel>
 
       <div className="space-y-8">
-        
+
+        {/* 白名單管理：僅管理員可見 */}
+        {isSubteachAdmin && (
+          <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+              <ShieldCheck size={20} className="mr-2 text-emerald-600"/>
+              白名單管理
+            </h2>
+            <p className="text-sm text-slate-600 mb-4">僅白名單內的帳號可登入使用本系統。第一位管理員請在 Firebase Console 手動建立 <code className="bg-slate-100 px-1 rounded">subteach_allowed_users/您的Email</code>，欄位 <code className="bg-slate-100 px-1 rounded">enabled: true</code>、<code className="bg-slate-100 px-1 rounded">role: &quot;admin&quot;</code>。</p>
+            <div className="flex flex-wrap items-end gap-3 mb-6">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-bold text-slate-700 mb-1">Email（加入白名單）</label>
+                <input
+                  type="email"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="user@example.com"
+                  value={whitelistEmail}
+                  onChange={(e) => setWhitelistEmail(e.target.value)}
+                />
+              </div>
+              <div className="w-32">
+                <label className="block text-xs font-bold text-slate-700 mb-1">角色</label>
+                <select
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={whitelistRole}
+                  onChange={(e) => setWhitelistRole(e.target.value as 'admin' | 'user')}
+                >
+                  <option value="user">一般使用者</option>
+                  <option value="admin">管理員</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddWhitelist}
+                disabled={!whitelistEmail.trim() || whitelistSaving}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <UserPlus size={18}/> {whitelistSaving ? '處理中…' : '加入白名單'}
+              </button>
+            </div>
+            <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold text-slate-600">Email</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600">角色</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600">啟用</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {subteachAllowedUsers.map((u) => (
+                    <tr key={u.email} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono text-slate-700">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <select
+                          className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white"
+                          value={u.role || 'user'}
+                          onChange={(e) => updateSubteachAllowedUser(u.email, { role: e.target.value as 'admin' | 'user' })}
+                        >
+                          <option value="user">一般使用者</option>
+                          <option value="admin">管理員</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={u.enabled}
+                            onChange={(e) => updateSubteachAllowedUser(u.email, { enabled: e.target.checked })}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-slate-600">{u.enabled ? '啟用' : '停用'}</span>
+                        </label>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setRemoveWhitelistEmail(u.email)}
+                          className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors"
+                          title="從白名單移除"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {subteachAllowedUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-slate-400">尚無白名單成員（請於 Firebase 手動建立第一位 admin）</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         {/* Semester & Graduation Settings Section */}
         <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
