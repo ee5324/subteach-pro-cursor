@@ -1,13 +1,14 @@
 /**
  * 代課聯絡資訊交換
- * 供代課老師與請假老師查看／填寫：上課班級、教室、聯繫電話、備註
+ * 僅在「添加」時列出項目，渲染為可列印的雙方通知單。
  */
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Phone, MapPin, BookOpen, MessageSquare, User, UserCheck } from 'lucide-react';
+import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer } from 'lucide-react';
 import { LeaveRecord, TimetableSlot } from '../types';
 
 interface ContactRow {
+  key: string;
   recordId: string;
   record: LeaveRecord;
   slot: TimetableSlot;
@@ -19,12 +20,13 @@ interface ContactRow {
 
 export default function SubstituteContactExchange() {
   const { records, teachers, updateRecord } = useAppStore();
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
   const [editingSlot, setEditingSlot] = useState<{ recordId: string; date: string; period: string } | null>(null);
   const [editingNoteRecordId, setEditingNoteRecordId] = useState<string | null>(null);
   const [tempClassroom, setTempClassroom] = useState('');
   const [tempNote, setTempNote] = useState('');
 
-  const rows = useMemo((): ContactRow[] => {
+  const allRows = useMemo((): ContactRow[] => {
     const out: ContactRow[] = [];
     records.forEach((record) => {
       if (!record.slots) return;
@@ -33,6 +35,7 @@ export default function SubstituteContactExchange() {
         if (!slot.substituteTeacherId) return;
         const substituteTeacher = teachers.find((t) => t.id === slot.substituteTeacherId);
         out.push({
+          key: `${record.id}_${slot.date}_${slot.period}`,
           recordId: record.id,
           record,
           slot,
@@ -45,6 +48,12 @@ export default function SubstituteContactExchange() {
     });
     return out.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || String(a.slot.period).localeCompare(String(b.slot.period)));
   }, [records, teachers]);
+
+  const availableRows = useMemo(() => allRows.filter((r) => !addedKeys.has(r.key)), [allRows, addedKeys]);
+  const addedRows = useMemo(() => allRows.filter((r) => addedKeys.has(r.key)), [allRows, addedKeys]);
+
+  const addToNotice = (key: string) => setAddedKeys((prev) => new Set(prev).add(key));
+  const removeFromNotice = (key: string) => setAddedKeys((prev) => { const n = new Set(prev); n.delete(key); return n; });
 
   const saveClassroom = (recordId: string, date: string, period: string) => {
     const record = records.find((r) => r.id === recordId);
@@ -77,179 +86,235 @@ export default function SubstituteContactExchange() {
 
   const periodLabel = (p: string) => (p === '早' ? '早自習' : p === '午' ? '午休' : `第 ${p} 節`);
 
+  const handlePrint = () => window.print();
+
   return (
     <div className="p-8 pb-24">
-      <header className="mb-8">
+      <header className="mb-6 print:hidden">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
           <MessageSquare className="text-indigo-600" size={28} />
           代課聯絡資訊交換
         </h1>
         <p className="text-slate-500 mt-2">
-          供代課老師與請假老師對照：上課班級、教室、聯繫電話及備註。可於表格內直接編輯教室與備註。
+          將要列印的項目加入下方「通知單」，再列印成雙方通知單。介面僅顯示您已添加的項目，保持簡潔。
         </p>
       </header>
 
-      {rows.length === 0 ? (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-12 text-center">
+      {/* 可加入的項目：僅在未加入時顯示，簡潔列表 */}
+      {allRows.length === 0 ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-12 text-center print:hidden">
           <p className="text-slate-600 font-medium">目前沒有已派代的代課節次</p>
-          <p className="text-slate-500 text-sm mt-1">待派代完成後，已派代的課程會顯示於此供填寫聯絡資訊。</p>
+          <p className="text-slate-500 text-sm mt-1">待派代完成後，可於此處加入並列印聯絡通知單。</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[900px]">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">請假老師</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">聯繫電話</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">代課老師</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">聯繫電話</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">日期</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">節次</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">科目／班級</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">教室</th>
-                  <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">備註</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((row, idx) => {
+        <>
+          <section className="mb-8 print:hidden">
+            <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <Plus size={16} /> 加入至通知單
+            </h2>
+            <p className="text-slate-500 text-sm mb-3">點「加入」後，該筆會出現在下方通知單並可列印。</p>
+            <ul className="space-y-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white p-3">
+              {availableRows.length === 0 ? (
+                <li className="text-slate-400 text-sm py-2">已全部加入；可從下方通知單移除後再重新加入。</li>
+              ) : (
+                availableRows.map((row) => (
+                  <li
+                    key={row.key}
+                    className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 text-sm"
+                  >
+                    <span className="text-slate-600">
+                      <span className="font-medium text-slate-800">{row.slot.date}</span>
+                      <span className="text-slate-400 mx-1">·</span>
+                      {periodLabel(row.slot.period)}
+                      <span className="text-slate-400 mx-1">·</span>
+                      {row.originalTeacherName} → {row.substituteTeacherName}
+                      <span className="text-slate-400 mx-1">·</span>
+                      {row.slot.subject} {row.slot.className}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => addToNotice(row.key)}
+                      className="shrink-0 text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center gap-1"
+                    >
+                      <Plus size={14} /> 加入
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+
+          {/* 通知單內容（僅顯示已添加，可列印） */}
+          <section className={addedRows.length === 0 ? 'print:hidden' : ''}>
+            <div className="flex items-center justify-between gap-4 mb-4 print:hidden">
+              <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                通知單（共 {addedRows.length} 筆）
+              </h2>
+              <button
+                type="button"
+                onClick={handlePrint}
+                disabled={addedRows.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Printer size={18} /> 列印雙方通知單
+              </button>
+            </div>
+
+            {addedRows.length === 0 ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-sm print:hidden">
+                尚未加入任何項目，請從上方「加入至通知單」加入後再列印。
+              </div>
+            ) : (
+              <div className="print-area space-y-6">
+                {addedRows.map((row) => {
                   const isEditingClassroom =
                     editingSlot?.recordId === row.recordId &&
                     editingSlot?.date === row.slot.date &&
                     editingSlot?.period === row.slot.period;
                   const isEditingNote = editingNoteRecordId === row.recordId;
-                  const isFirstSlotOfRecord =
-                    rows.findIndex((r) => r.recordId === row.recordId) === idx;
-
                   return (
-                    <tr key={`${row.recordId}_${row.slot.date}_${row.slot.period}`} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-slate-800 flex items-center gap-1.5">
-                          <User size={14} className="text-slate-400" />
-                          {row.originalTeacherName}
+                    <div
+                      key={row.key}
+                      className="bg-white border-2 border-slate-200 rounded-2xl shadow-sm overflow-hidden print:shadow-none print:break-inside-avoid"
+                    >
+                      <div className="flex justify-between items-start gap-2 p-3 bg-slate-50 border-b border-slate-200 print:bg-white print:border-b print:hidden">
+                        <span className="text-xs text-slate-500">
+                          {row.slot.date} {periodLabel(row.slot.period)} · {row.slot.subject} {row.slot.className}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 text-sm">
-                        <span className="flex items-center gap-1.5">
-                          <Phone size={12} className="text-slate-400" />
-                          {row.originalTeacherPhone}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-slate-800 flex items-center gap-1.5">
-                          <UserCheck size={14} className="text-indigo-500" />
-                          {row.substituteTeacherName}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 text-sm">
-                        <span className="flex items-center gap-1.5">
-                          <Phone size={12} className="text-slate-400" />
-                          {row.substituteTeacherPhone}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-sm text-slate-600">{row.slot.date}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{periodLabel(row.slot.period)}</td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-slate-800">{row.slot.subject}</span>
-                        <span className="text-slate-400 mx-1">/</span>
-                        <span className="text-slate-600">{row.slot.className}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {isEditingClassroom ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={tempClassroom}
-                              onChange={(e) => setTempClassroom(e.target.value)}
-                              placeholder="教室"
-                              className="w-28 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                              autoFocus
-                            />
-                            <button
-                              type="button"
-                              onClick={() => saveClassroom(row.recordId, row.slot.date, row.slot.period)}
-                              className="text-indigo-600 text-sm font-medium hover:underline"
-                            >
-                              儲存
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingSlot(null); setTempClassroom(''); }}
-                              className="text-slate-500 text-sm hover:underline"
-                            >
-                              取消
-                            </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFromNotice(row.key)}
+                          className="text-slate-400 hover:text-red-600 p-1"
+                          title="從通知單移除"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className="p-5 print:p-4">
+                        <h3 className="text-center font-bold text-slate-800 text-lg mb-4 print:text-base">
+                          代課聯絡通知單
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
+                          {/* 給請假老師 */}
+                          <div className="border border-slate-200 rounded-xl p-4 print:rounded-lg">
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給請假老師（{row.originalTeacherName}）</div>
+                            <p className="text-sm text-slate-600 mb-1">
+                              <strong>代課老師：</strong>{row.substituteTeacherName}
+                            </p>
+                            <p className="text-sm text-slate-600 mb-1 flex items-center gap-1">
+                              <Phone size={12} /> {row.substituteTeacherPhone}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-2">
+                              <strong>日期／節次：</strong>{row.slot.date} {periodLabel(row.slot.period)}
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              <strong>科目／班級：</strong>{row.slot.subject} · {row.slot.className}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-1">
+                              <strong>教室：</strong>
+                              {isEditingClassroom ? (
+                                <span className="inline-flex items-center gap-2 mt-1">
+                                  <input
+                                    type="text"
+                                    value={tempClassroom}
+                                    onChange={(e) => setTempClassroom(e.target.value)}
+                                    placeholder="教室"
+                                    className="w-28 px-2 py-1 border border-slate-300 rounded text-sm"
+                                    autoFocus
+                                  />
+                                  <button type="button" onClick={() => saveClassroom(row.recordId, row.slot.date, row.slot.period)} className="text-indigo-600 text-xs">儲存</button>
+                                  <button type="button" onClick={() => { setEditingSlot(null); setTempClassroom(''); }} className="text-slate-500 text-xs">取消</button>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditClassroom(row)}
+                                  className="inline-flex items-center gap-1 text-slate-600 hover:text-indigo-600 print:no-underline"
+                                >
+                                  <MapPin size={12} /> {row.slot.classroom?.trim() || '點擊填寫'}
+                                </button>
+                              )}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-1">
+                              <strong>備註：</strong>
+                              {isEditingNote ? (
+                                <span className="block mt-1">
+                                  <textarea
+                                    value={tempNote}
+                                    onChange={(e) => setTempNote(e.target.value)}
+                                    placeholder="教材、聯絡方式等"
+                                    rows={2}
+                                    className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
+                                    autoFocus
+                                  />
+                                  <span className="flex gap-2 mt-1">
+                                    <button type="button" onClick={() => saveNote(row.recordId)} className="text-indigo-600 text-xs">儲存</button>
+                                    <button type="button" onClick={() => { setEditingNoteRecordId(null); setTempNote(''); }} className="text-slate-500 text-xs">取消</button>
+                                  </span>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditNote(row.record)}
+                                  className="inline-flex items-start gap-1 text-left text-slate-600 hover:text-indigo-600 print:no-underline"
+                                >
+                                  <MessageSquare size={12} className="shrink-0 mt-0.5" />
+                                  <span>{row.record.contactNoteForSubstitute?.trim() || '點擊填寫'}</span>
+                                </button>
+                              )}
+                            </p>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => startEditClassroom(row)}
-                            className="flex items-center gap-1.5 text-left text-sm text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg px-2 py-1 -mx-2"
-                          >
-                            <MapPin size={14} className="text-slate-400 shrink-0" />
-                            {row.slot.classroom?.trim() || '點擊填寫'}
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 max-w-[200px]">
-                        {isFirstSlotOfRecord ? (
-                          isEditingNote ? (
-                            <div className="flex flex-col gap-2">
-                              <textarea
-                                value={tempNote}
-                                onChange={(e) => setTempNote(e.target.value)}
-                                placeholder="教材位置、聯絡方式等備註"
-                                rows={2}
-                                className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                autoFocus
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => saveNote(row.recordId)}
-                                  className="text-indigo-600 text-sm font-medium hover:underline"
-                                >
-                                  儲存
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => { setEditingNoteRecordId(null); setTempNote(''); }}
-                                  className="text-slate-500 text-sm hover:underline"
-                                >
-                                  取消
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => startEditNote(row.record)}
-                              className="flex items-start gap-1.5 text-left text-sm text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg px-2 py-1 -mx-2 w-full"
-                            >
-                              <MessageSquare size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                              <span className="line-clamp-2">{row.record.contactNoteForSubstitute?.trim() || '點擊填寫備註'}</span>
-                            </button>
-                          )
-                        ) : (
-                          <span className="text-slate-400 text-sm">—</span>
-                        )}
-                      </td>
-                    </tr>
+                          {/* 給代課老師 */}
+                          <div className="border border-slate-200 rounded-xl p-4 print:rounded-lg">
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給代課老師（{row.substituteTeacherName}）</div>
+                            <p className="text-sm text-slate-600 mb-1">
+                              <strong>請假老師：</strong>{row.originalTeacherName}
+                            </p>
+                            <p className="text-sm text-slate-600 mb-1 flex items-center gap-1">
+                              <Phone size={12} /> {row.originalTeacherPhone}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-2">
+                              <strong>日期／節次：</strong>{row.slot.date} {periodLabel(row.slot.period)}
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              <strong>科目／班級：</strong>{row.slot.subject} · {row.slot.className}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-1">
+                              <strong>教室：</strong>{row.slot.classroom?.trim() || '—'}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-1">
+                              <strong>備註：</strong>{row.record.contactNoteForSubstitute?.trim() || '—'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </div>
+            )}
+          </section>
+        </>
       )}
 
-      <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-600">
+      <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-600 print:hidden">
         <p className="font-medium text-slate-700 mb-1">說明</p>
         <ul className="list-disc pl-5 space-y-0.5">
-          <li>聯繫電話取自「教師管理」中該教師的電話欄位，請於教師管理維護。</li>
-          <li>教室、備註可直接在表格中點擊填寫，供代課老師與請假老師對照使用。</li>
+          <li>僅顯示您「加入至通知單」的項目，介面簡潔。列印時僅輸出已加入的通知單。</li>
+          <li>聯繫電話取自「教師管理」；教室、備註可於通知單上直接點擊填寫。</li>
         </ul>
       </div>
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+          .print-area .print\\:break-inside-avoid { break-inside: avoid; }
+          .print-area .print\\:shadow-none { box-shadow: none; }
+          .print-area .print\\:bg-white { background: white; }
+        }
+      `}</style>
     </div>
   );
 }
