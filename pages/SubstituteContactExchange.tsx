@@ -63,51 +63,123 @@ export default function SubstituteContactExchange() {
     return out.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || String(a.slot.period).localeCompare(String(b.slot.period)));
   }, [records, teachers]);
 
+  const today = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
   const monthFilteredRows = useMemo(
-    () => allRows.filter((r) => r.slot.date.startsWith(selectedMonth)),
-    [allRows, selectedMonth]
+    () => allRows.filter((r) => r.slot.date.startsWith(selectedMonth) && r.slot.date >= today),
+    [allRows, selectedMonth, today]
   );
 
-  const availableRows = useMemo(
-    () => monthFilteredRows.filter((r) => !addedKeys.has(r.key)),
-    [monthFilteredRows, addedKeys]
+  type ContactGroup = {
+    groupKey: string;
+    date: string;
+    record: LeaveRecord;
+    originalTeacherName: string;
+    originalTeacherPhone: string;
+    substituteTeacherName: string;
+    substituteTeacherPhone: string;
+    rows: ContactRow[];
+  };
+
+  const monthFilteredGroups = useMemo((): ContactGroup[] => {
+    const map = new Map<string, ContactRow[]>();
+    monthFilteredRows.forEach((row) => {
+      const gk = `${row.recordId}_${row.slot.substituteTeacherId}_${row.slot.date}`;
+      if (!map.has(gk)) map.set(gk, []);
+      map.get(gk)!.push(row);
+    });
+    return Array.from(map.entries()).map(([groupKey, rows]) => {
+      const r = rows[0];
+      return {
+        groupKey,
+        date: r.slot.date,
+        record: r.record,
+        originalTeacherName: r.originalTeacherName,
+        originalTeacherPhone: r.originalTeacherPhone,
+        substituteTeacherName: r.substituteTeacherName,
+        substituteTeacherPhone: r.substituteTeacherPhone,
+        rows: rows.sort((a, b) => String(a.slot.period).localeCompare(String(b.slot.period))),
+      };
+    });
+  }, [monthFilteredRows]);
+
+  const availableGroups = useMemo(
+    () => monthFilteredGroups.filter((g) => g.rows.some((r) => !addedKeys.has(r.key))),
+    [monthFilteredGroups, addedKeys]
   );
 
   const keywordLower = searchKeyword.trim().toLowerCase();
-  const filteredAvailableRows = useMemo(() => {
-    if (!keywordLower) return availableRows;
-    return availableRows.filter((row) => {
+  const filteredAvailableGroups = useMemo(() => {
+    if (!keywordLower) return availableGroups;
+    return availableGroups.filter((g) => {
       const text = [
-        row.slot.date,
-        row.slot.period,
-        row.originalTeacherName,
-        row.substituteTeacherName,
-        row.slot.subject,
-        row.slot.className,
+        g.date,
+        g.rows.map((r) => r.slot.period).join(' '),
+        g.originalTeacherName,
+        g.substituteTeacherName,
+        g.rows.map((r) => r.slot.subject).join(' '),
+        g.rows.map((r) => r.slot.className).join(' '),
       ].join(' ').toLowerCase();
       return text.includes(keywordLower);
     });
-  }, [availableRows, keywordLower]);
+  }, [availableGroups, keywordLower]);
+
+  const addGroupToNotice = (group: ContactGroup) =>
+    setAddedKeys((prev) => {
+      const next = new Set(prev);
+      group.rows.forEach((r) => next.add(r.key));
+      return next;
+    });
 
   const addedRows = useMemo(() => allRows.filter((r) => addedKeys.has(r.key)), [allRows, addedKeys]);
+
+  const addedGroups = useMemo((): ContactGroup[] => {
+    const map = new Map<string, ContactRow[]>();
+    addedRows.forEach((row) => {
+      const gk = `${row.recordId}_${row.slot.substituteTeacherId}_${row.slot.date}`;
+      if (!map.has(gk)) map.set(gk, []);
+      map.get(gk)!.push(row);
+    });
+    return Array.from(map.entries()).map(([groupKey, rows]) => {
+      const r = rows[0];
+      return {
+        groupKey,
+        date: r.slot.date,
+        record: r.record,
+        originalTeacherName: r.originalTeacherName,
+        originalTeacherPhone: r.originalTeacherPhone,
+        substituteTeacherName: r.substituteTeacherName,
+        substituteTeacherPhone: r.substituteTeacherPhone,
+        rows: rows.sort((a, b) => String(a.slot.period).localeCompare(String(b.slot.period))),
+      };
+    });
+  }, [addedRows]);
+
   const noticeKeywordLower = noticeSearchKeyword.trim().toLowerCase();
-  const filteredAddedRows = useMemo(() => {
-    if (!noticeKeywordLower) return addedRows;
-    return addedRows.filter((row) => {
+  const filteredAddedGroups = useMemo(() => {
+    if (!noticeKeywordLower) return addedGroups;
+    return addedGroups.filter((g) => {
       const text = [
-        row.slot.date,
-        row.slot.period,
-        row.originalTeacherName,
-        row.substituteTeacherName,
-        row.slot.subject,
-        row.slot.className,
+        g.date,
+        g.rows.map((r) => r.slot.period).join(' '),
+        g.originalTeacherName,
+        g.substituteTeacherName,
+        g.rows.map((r) => r.slot.subject).join(' '),
+        g.rows.map((r) => r.slot.className).join(' '),
       ].join(' ').toLowerCase();
       return text.includes(noticeKeywordLower);
     });
-  }, [addedRows, noticeKeywordLower]);
+  }, [addedGroups, noticeKeywordLower]);
 
-  const addToNotice = (key: string) => setAddedKeys((prev) => new Set(prev).add(key));
-  const removeFromNotice = (key: string) => setAddedKeys((prev) => { const n = new Set(prev); n.delete(key); return n; });
+  const removeGroupFromNotice = (group: ContactGroup) =>
+    setAddedKeys((prev) => {
+      const next = new Set(prev);
+      group.rows.forEach((r) => next.delete(r.key));
+      return next;
+    });
 
   const saveClassroom = (recordId: string, date: string, period: string) => {
     const record = records.find((r) => r.id === recordId);
@@ -195,7 +267,7 @@ export default function SubstituteContactExchange() {
                 </button>
               </div>
               <span className="text-slate-500 text-sm">
-                {selectedMonth} 共 {monthFilteredRows.length} 筆已派代
+                {selectedMonth} 共 {monthFilteredGroups.length} 筆（同一老師同一天一筆，僅顯示今日及之後）
               </span>
             </div>
             <p className="text-slate-500 text-sm mb-3">點「加入」後，該筆會出現在下方通知單並可列印。</p>
@@ -210,35 +282,35 @@ export default function SubstituteContactExchange() {
               />
               {searchKeyword.trim() && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                  共 {filteredAvailableRows.length} 筆
+                  共 {filteredAvailableGroups.length} 筆
                 </span>
               )}
             </div>
             <ul className="space-y-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white p-3">
-              {monthFilteredRows.length === 0 ? (
+              {monthFilteredGroups.length === 0 ? (
                 <li className="text-slate-400 text-sm py-2">此月份沒有已派代的代課節次，請切換其他年月。</li>
-              ) : availableRows.length === 0 ? (
+              ) : availableGroups.length === 0 ? (
                 <li className="text-slate-400 text-sm py-2">此月份已全部加入；可從下方通知單移除後再重新加入。</li>
-              ) : filteredAvailableRows.length === 0 ? (
+              ) : filteredAvailableGroups.length === 0 ? (
                 <li className="text-slate-400 text-sm py-2">沒有符合「{searchKeyword.trim()}」的項目。</li>
               ) : (
-                filteredAvailableRows.map((row) => (
+                filteredAvailableGroups.map((group) => (
                   <li
-                    key={row.key}
+                    key={group.groupKey}
                     className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 text-sm"
                   >
                     <span className="text-slate-600">
-                      <span className="font-medium text-slate-800">{row.slot.date}</span>
+                      <span className="font-medium text-slate-800">{group.date}</span>
                       <span className="text-slate-400 mx-1">·</span>
-                      {periodLabel(row.slot.period)}
+                      {group.rows.map((r) => periodLabel(r.slot.period)).join('、')}
                       <span className="text-slate-400 mx-1">·</span>
-                      {row.originalTeacherName} → {row.substituteTeacherName}
+                      {group.originalTeacherName} → {group.substituteTeacherName}
                       <span className="text-slate-400 mx-1">·</span>
-                      {row.slot.subject} {row.slot.className}
+                      {group.rows.length} 節
                     </span>
                     <button
                       type="button"
-                      onClick={() => addToNotice(row.key)}
+                      onClick={() => addGroupToNotice(group)}
                       className="shrink-0 text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center gap-1"
                     >
                       <Plus size={14} /> 加入
@@ -254,9 +326,9 @@ export default function SubstituteContactExchange() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 print:hidden">
               <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
-                  通知單（共 {addedRows.length} 筆）
+                  通知單（共 {addedGroups.length} 筆）
                 </h2>
-                {addedRows.length > 0 && (
+                {addedGroups.length > 0 && (
                   <div className="relative flex-1 min-w-[180px] max-w-xs">
                     <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -272,37 +344,45 @@ export default function SubstituteContactExchange() {
               <button
                 type="button"
                 onClick={handlePrint}
-                disabled={addedRows.length === 0}
+                disabled={addedGroups.length === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Printer size={18} /> 列印雙方通知單
               </button>
             </div>
 
-            {addedRows.length === 0 ? (
+            {addedGroups.length === 0 ? (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-sm print:hidden">
                 尚未加入任何項目，請從上方「加入至通知單」加入後再列印。
               </div>
             ) : (
               <div className="print-area space-y-6">
-                {(noticeKeywordLower ? filteredAddedRows : addedRows).map((row) => {
+                {(noticeKeywordLower ? filteredAddedGroups : addedGroups).map((group) => {
+                  const first = group.rows[0];
                   const isEditingClassroom =
-                    editingSlot?.recordId === row.recordId &&
-                    editingSlot?.date === row.slot.date &&
-                    editingSlot?.period === row.slot.period;
-                  const isEditingNote = editingNoteRecordId === row.recordId;
+                    editingSlot?.recordId === first.recordId &&
+                    editingSlot?.date === first.slot.date &&
+                    editingSlot?.period === first.slot.period;
+                  const isEditingNote = editingNoteRecordId === group.record.id;
+                  const periodsText = group.rows.map((r) => periodLabel(r.slot.period)).join('、');
+                  const subjectClassText = group.rows.length === 1
+                    ? `${first.slot.subject} · ${first.slot.className}`
+                    : `${first.slot.subject} · ${first.slot.className} 等${group.rows.length}節`;
+                  const classroomDisplay = group.rows.length === 1
+                    ? (first.slot.classroom?.trim() || '—')
+                    : (first.slot.classroom?.trim() || '—');
                   return (
                     <div
-                      key={row.key}
+                      key={group.groupKey}
                       className="bg-white border-2 border-slate-200 rounded-2xl shadow-sm overflow-hidden print:shadow-none print:break-inside-avoid"
                     >
                       <div className="flex justify-between items-start gap-2 p-3 bg-slate-50 border-b border-slate-200 print:bg-white print:border-b print:hidden">
                         <span className="text-xs text-slate-500">
-                          {row.slot.date} {periodLabel(row.slot.period)} · {row.slot.subject} {row.slot.className}
+                          {group.date} {periodsText} · {group.originalTeacherName} → {group.substituteTeacherName}（{group.rows.length} 節）
                         </span>
                         <button
                           type="button"
-                          onClick={() => removeFromNotice(row.key)}
+                          onClick={() => removeGroupFromNotice(group)}
                           className="text-slate-400 hover:text-red-600 p-1"
                           title="從通知單移除"
                         >
@@ -314,20 +394,19 @@ export default function SubstituteContactExchange() {
                           代課聯絡通知單
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
-                          {/* 給請假老師 */}
                           <div className="border border-slate-200 rounded-xl p-4 print:rounded-lg">
-                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給請假老師（{row.originalTeacherName}）</div>
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給請假老師（{group.originalTeacherName}）</div>
                             <p className="text-sm text-slate-600 mb-1">
-                              <strong>代課老師：</strong>{row.substituteTeacherName}
+                              <strong>代課老師：</strong>{group.substituteTeacherName}
                             </p>
                             <p className="text-sm text-slate-600 mb-1 flex items-center gap-1">
-                              <Phone size={12} /> {row.substituteTeacherPhone}
+                              <Phone size={12} /> {group.substituteTeacherPhone}
                             </p>
                             <p className="text-sm text-slate-600 mt-2">
-                              <strong>日期／節次：</strong>{row.slot.date} {periodLabel(row.slot.period)}
+                              <strong>日期／節次：</strong>{group.date} {periodsText}
                             </p>
                             <p className="text-sm text-slate-600">
-                              <strong>科目／班級：</strong>{row.slot.subject} · {row.slot.className}
+                              <strong>科目／班級：</strong>{subjectClassText}
                             </p>
                             <p className="text-sm text-slate-600 mt-1">
                               <strong>教室：</strong>
@@ -341,16 +420,16 @@ export default function SubstituteContactExchange() {
                                     className="w-28 px-2 py-1 border border-slate-300 rounded text-sm"
                                     autoFocus
                                   />
-                                  <button type="button" onClick={() => saveClassroom(row.recordId, row.slot.date, row.slot.period)} className="text-indigo-600 text-xs">儲存</button>
+                                  <button type="button" onClick={() => saveClassroom(first.recordId, first.slot.date, first.slot.period)} className="text-indigo-600 text-xs">儲存</button>
                                   <button type="button" onClick={() => { setEditingSlot(null); setTempClassroom(''); }} className="text-slate-500 text-xs">取消</button>
                                 </span>
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => startEditClassroom(row)}
+                                  onClick={() => startEditClassroom(first)}
                                   className="inline-flex items-center gap-1 text-slate-600 hover:text-indigo-600 print:no-underline"
                                 >
-                                  <MapPin size={12} /> {row.slot.classroom?.trim() || '點擊填寫'}
+                                  <MapPin size={12} /> {first.slot.classroom?.trim() || '點擊填寫'}
                                 </button>
                               )}
                             </p>
@@ -367,42 +446,41 @@ export default function SubstituteContactExchange() {
                                     autoFocus
                                   />
                                   <span className="flex gap-2 mt-1">
-                                    <button type="button" onClick={() => saveNote(row.recordId)} className="text-indigo-600 text-xs">儲存</button>
+                                    <button type="button" onClick={() => saveNote(group.record.id)} className="text-indigo-600 text-xs">儲存</button>
                                     <button type="button" onClick={() => { setEditingNoteRecordId(null); setTempNote(''); }} className="text-slate-500 text-xs">取消</button>
                                   </span>
                                 </span>
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => startEditNote(row.record)}
+                                  onClick={() => startEditNote(group.record)}
                                   className="inline-flex items-start gap-1 text-left text-slate-600 hover:text-indigo-600 print:no-underline"
                                 >
                                   <MessageSquare size={12} className="shrink-0 mt-0.5" />
-                                  <span>{row.record.contactNoteForSubstitute?.trim() || '點擊填寫'}</span>
+                                  <span>{group.record.contactNoteForSubstitute?.trim() || '點擊填寫'}</span>
                                 </button>
                               )}
                             </p>
                           </div>
-                          {/* 給代課老師 */}
                           <div className="border border-slate-200 rounded-xl p-4 print:rounded-lg">
-                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給代課老師（{row.substituteTeacherName}）</div>
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">給代課老師（{group.substituteTeacherName}）</div>
                             <p className="text-sm text-slate-600 mb-1">
-                              <strong>請假老師：</strong>{row.originalTeacherName}
+                              <strong>請假老師：</strong>{group.originalTeacherName}
                             </p>
                             <p className="text-sm text-slate-600 mb-1 flex items-center gap-1">
-                              <Phone size={12} /> {row.originalTeacherPhone}
+                              <Phone size={12} /> {group.originalTeacherPhone}
                             </p>
                             <p className="text-sm text-slate-600 mt-2">
-                              <strong>日期／節次：</strong>{row.slot.date} {periodLabel(row.slot.period)}
+                              <strong>日期／節次：</strong>{group.date} {periodsText}
                             </p>
                             <p className="text-sm text-slate-600">
-                              <strong>科目／班級：</strong>{row.slot.subject} · {row.slot.className}
+                              <strong>科目／班級：</strong>{subjectClassText}
                             </p>
                             <p className="text-sm text-slate-600 mt-1">
-                              <strong>教室：</strong>{row.slot.classroom?.trim() || '—'}
+                              <strong>教室：</strong>{classroomDisplay}
                             </p>
                             <p className="text-sm text-slate-600 mt-1">
-                              <strong>備註：</strong>{row.record.contactNoteForSubstitute?.trim() || '—'}
+                              <strong>備註：</strong>{group.record.contactNoteForSubstitute?.trim() || '—'}
                             </p>
                           </div>
                         </div>
