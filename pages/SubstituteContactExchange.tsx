@@ -4,7 +4,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer, Search } from 'lucide-react';
+import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LeaveRecord, TimetableSlot } from '../types';
 
 interface ContactRow {
@@ -20,6 +20,12 @@ interface ContactRow {
 
 const getDefaultMonth = () => {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const addMonths = (ym: string, delta: number): string => {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
@@ -160,16 +166,34 @@ export default function SubstituteContactExchange() {
             <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 flex items-center gap-2">
               <Plus size={16} /> 加入至通知單
             </h2>
-            <div className="flex flex-wrap items-center gap-4 mb-3">
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <span>篩選年月：</span>
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                />
-              </label>
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              <div className="flex items-center gap-1 border border-slate-200 rounded-lg overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(addMonths(selectedMonth, -1))}
+                  className="p-2 text-slate-600 hover:bg-slate-100 transition-colors"
+                  title="上一個月"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <label className="flex items-center border-x border-slate-200">
+                  <span className="sr-only">篩選年月</span>
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none min-w-[140px]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
+                  className="p-2 text-slate-600 hover:bg-slate-100 transition-colors"
+                  title="下一個月"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
               <span className="text-slate-500 text-sm">
                 {selectedMonth} 共 {monthFilteredRows.length} 筆已派代
               </span>
