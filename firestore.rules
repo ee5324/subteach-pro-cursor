@@ -19,15 +19,18 @@ service cloud.firestore {
       return isWhitelisted()
         && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.role == 'admin';
     }
-    // 首次登入：尚未建立白名單 init 時，任一已驗證 Email 使用者可暫時存取，並由 App 寫入白名單
+    // 首次登入：尚未建立白名單 init 時，任一有 Email 的登入者暫可存取，由 App 寫入白名單（不要求 email_verified，避免 Google 登入後 token 延遲）
     function isFirstLoginBootstrap() {
       return request.auth != null
         && request.auth.token.email != null
-        && request.auth.token.email_verified == true
         && !exists(/databases/$(database)/documents/system/subteach_whitelist_init);
     }
+    // 指定管理員 Email，無條件通過（白名單遺失或 init 已存在時仍可登入）
+    function isDesignatedSubteachAdmin() {
+      return request.auth != null && request.auth.token.email == 'y.chengju@gmail.com';
+    }
     function canAccessSubteach() {
-      return isWhitelisted() || isFirstLoginBootstrap();
+      return isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin();
     }
 
     function isEduTrackAllowedUser() {
@@ -99,9 +102,9 @@ service cloud.firestore {
       allow write: if canAccessSubteach();
     }
     match /subteach_allowed_users/{email} {
-      allow read: if (isWhitelisted() || isFirstLoginBootstrap()) && (request.auth.token.email == email || isSubteachAdmin());
-      allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin();
-      allow update, delete: if isSubteachAdmin();
+      allow read: if (isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin()) && (request.auth.token.email == email || isSubteachAdmin() || isDesignatedSubteachAdmin());
+      allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin() || isDesignatedSubteachAdmin();
+      allow update, delete: if isSubteachAdmin() || isDesignatedSubteachAdmin();
     }
 
     // =========================================================

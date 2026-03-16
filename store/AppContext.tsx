@@ -148,7 +148,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [loading, setLoading] = useState(true);
 
-  const isSubteachAdmin = Boolean(currentUser?.email && subteachAllowedUsers.find(u => u.email === currentUser?.email)?.role === 'admin');
+  const isSubteachAdmin = Boolean(
+    currentUser?.email && (
+      subteachAllowedUsers.find(u => u.email === currentUser?.email)?.role === 'admin' ||
+      currentUser.email === 'y.chengju@gmail.com' // 指定管理員，規則與 firestore.rules 一致
+    )
+  );
 
   // --- Auth Listener ---
   useEffect(() => {
@@ -191,26 +196,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setNotAllowed(false);
     const unsubs: (() => void)[] = [];
 
-    // 首次登入：若尚未建立白名單，將目前 Google 帳號寫入為管理員（規則允許 isFirstLoginBootstrap 時寫入）
-    (async () => {
-      if (!currentUser?.email || !currentUser.emailVerified) return;
-      const initRef = doc(db, 'system', 'subteach_whitelist_init');
-      try {
-        const initSnap = await getDoc(initRef);
-        if (initSnap.exists()) return;
-        await setDoc(initRef, sanitizeForFirestore({ initialized: true, createdAt: Date.now() }));
-        await setDoc(doc(db, 'subteach_allowed_users', currentUser.email), sanitizeForFirestore({
-          email: currentUser.email,
-          enabled: true,
-          role: 'admin',
-          updatedAt: Date.now()
-        }));
-      } catch (e) {
-        console.warn('First-login bootstrap failed', e);
+    // 首次登入：先執行 bootstrap 再訂閱，避免競態。有 Email 就嘗試寫入（規則已不要求 email_verified）
+    const runBootstrapThenSubscriptions = async () => {
+      if (currentUser?.email) {
+        const initRef = doc(db, 'system', 'subteach_whitelist_init');
+        try {
+          const initSnap = await getDoc(initRef);
+          if (!initSnap.exists()) {
+            await setDoc(initRef, sanitizeForFirestore({ initialized: true, createdAt: Date.now() }));
+            await setDoc(doc(db, 'subteach_allowed_users', currentUser.email), sanitizeForFirestore({
+              email: currentUser.email,
+              enabled: true,
+              role: 'admin',
+              updatedAt: Date.now()
+            }));
+          }
+        } catch (e) {
+          console.warn('First-login bootstrap failed', e);
+        }
       }
-    })();
 
-    // Teachers（若權限不足會觸發 error，表示未在白名單內）
+      // Teachers（若權限不足會觸發 error，表示未在白名單內）
     unsubs.push(onSnapshot(
       collection(db, 'teachers'),
       (snap) => {
@@ -327,7 +333,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }));
     }));
 
-    setLoading(false);
+      setLoading(false);
+    };
+    runBootstrapThenSubscriptions();
 
     return () => {
       unsubs.forEach(unsub => unsub());

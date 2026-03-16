@@ -75,6 +75,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
         <div className="bg-white rounded-xl shadow-md border border-slate-200 p-8 max-w-md text-center">
           <h1 className="text-xl font-bold text-slate-800 mb-3">無法使用本系統</h1>
           <p className="text-slate-600 mb-6">您沒有權限使用本系統，請聯絡管理員將您的帳號加入白名單。</p>
+          <p className="text-sm text-slate-500 mb-4">若為首次使用或管理員，請確認以 <strong>Google 登入</strong>（非匿名），重新整理頁面後再試。</p>
           <button
             type="button"
             onClick={() => signOut(auth)}
