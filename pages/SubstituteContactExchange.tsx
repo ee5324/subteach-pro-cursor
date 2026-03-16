@@ -4,7 +4,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer } from 'lucide-react';
+import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer, Search } from 'lucide-react';
 import { LeaveRecord, TimetableSlot } from '../types';
 
 interface ContactRow {
@@ -21,6 +21,8 @@ interface ContactRow {
 export default function SubstituteContactExchange() {
   const { records, teachers, updateRecord } = useAppStore();
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('');
   const [editingSlot, setEditingSlot] = useState<{ recordId: string; date: string; period: string } | null>(null);
   const [editingNoteRecordId, setEditingNoteRecordId] = useState<string | null>(null);
   const [tempClassroom, setTempClassroom] = useState('');
@@ -50,7 +52,39 @@ export default function SubstituteContactExchange() {
   }, [records, teachers]);
 
   const availableRows = useMemo(() => allRows.filter((r) => !addedKeys.has(r.key)), [allRows, addedKeys]);
+
+  const keywordLower = searchKeyword.trim().toLowerCase();
+  const filteredAvailableRows = useMemo(() => {
+    if (!keywordLower) return availableRows;
+    return availableRows.filter((row) => {
+      const text = [
+        row.slot.date,
+        row.slot.period,
+        row.originalTeacherName,
+        row.substituteTeacherName,
+        row.slot.subject,
+        row.slot.className,
+      ].join(' ').toLowerCase();
+      return text.includes(keywordLower);
+    });
+  }, [availableRows, keywordLower]);
+
   const addedRows = useMemo(() => allRows.filter((r) => addedKeys.has(r.key)), [allRows, addedKeys]);
+  const noticeKeywordLower = noticeSearchKeyword.trim().toLowerCase();
+  const filteredAddedRows = useMemo(() => {
+    if (!noticeKeywordLower) return addedRows;
+    return addedRows.filter((row) => {
+      const text = [
+        row.slot.date,
+        row.slot.period,
+        row.originalTeacherName,
+        row.substituteTeacherName,
+        row.slot.subject,
+        row.slot.className,
+      ].join(' ').toLowerCase();
+      return text.includes(noticeKeywordLower);
+    });
+  }, [addedRows, noticeKeywordLower]);
 
   const addToNotice = (key: string) => setAddedKeys((prev) => new Set(prev).add(key));
   const removeFromNotice = (key: string) => setAddedKeys((prev) => { const n = new Set(prev); n.delete(key); return n; });
@@ -113,11 +147,28 @@ export default function SubstituteContactExchange() {
               <Plus size={16} /> 加入至通知單
             </h2>
             <p className="text-slate-500 text-sm mb-3">點「加入」後，該筆會出現在下方通知單並可列印。</p>
+            <div className="relative mb-3">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                placeholder="搜尋日期、節次、請假老師、代課老師、科目、班級..."
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              />
+              {searchKeyword.trim() && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                  共 {filteredAvailableRows.length} 筆
+                </span>
+              )}
+            </div>
             <ul className="space-y-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-white p-3">
               {availableRows.length === 0 ? (
                 <li className="text-slate-400 text-sm py-2">已全部加入；可從下方通知單移除後再重新加入。</li>
+              ) : filteredAvailableRows.length === 0 ? (
+                <li className="text-slate-400 text-sm py-2">沒有符合「{searchKeyword.trim()}」的項目。</li>
               ) : (
-                availableRows.map((row) => (
+                filteredAvailableRows.map((row) => (
                   <li
                     key={row.key}
                     className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 text-sm"
@@ -146,10 +197,24 @@ export default function SubstituteContactExchange() {
 
           {/* 通知單內容（僅顯示已添加，可列印） */}
           <section className={addedRows.length === 0 ? 'print:hidden' : ''}>
-            <div className="flex items-center justify-between gap-4 mb-4 print:hidden">
-              <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
-                通知單（共 {addedRows.length} 筆）
-              </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 print:hidden">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                  通知單（共 {addedRows.length} 筆）
+                </h2>
+                {addedRows.length > 0 && (
+                  <div className="relative flex-1 min-w-[180px] max-w-xs">
+                    <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={noticeSearchKeyword}
+                      onChange={(e) => setNoticeSearchKeyword(e.target.value)}
+                      placeholder="搜尋通知單..."
+                      className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handlePrint}
@@ -166,7 +231,7 @@ export default function SubstituteContactExchange() {
               </div>
             ) : (
               <div className="print-area space-y-6">
-                {addedRows.map((row) => {
+                {(noticeKeywordLower ? filteredAddedRows : addedRows).map((row) => {
                   const isEditingClassroom =
                     editingSlot?.recordId === row.recordId &&
                     editingSlot?.date === row.slot.date &&
