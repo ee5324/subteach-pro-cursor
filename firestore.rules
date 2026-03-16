@@ -2,50 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ========== 既有系統：管理員與登入判斷 ==========
-    function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'y.chengju@gmail.com';
-    }
-    function isAuth() {
+    // 輔助函式：檢查使用者是否已登入 (包含 Email 登入與匿名登入)
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // 系統設定：所有人可讀 (為了維護遮罩)，僅管理員可寫
-    match /config/system {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    // 學生名單：所有人可讀 (登入驗證用)，僅管理員可寫
-    match /students/{docId} {
-      allow read: if isAuth();
-      allow write: if isAdmin();
-    }
-    // 交易紀錄：學生可讀取自己的 (透過 query)，管理員可全讀寫
-    match /transactions/{docId} {
-      allow read: if isAuth();
-      allow write: if isAdmin();
-    }
-    // 獎品資訊：學生可 update 扣庫存，管理員可全權處理
-    match /prizes/{docId} {
-      allow read: if isAuth();
-      allow update: if isAuth();
-      allow write: if isAdmin();
-    }
-    // 分數提報：學生可新增，管理員可審核
-    match /submissions/{docId} {
-      allow create: if isAuth();
-      allow read, update, delete: if isAdmin();
-      allow read: if isAuth() && resource.data.studentName == request.query.studentName;
-    }
-    // 預約紀錄：學生可新增與讀取自己的，管理員可處理
-    match /reservations/{docId} {
-      allow create: if isAuth();
-      allow read, update: if isAuth();
-      allow delete: if isAdmin();
-    }
-
-    // ========== 代課系統 (Subteach)：白名單制 ==========
-    // 須為 Email 登入且已驗證，且列於 subteach_allowed_users 且 enabled
+    // 代課系統白名單：須為 Email 登入且已驗證，且列於 subteach_allowed_users 且 enabled
     function isWhitelisted() {
       return request.auth != null
         && request.auth.token.email != null
@@ -57,64 +19,134 @@ service cloud.firestore {
       return isWhitelisted()
         && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.role == 'admin';
     }
+    // 首次登入：尚未建立白名單 init 時，任一已驗證 Email 使用者可暫時存取，並由 App 寫入白名單
+    function isFirstLoginBootstrap() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && !exists(/databases/$(database)/documents/system/subteach_whitelist_init);
+    }
+    function canAccessSubteach() {
+      return isWhitelisted() || isFirstLoginBootstrap();
+    }
 
+    function isEduTrackAllowedUser() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.enabled == true;
+    }
+
+    function isEduTrackAdmin() {
+      return isEduTrackAllowedUser()
+        && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.role == 'admin';
+    }
+
+    // =========================================================
+    // 代課系統 (Subteach)：白名單制；首次登入者自動取得權限並寫入白名單
+    // =========================================================
     match /teachers/{teacherId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /records/{recordId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /overtimeRecords/{recordId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /specialActivities/{activityId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /salaryGrades/{gradeId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /fixedOvertimeConfig/{configId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /gradeEvents/{eventId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /semesters/{semesterId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /subPool/{teacherId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /languagePayrolls/{payrollId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
-    // 代課系統專用 system 集合 (settings, holidays, metadata)，與既有 /config/system 不同
     match /system/{docId} {
-      allow read, write: if isWhitelisted();
+      allow read, write: if canAccessSubteach();
     }
     match /substituteApplications/{appId} {
       allow create: if true;
-      allow read, update, delete: if isWhitelisted();
+      allow read, update, delete: if canAccessSubteach();
     }
     match /publicBoard/{docId} {
       allow read: if true;
-      allow write: if isWhitelisted();
+      allow write: if canAccessSubteach();
     }
     match /publicBoardApplications/{appId} {
       allow create: if true;
-      allow read, update, delete: if isWhitelisted();
+      allow read, update, delete: if canAccessSubteach();
     }
     match /teacherLeaveRequests/{requestId} {
       allow create: if true;
-      allow read, update, delete: if isWhitelisted();
+      allow read, update, delete: if canAccessSubteach();
     }
     match /publicTeacherSchedules/{teacherName} {
       allow read: if true;
-      allow write: if isWhitelisted();
+      allow write: if canAccessSubteach();
     }
     match /subteach_allowed_users/{email} {
-      allow read: if isWhitelisted() && (request.auth.token.email == email || isSubteachAdmin());
-      allow create, update, delete: if isSubteachAdmin();
+      allow read: if (isWhitelisted() || isFirstLoginBootstrap()) && (request.auth.token.email == email || isSubteachAdmin());
+      allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin();
+      allow update, delete: if isSubteachAdmin();
+    }
+
+    // =========================================================
+    // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
+    // =========================================================
+    match /edutrack_courses/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_students/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_awards/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_vendors/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_archive/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_todos/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_exam_papers/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_exam_paper_folders/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_exam_paper_checks/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_language_elective/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_allowed_users/{email} {
+      allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
+      allow create, update, delete: if isEduTrackAdmin();
+    }
+
+    // =========================================================
+    // 預設規則
+    // =========================================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

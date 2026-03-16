@@ -191,6 +191,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setNotAllowed(false);
     const unsubs: (() => void)[] = [];
 
+    // 首次登入：若尚未建立白名單，將目前 Google 帳號寫入為管理員（規則允許 isFirstLoginBootstrap 時寫入）
+    (async () => {
+      if (!currentUser?.email || !currentUser.emailVerified) return;
+      const initRef = doc(db, 'system', 'subteach_whitelist_init');
+      try {
+        const initSnap = await getDoc(initRef);
+        if (initSnap.exists()) return;
+        await setDoc(initRef, sanitizeForFirestore({ initialized: true, createdAt: Date.now() }));
+        await setDoc(doc(db, 'subteach_allowed_users', currentUser.email), sanitizeForFirestore({
+          email: currentUser.email,
+          enabled: true,
+          role: 'admin',
+          updatedAt: Date.now()
+        }));
+      } catch (e) {
+        console.warn('First-login bootstrap failed', e);
+      }
+    })();
+
     // Teachers（若權限不足會觸發 error，表示未在白名單內）
     unsubs.push(onSnapshot(
       collection(db, 'teachers'),

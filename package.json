@@ -13,8 +13,9 @@
     "gas:deploy": "clasp deploy --description \"自動部署\"",
     "push": "node scripts/push-with-gas.cjs",
     "push:full": "npm run gas:push && npm run gas:deploy && git push",
-    "firebase:deploy": "npx firebase deploy --only firestore",
-    "firebase:login": "FIREBASE_CLI_UPDATE_CHECK=false npx firebase login"
+    "firebase:deploy": "npx firebase-tools deploy --only firestore",
+    "firebase:deploy:rules": "npx firebase-tools deploy --only firestore:rules",
+    "firebase:login": "FIREBASE_CLI_UPDATE_CHECK=false npx firebase-tools login"
   },
   "dependencies": {
     "firebase": "^12.10.0",
@@ -26,9 +27,9 @@
   },
   "devDependencies": {
     "@google/clasp": "^3.0.2",
-    "firebase-tools": "^13.0.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "firebase-tools": "^13.35.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
