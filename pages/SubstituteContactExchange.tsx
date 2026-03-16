@@ -374,7 +374,7 @@ export default function SubstituteContactExchange() {
                   return (
                     <div
                       key={group.groupKey}
-                      className="bg-white border-2 border-slate-200 rounded-2xl shadow-sm overflow-hidden print:shadow-none print:break-inside-avoid"
+                      className="a4-notice bg-white border-2 border-slate-200 rounded-2xl shadow-sm overflow-hidden print:shadow-none print:break-inside-avoid"
                     >
                       <div className="flex justify-between items-start gap-2 p-3 bg-slate-50 border-b border-slate-200 print:bg-white print:border-b print:hidden">
                         <span className="text-xs text-slate-500">
@@ -504,9 +504,18 @@ export default function SubstituteContactExchange() {
 
       <style>{`
         @media print {
+          @page { size: A4; margin: 12mm; }
           body * { visibility: hidden; }
           .print-area, .print-area * { visibility: visible !important; }
           .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+          .print-area .a4-notice {
+            width: 100%;
+            min-height: 273mm;
+            box-sizing: border-box;
+            break-after: page;
+            page-break-after: always;
+          }
+          .print-area .a4-notice:last-child { break-after: auto; page-break-after: auto; }
           .print-area .print\\:break-inside-avoid { break-inside: avoid; }
           .print-area .print\\:shadow-none { box-shadow: none; }
           .print-area .print\\:bg-white { background: white; }
