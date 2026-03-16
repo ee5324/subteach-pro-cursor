@@ -250,7 +250,61 @@ export default function SubstituteContactExchange() {
 
   const periodLabel = (p: string) => (p === '早' ? '早自習' : p === '午' ? '午休' : `第 ${p} 節`);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const groupsToPrint = noticeKeywordLower ? filteredAddedGroups : addedGroups;
+    if (groupsToPrint.length === 0) return;
+    const escape = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const pages = groupsToPrint.map((group) => {
+      const first = group.rows[0];
+      const periodsText = group.rows.map((r) => periodLabel(r.slot.period)).join('、');
+      const subjectClassText = group.rows.length === 1
+        ? `${first.slot.subject} · ${first.slot.className}`
+        : `${first.slot.subject} · ${first.slot.className} 等${group.rows.length}節`;
+      const classroomDisplay = first.slot.classroom?.trim() || '—';
+      const noteDisplay = group.record.contactNoteForSubstitute?.trim() || '—';
+      return `
+        <div class="notice-page">
+          <h2 class="notice-title">代課聯絡通知單</h2>
+          <div class="notice-block">
+            <div class="notice-block-title">給請假老師（${escape(group.originalTeacherName)}）</div>
+            <p><strong>代課老師：</strong>${escape(group.substituteTeacherName)}</p>
+            <p><strong>聯繫電話：</strong>${escape(group.substituteTeacherPhone)}</p>
+            <p><strong>日期／節次：</strong>${group.date} ${periodsText}</p>
+            <p><strong>科目／班級：</strong>${escape(subjectClassText)}</p>
+            <p><strong>教室：</strong>${escape(classroomDisplay)}</p>
+            <p><strong>備註：</strong>${escape(noteDisplay)}</p>
+          </div>
+          <div class="notice-block">
+            <div class="notice-block-title">給代課老師（${escape(group.substituteTeacherName)}）</div>
+            <p><strong>請假老師：</strong>${escape(group.originalTeacherName)}</p>
+            <p><strong>聯繫電話：</strong>${escape(group.originalTeacherPhone)}</p>
+            <p><strong>日期／節次：</strong>${group.date} ${periodsText}</p>
+            <p><strong>科目／班級：</strong>${escape(subjectClassText)}</p>
+            <p><strong>教室：</strong>${escape(classroomDisplay)}</p>
+            <p><strong>備註：</strong>${escape(noteDisplay)}</p>
+          </div>
+        </div>
+      `;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>代課聯絡通知單</title>
+      <style>
+        @page { size: A4; margin: 12mm; }
+        body { font-family: sans-serif; margin: 0; padding: 0; color: #334155; }
+        .notice-page { width: 100%; min-height: 273mm; box-sizing: border-box; padding: 12mm; page-break-after: always; display: flex; flex-direction: column; gap: 0; }
+        .notice-page:last-child { page-break-after: auto; }
+        .notice-title { text-align: center; font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; flex-shrink: 0; }
+        .notice-block { flex: 1; min-height: 50%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 0.75rem; display: flex; flex-direction: column; justify-content: flex-start; box-sizing: border-box; }
+        .notice-block:last-child { margin-bottom: 0; }
+        .notice-block-title { font-size: 1rem; font-weight: bold; color: #64748b; margin-bottom: 0.75rem; text-transform: uppercase; }
+        .notice-block p { margin: 0.4rem 0; font-size: 1.05rem; line-height: 1.5; }
+      </style></head><body>${pages}</body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('無法開啟列印視窗，請允許彈出視窗後重試。'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => { w.focus(); w.print(); w.onafterprint = () => w.close(); };
+    if (w.document.readyState === 'complete') { w.focus(); w.print(); w.onafterprint = () => w.close(); }
+  };
 
   return (
     <div className="p-8 pb-24">
