@@ -1,12 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
+    
     // 輔助函式：檢查使用者是否已登入 (包含 Email 登入與匿名登入)
     function isSignedIn() {
       return request.auth != null;
     }
-
+    
     // 代課系統白名單：須為 Email 登入且已驗證，且列於 subteach_allowed_users 且 enabled
     function isWhitelisted() {
       return request.auth != null
@@ -40,19 +40,19 @@ service cloud.firestore {
     function canAccessSubteach() {
       return isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin();
     }
-
+    
     function isEduTrackAllowedUser() {
       return isSignedIn()
         && request.auth.token.email_verified == true
         && exists(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email))
         && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.enabled == true;
     }
-
+    
     function isEduTrackAdmin() {
       return isEduTrackAllowedUser()
         && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.role == 'admin';
     }
-
+    
     // =========================================================
     // 代課系統 (Subteach)：白名單制；首次登入者自動取得權限並寫入白名單
     // =========================================================
@@ -86,9 +86,13 @@ service cloud.firestore {
     match /languagePayrolls/{payrollId} {
       allow read, write: if canAccessSubteach();
     }
+    
+    // system/settings 與 system/holidays 需要讓 EduTrack 讀取（點名單用學期起訖與放假日）
     match /system/{docId} {
-      allow read, write: if canAccessSubteach();
+      allow read: if canAccessSubteach() || (isEduTrackAllowedUser() && docId in ['settings', 'holidays']);
+      allow write: if canAccessSubteach();
     }
+    
     match /substituteApplications/{appId} {
       allow create: if true;
       allow read, update, delete: if canAccessSubteach();
@@ -114,7 +118,7 @@ service cloud.firestore {
       allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
       allow update, delete: if isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
     }
-
+    
     // =========================================================
     // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
     // =========================================================
@@ -152,7 +156,12 @@ service cloud.firestore {
       allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
       allow create, update, delete: if isEduTrackAdmin();
     }
-
+    
+    // （保留）若未來改回用 edutrack_calendar_settings，也能存取
+    match /edutrack_calendar_settings/{docId} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    
     // =========================================================
     // 預設規則
     // =========================================================
