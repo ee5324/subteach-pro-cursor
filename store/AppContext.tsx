@@ -203,13 +203,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
           const initSnap = await getDoc(initRef);
           if (!initSnap.exists()) {
-            await setDoc(initRef, sanitizeForFirestore({ initialized: true, createdAt: Date.now() }));
-            await setDoc(doc(db, 'subteach_allowed_users', currentUser.email), sanitizeForFirestore({
+            // IMPORTANT: 必須在同一個 batch 內寫入 init 與白名單。
+            // Firestore rules 的 isFirstLoginBootstrap() 依賴 init 不存在；
+            // 若先寫 init 再寫白名單，第二筆會被拒絕。
+            const batch = writeBatch(db);
+            batch.set(initRef, sanitizeForFirestore({ initialized: true, createdAt: Date.now() }));
+            batch.set(doc(db, 'subteach_allowed_users', currentUser.email), sanitizeForFirestore({
               email: currentUser.email,
               enabled: true,
               role: 'admin',
               updatedAt: Date.now()
             }));
+            await batch.commit();
           }
         } catch (e) {
           console.warn('First-login bootstrap failed', e);
