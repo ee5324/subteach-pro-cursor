@@ -203,13 +203,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
           const initSnap = await getDoc(initRef);
           if (!initSnap.exists()) {
+            const normalizedEmail = currentUser.email.trim().toLowerCase();
             // IMPORTANT: 必須在同一個 batch 內寫入 init 與白名單。
             // Firestore rules 的 isFirstLoginBootstrap() 依賴 init 不存在；
             // 若先寫 init 再寫白名單，第二筆會被拒絕。
             const batch = writeBatch(db);
             batch.set(initRef, sanitizeForFirestore({ initialized: true, createdAt: Date.now() }));
-            batch.set(doc(db, 'subteach_allowed_users', currentUser.email), sanitizeForFirestore({
-              email: currentUser.email,
+            batch.set(doc(db, 'subteach_allowed_users', normalizedEmail), sanitizeForFirestore({
+              email: normalizedEmail,
               enabled: true,
               role: 'admin',
               updatedAt: Date.now()
@@ -759,9 +760,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addSubteachAllowedUser = async (email: string, role: 'admin' | 'user', displayName?: string) => {
     if (!db) throw new Error('Firebase 未初始化');
-    const ref = doc(db, 'subteach_allowed_users', email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const ref = doc(db, 'subteach_allowed_users', normalizedEmail);
     await setDoc(ref, sanitizeForFirestore({
-      email,
+      email: normalizedEmail,
       enabled: true,
       role,
       displayName: displayName || null,
@@ -771,13 +773,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateSubteachAllowedUser = async (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName'>>) => {
     if (!db) throw new Error('Firebase 未初始化');
-    const ref = doc(db, 'subteach_allowed_users', email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const ref = doc(db, 'subteach_allowed_users', normalizedEmail);
     await updateDoc(ref, sanitizeForFirestore({ ...data, updatedAt: Date.now() }) as any);
   };
 
   const removeSubteachAllowedUser = async (email: string) => {
     if (!db) throw new Error('Firebase 未初始化');
-    await deleteDoc(doc(db, 'subteach_allowed_users', email));
+    const normalizedEmail = email.trim().toLowerCase();
+    await deleteDoc(doc(db, 'subteach_allowed_users', normalizedEmail));
   };
 
   const value = {
