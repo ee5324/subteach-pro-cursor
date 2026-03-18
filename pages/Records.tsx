@@ -388,6 +388,32 @@ const Records: React.FC = () => {
     return fixedOvertimeTeacherIdSet.has(record.originalTeacherId);
   };
 
+  const sliceRecordToSelectedMonth = (record: LeaveRecord): LeaveRecord | null => {
+    const detailsDeduped = deduplicateDetails(record.details || []);
+    const monthDetails = detailsDeduped.filter(d => {
+      const ymd = toYMD(d.date);
+      return ymd >= monthStartStr && ymd <= monthEndStr;
+    });
+    const monthSlots = (record.slots || []).filter(s => {
+      const ymd = toYMD(s.date);
+      return ymd >= monthStartStr && ymd <= monthEndStr;
+    });
+
+    if (monthDetails.length === 0 && monthSlots.length === 0) return null;
+
+    const allDates = [...monthDetails.map(d => toYMD(d.date)), ...monthSlots.map(s => toYMD(s.date))].filter(Boolean).sort();
+    const startDate = allDates[0] || record.startDate;
+    const endDate = allDates[allDates.length - 1] || record.endDate;
+
+    return {
+      ...record,
+      startDate,
+      endDate,
+      details: monthDetails,
+      slots: monthSlots
+    };
+  };
+
   const handleRecalculateRecord = (record: LeaveRecord) => {
       if (!salaryGrades || salaryGrades.length === 0) {
           showModal({ title: '無薪級表', message: '系統尚未載入薪級表，無法進行計算。', type: 'warning' });
@@ -488,11 +514,12 @@ const Records: React.FC = () => {
 
       setIsGeneratingReport(true);
       try {
-          const recordsWithDedupedDetails = filteredRecords
+          const recordsForExport = filteredRecords
             .filter(r => !shouldExcludeFromSubteachLedgerExport(r))
-            .map(r => ({ ...r, details: deduplicateDetails(r.details || []) }));
+            .map(r => sliceRecordToSelectedMonth(r))
+            .filter((r): r is LeaveRecord => r != null);
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_REPORTS', {
-              records: recordsWithDedupedDetails,
+              records: recordsForExport,
               teachers: teachers,
               exportOptions: {
                   ledgers: Array.from(selectedLedgerTypes),
