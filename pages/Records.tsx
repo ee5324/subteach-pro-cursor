@@ -379,6 +379,15 @@ const Records: React.FC = () => {
     navigate(`/entry/${id}`);
   };
 
+  // 固定兼課教師的請假紀錄：頁面仍顯示，但「代課清冊」匯出時不列入（避免在固定兼課清冊又扣一次）
+  const fixedOvertimeTeacherIdSet = useMemo(() => {
+    return new Set((teachers || []).filter(t => t.isFixedOvertimeTeacher).map(t => t.id));
+  }, [teachers]);
+
+  const shouldExcludeFromSubteachLedgerExport = (record: LeaveRecord) => {
+    return fixedOvertimeTeacherIdSet.has(record.originalTeacherId);
+  };
+
   const handleRecalculateRecord = (record: LeaveRecord) => {
       if (!salaryGrades || salaryGrades.length === 0) {
           showModal({ title: '無薪級表', message: '系統尚未載入薪級表，無法進行計算。', type: 'warning' });
@@ -479,7 +488,9 @@ const Records: React.FC = () => {
 
       setIsGeneratingReport(true);
       try {
-          const recordsWithDedupedDetails = filteredRecords.map(r => ({ ...r, details: deduplicateDetails(r.details || []) }));
+          const recordsWithDedupedDetails = filteredRecords
+            .filter(r => !shouldExcludeFromSubteachLedgerExport(r))
+            .map(r => ({ ...r, details: deduplicateDetails(r.details || []) }));
           const result = await callGasApi(settings.gasWebAppUrl, 'GENERATE_REPORTS', {
               records: recordsWithDedupedDetails,
               teachers: teachers,
