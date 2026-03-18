@@ -392,16 +392,41 @@ const Records: React.FC = () => {
     const detailsDeduped = deduplicateDetails(record.details || []);
     // 匯出代課清冊/憑證時，超鐘點（isOvertime=true）明細應只出現在超鐘點清冊，
     // 不要在代課清冊再扣一次；因此匯出前移除超鐘點明細。
-    const monthDetails = detailsDeduped
-      .filter(d => {
-      const ymd = toYMD(d.date);
-      return ymd >= monthStartStr && ymd <= monthEndStr;
-      })
-      .filter(d => d.isOvertime !== true);
     const monthSlots = (record.slots || []).filter(s => {
       const ymd = toYMD(s.date);
       return ymd >= monthStartStr && ymd <= monthEndStr;
     });
+
+    // 用 slots 的 isOvertime 建立索引，避免既有資料 detail.isOvertime 可能為缺值/非布林導致判斷失準
+    const overtimeSlotKeySet = new Set<string>();
+    monthSlots.forEach(s => {
+      const isOT = (s as any).isOvertime === true || (s as any).isOvertime === 'true' || (s as any).isOvertime === 1;
+      if (!isOT) return;
+      if (!s.substituteTeacherId) return;
+      overtimeSlotKeySet.add(`${s.date}_${s.substituteTeacherId}_${String(s.period)}`);
+    });
+
+    const detailIsOvertime = (d: SubstituteDetail) => {
+      const raw = (d as any).isOvertime;
+      if (raw === true || raw === 'true' || raw === 1) return true;
+      // 若 detail.isOvertime 缺失，則用 selectedPeriods/period 對照 overtimeSlotKeySet
+      const ymd = toYMD(d.date);
+      if (!ymd) return false;
+      if (!d.substituteTeacherId) return false;
+      const periods = (d.selectedPeriods && d.selectedPeriods.length > 0) ? d.selectedPeriods : [];
+      for (const p of periods) {
+        const key = `${ymd}_${d.substituteTeacherId}_${String(p)}`;
+        if (overtimeSlotKeySet.has(key)) return true;
+      }
+      return false;
+    };
+
+    const monthDetails = detailsDeduped
+      .filter(d => {
+        const ymd = toYMD(d.date);
+        return ymd >= monthStartStr && ymd <= monthEndStr;
+      })
+      .filter(d => !detailIsOvertime(d));
 
     if (monthDetails.length === 0 && monthSlots.length === 0) return null;
 
