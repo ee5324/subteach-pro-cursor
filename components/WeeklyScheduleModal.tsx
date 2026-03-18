@@ -260,7 +260,7 @@ const WeeklyScheduleModal: React.FC<WeeklyScheduleModalProps> = ({
                                                                         </div>
                                                                     )}
                                                                     {item.reason && (
-                                                                        <div className="text-[10px] text-slate-400 mt-1 max-w-full truncate px-1">
+                                                                        <div className="text-[10px] text-slate-400 mt-1 max-w-full truncate px-1 print:hidden">
                                                                             ({item.reason})
                                                                         </div>
                                                                     )}
