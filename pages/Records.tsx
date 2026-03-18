@@ -390,10 +390,14 @@ const Records: React.FC = () => {
 
   const sliceRecordToSelectedMonth = (record: LeaveRecord): LeaveRecord | null => {
     const detailsDeduped = deduplicateDetails(record.details || []);
-    const monthDetails = detailsDeduped.filter(d => {
+    // 匯出代課清冊/憑證時，超鐘點（isOvertime=true）明細應只出現在超鐘點清冊，
+    // 不要在代課清冊再扣一次；因此匯出前移除超鐘點明細。
+    const monthDetails = detailsDeduped
+      .filter(d => {
       const ymd = toYMD(d.date);
       return ymd >= monthStartStr && ymd <= monthEndStr;
-    });
+      })
+      .filter(d => d.isOvertime !== true);
     const monthSlots = (record.slots || []).filter(s => {
       const ymd = toYMD(s.date);
       return ymd >= monthStartStr && ymd <= monthEndStr;
