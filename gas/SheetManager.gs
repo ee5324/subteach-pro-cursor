@@ -847,11 +847,19 @@ var SheetManager = {
     var teacherMap = {};
     if (teachers) { teachers.forEach(function(t) { teacherMap[t.id] = t; }); }
     var sheetsData = {};
+
+    /** 請假人為固定兼課教師者：代課鐘點應入固定兼課印領清冊，不進一般代課清冊／憑證 */
+    function isFixedOvertimeLeaveTeacher(leaveTeacherId) {
+      if (!leaveTeacherId) return false;
+      var t = teacherMap[leaveTeacherId];
+      return t && t.isFixedOvertimeTeacher === true;
+    }
     
     records.forEach(function(record) {
       if (!record.details) return;
       // 公派(家長會) 整筆只入家長會清冊，不進入依假別分類的一般清冊
       if (record.leaveType === '公派(家長會)') return;
+      if (isFixedOvertimeLeaveTeacher(record.originalTeacherId)) return;
       record.details.forEach(function(detail) {
         // 超鐘點：前端已單獨為「鐘點費」明細，納入清冊一次，不跳過以免報表少算
         var sheetName = SheetManagerHelpers.getSafeSheetName(detail.date, record.leaveType);

@@ -465,7 +465,8 @@ const Records: React.FC = () => {
     navigate(`/entry/${id}`);
   };
 
-  // 固定兼課教師的請假紀錄：頁面仍顯示，但「代課清冊」匯出時不列入（避免在固定兼課清冊又扣一次）
+  // 固定兼課教師為「請假人」、他人代課：該筆應入「固定兼課」印領清冊（固定兼課頁匯出），
+  // 不應入一般「代課」清冊／憑證。頁面列表仍完整顯示，僅匯出代課清冊時整筆排除。
   const fixedOvertimeTeacherIdSet = useMemo(() => {
     return new Set((teachers || []).filter(t => t.isFixedOvertimeTeacher).map(t => t.id));
   }, [teachers]);
