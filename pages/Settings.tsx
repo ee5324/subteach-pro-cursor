@@ -111,11 +111,11 @@ const Settings: React.FC = () => {
   const safeStr = (v: unknown) => (v == null ? '' : String(v).trim());
 
   const handleExportTeacherListCsv = () => {
-    const headers = ['姓名', '職別', '電話', '任教科目', '任課班級', '類別'];
+    const headers = ['編號', '姓名', '職別', '電話', '任教科目', '任課班級', '類別'];
     const escape = (v: string | undefined) => (v == null ? '' : String(v).replace(/"/g, '""'));
-    const row = (t: { name?: string; jobTitle?: string; phone?: string; subjects?: string; teachingClasses?: string; type?: string }) =>
-      [escape(t.name), escape(t.jobTitle), escape(t.phone), escape(t.subjects), escape(t.teachingClasses), escape(t.type)].map(c => `"${c}"`).join(',');
-    const csv = '\uFEFF' + headers.join(',') + '\n' + sortedTeachers.map(t => row(t)).join('\n');
+    const row = (t: { name?: string; jobTitle?: string; phone?: string; subjects?: string; teachingClasses?: string; type?: string }, idx: number) =>
+      [String(idx + 1), escape(t.name), escape(t.jobTitle), escape(t.phone), escape(t.subjects), escape(t.teachingClasses), escape(t.type)].map(c => `"${c}"`).join(',');
+    const csv = '\uFEFF' + headers.join(',') + '\n' + sortedTeachers.map((t, i) => row(t, i)).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -128,8 +128,9 @@ const Settings: React.FC = () => {
   const handlePrintTeacherList = () => {
     const win = window.open('', '_blank');
     if (!win) return;
-    const tableRows = sortedTeachers.map(t => `
+    const tableRows = sortedTeachers.map((t, i) => `
       <tr>
+        <td>${i + 1}</td>
         <td>${escapeHtml(safeStr(t.name))}</td>
         <td>${escapeHtml(safeStr(t.jobTitle))}</td>
         <td>${escapeHtml(safeStr(t.phone))}</td>
@@ -145,7 +146,7 @@ const Settings: React.FC = () => {
       <h1>學校教師名單</h1>
       <p>列印時間：${new Date().toLocaleString('zh-TW')}</p>
       <table>
-        <thead><tr><th>姓名</th><th>職別</th><th>電話</th><th>任教科目</th><th>任課班級</th><th>類別</th></tr></thead>
+        <thead><tr><th>編號</th><th>姓名</th><th>職別</th><th>電話</th><th>任教科目</th><th>任課班級</th><th>類別</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
       </body></html>
@@ -477,6 +478,7 @@ const Settings: React.FC = () => {
                 <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                         <tr>
+                            <th className="px-4 py-3 font-semibold text-slate-600">編號</th>
                             <th className="px-4 py-3 font-semibold text-slate-600">姓名</th>
                             <th className="px-4 py-3 font-semibold text-slate-600">職別</th>
                             <th className="px-4 py-3 font-semibold text-slate-600">電話</th>
@@ -486,8 +488,9 @@ const Settings: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                        {sortedTeachers.map((t) => (
+                        {sortedTeachers.map((t, idx) => (
                             <tr key={t.id} className="hover:bg-slate-50">
+                                <td className="px-4 py-3 text-slate-600 font-mono">{idx + 1}</td>
                                 <td className="px-4 py-3 font-medium text-slate-800">{safeStr(t.name) || '—'}</td>
                                 <td className="px-4 py-3 text-slate-700">{safeStr(t.jobTitle) || '—'}</td>
                                 <td className="px-4 py-3 text-slate-600">{safeStr(t.phone) || '—'}</td>
@@ -498,7 +501,7 @@ const Settings: React.FC = () => {
                         ))}
                         {sortedTeachers.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">尚無教師資料（請至「教師管理」新增）</td>
+                                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">尚無教師資料（請至「教師管理」新增）</td>
                             </tr>
                         )}
                     </tbody>
