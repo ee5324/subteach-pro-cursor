@@ -108,6 +108,8 @@ const Settings: React.FC = () => {
 
   const sortedTeachers = useMemo(() => [...(teachers || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-TW')), [teachers]);
 
+  const safeStr = (v: unknown) => (v == null ? '' : String(v).trim());
+
   const handleExportTeacherListCsv = () => {
     const headers = ['姓名', '職別', '電話', '任教科目', '任課班級', '類別'];
     const escape = (v: string | undefined) => (v == null ? '' : String(v).replace(/"/g, '""'));
@@ -128,12 +130,12 @@ const Settings: React.FC = () => {
     if (!win) return;
     const tableRows = sortedTeachers.map(t => `
       <tr>
-        <td>${escapeHtml(t.name ?? '')}</td>
-        <td>${escapeHtml(t.jobTitle ?? '')}</td>
-        <td>${escapeHtml(t.phone ?? '')}</td>
-        <td>${escapeHtml(t.subjects ?? '')}</td>
-        <td>${escapeHtml(t.teachingClasses ?? '')}</td>
-        <td>${escapeHtml(t.type ?? '')}</td>
+        <td>${escapeHtml(safeStr(t.name))}</td>
+        <td>${escapeHtml(safeStr(t.jobTitle))}</td>
+        <td>${escapeHtml(safeStr(t.phone))}</td>
+        <td>${escapeHtml(safeStr(t.subjects))}</td>
+        <td>${escapeHtml(safeStr(t.teachingClasses))}</td>
+        <td>${escapeHtml(safeStr(t.type))}</td>
       </tr>
     `).join('');
     win.document.write(`
@@ -486,12 +488,12 @@ const Settings: React.FC = () => {
                     <tbody className="divide-y divide-slate-200">
                         {sortedTeachers.map((t) => (
                             <tr key={t.id} className="hover:bg-slate-50">
-                                <td className="px-4 py-3 font-medium text-slate-800">{t.name ?? '—'}</td>
-                                <td className="px-4 py-3 text-slate-700">{t.jobTitle?.trim() || '—'}</td>
-                                <td className="px-4 py-3 text-slate-600">{t.phone?.trim() || '—'}</td>
-                                <td className="px-4 py-3 text-slate-600">{t.subjects?.trim() || '—'}</td>
-                                <td className="px-4 py-3 text-slate-600">{t.teachingClasses?.trim() || '—'}</td>
-                                <td className="px-4 py-3 text-slate-600">{t.type ?? '—'}</td>
+                                <td className="px-4 py-3 font-medium text-slate-800">{safeStr(t.name) || '—'}</td>
+                                <td className="px-4 py-3 text-slate-700">{safeStr(t.jobTitle) || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{safeStr(t.phone) || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{safeStr(t.subjects) || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{safeStr(t.teachingClasses) || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{safeStr(t.type) || '—'}</td>
                             </tr>
                         ))}
                         {sortedTeachers.length === 0 && (
