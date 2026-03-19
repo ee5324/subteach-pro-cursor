@@ -8,6 +8,14 @@ import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginSto
 import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer } from 'lucide-react';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
+import { TeacherType } from '../types';
+
+/** 匯出／列印教師名單：類別排序（校內 → 校外 → 語言），同類別內依姓名 */
+const TEACHER_TYPE_SORT_ORDER: Record<string, number> = {
+  [TeacherType.INTERNAL]: 0,
+  [TeacherType.EXTERNAL]: 1,
+  [TeacherType.LANGUAGE]: 2,
+};
 
 const Settings: React.FC = () => {
   const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser, teachers } = useAppStore();
@@ -106,7 +114,17 @@ const Settings: React.FC = () => {
     );
   };
 
-  const sortedTeachers = useMemo(() => [...(teachers || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-TW')), [teachers]);
+  const sortedTeachers = useMemo(() => {
+    return [...(teachers || [])].sort((a, b) => {
+      const typeA = String(a.type ?? '');
+      const typeB = String(b.type ?? '');
+      const orderA = TEACHER_TYPE_SORT_ORDER[typeA] ?? 99;
+      const orderB = TEACHER_TYPE_SORT_ORDER[typeB] ?? 99;
+      if (orderA !== orderB) return orderA - orderB;
+      if (typeA !== typeB) return typeA.localeCompare(typeB, 'zh-TW');
+      return (a.name || '').localeCompare(b.name || '', 'zh-TW');
+    });
+  }, [teachers]);
 
   const safeStr = (v: unknown) => (v == null ? '' : String(v).trim());
 
