@@ -866,8 +866,10 @@ var SheetManager = {
                 leaveTypes: [], 
                 reasons: [], 
                 notes: [], 
-                // 新增：備註明細（以代課日 + 請假人逐列顯示，供清冊「備註」欄渲染）
-                noteRows: [],
+                // 新增：逐筆明細（同一列多欄位同一格換行，且各欄位行數需一一對應；0 也不可省略）
+                // 每筆明細對應欄位：
+                // A 代課日期、E 代課天數、F 代課節數、G 代課鐘點費、H 請假人、K 備註、L 代導日數、M 導師費
+                lineItems: [],
                 subTeacherObj: teacherMap[subTeacherName] || null, 
                 totalDays: 0, 
                 totalPeriods: 0, 
@@ -925,22 +927,51 @@ var SheetManager = {
         }
         group.notes.push(note);
 
-        // === NEW：清冊備註改為逐列明細（不改欄位位置，只改「備註」格子的內容） ===
-        // 格式（每行）：代課日期 請假人 備註 代課鐘點費
-        // 注意：請假人不合併，因此用 record.originalTeacherId 維持請假人維度
+        // === NEW：逐筆明細（同一列多欄位同一格換行） ===
+        // 注意：不新增列；每個欄位同一格以「換行」呈現多筆，且各欄位第 N 行需對應同一筆明細
         try {
             var leaveTeacherName = teacherMap[record.originalTeacherId] ? teacherMap[record.originalTeacherId].name : record.originalTeacherId;
-            var amountStr = '';
-            if (detail.payType === '鐘點費') {
-                amountStr = String(Number(detail.calculatedAmount) || 0);
-            } else {
-                // 日薪/半日薪仍顯示金額（若你只想顯示鐘點費，可改為 ''）
-                amountStr = String(Number(detail.calculatedAmount) || 0);
-            }
             var dateMD = String(detail.date).substring(5).replace('-', '/');
-            group.noteRows.push({
+            // G 欄：只顯示「鐘點費」；日薪/半日薪該行固定填 0（且不可省略）
+            var payAmount = Number(detail.calculatedAmount) || 0;
+            var payAmountStr = (detail.payType === '鐘點費') ? String(payAmount) : '0';
+
+            // 逐筆欄位：天數/節數/代導日數/導師費（0 也要顯示）
+            var lineDaysStr = '0';
+            var linePeriodsStr = '0';
+            var lineHomeroomDaysStr = '0';
+            var lineHomeroomFeeStr = '0';
+
+            if (detail.payType === '鐘點費') {
+                // 鐘點：0 日 + N 節；導師費 0
+                lineDaysStr = '0';
+                linePeriodsStr = String(Number(detail.periodCount) || 0);
+                lineHomeroomDaysStr = '0';
+                lineHomeroomFeeStr = '0';
+            } else if (detail.payType === '半日薪') {
+                // 半日：0.5 日 + 0 節；導師費依 0.5 日計
+                lineDaysStr = '0.5';
+                linePeriodsStr = '0';
+                lineHomeroomDaysStr = '0.5';
+                lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+            } else {
+                // 日薪：N 日 + 0 節；導師費依 N 日計
+                lineDaysStr = String(Number(detail.periodCount) || 0);
+                linePeriodsStr = '0';
+                lineHomeroomDaysStr = String(Number(detail.periodCount) || 0);
+                lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
+            }
+
+            group.lineItems.push({
                 date: String(detail.date),
-                line: dateMD + "  " + String(leaveTeacherName) + "  " + String(note) + "  " + amountStr
+                dateMD: dateMD,
+                leaveTeacherName: String(leaveTeacherName),
+                note: String(note),
+                amountStr: payAmountStr,
+                daysStr: String(lineDaysStr),
+                periodsStr: String(linePeriodsStr),
+                homeroomDaysStr: String(lineHomeroomDaysStr),
+                homeroomFeeStr: String(lineHomeroomFeeStr)
             });
         } catch(e) {}
       });
@@ -1064,6 +1095,7 @@ var SheetManager = {
         var rows = [];
         for (var subName in groups) {
             var g = groups[subName];
+            // A 欄：代課日期（逐筆、多行、需與其他欄位行數對應）
             var dateDisplay = SheetManagerHelpers.formatDateRanges(g.fullDates);
             var subTeacherInfo = g.subTeacherObj || teacherMap[subName];
             var salaryGradeDisplay = '';
@@ -1072,26 +1104,49 @@ var SheetManager = {
                 salaryGradeDisplay = subTeacherInfo.salaryPoints + "\n" + certStatus;
             }
             var dailyRateDisplay = g.totalDays > 0 ? Math.round((g.finalAmount - g.homeroomFee) / g.totalDays) : '';
+            // H 欄：請假人（逐筆、多行、需與 A/K/G/E/F/L/M 行數對應）
             var origDisplay = (g.originalTeachers || []).join('\n');
             var typeDisplay = (g.leaveTypes || []).map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
             var reasonDisplay = (g.reasons || []).join('\n');
-            // 備註欄：改為逐列明細（代課日期／請假人／備註／代課鐘點費），不更動欄位位置
+
+            // 逐筆明細（同一列多欄位同一格換行），若有 lineItems 就用逐筆；否則維持舊格式 fallback
             var noteDisplay = '';
-            if (g.noteRows && g.noteRows.length > 0) {
-                // 依日期排序，再依字串排序，確保輸出穩定
-                g.noteRows.sort(function(a, b) {
+            var dayLines = '';
+            var periodLines = '';
+            var amountLines = '';
+            var homeroomDayLines = '';
+            var homeroomFeeLines = '';
+
+            if (g.lineItems && g.lineItems.length > 0) {
+                // 依日期排序，確保 A/E/F/G/H/K/L/M 各欄位行對齊
+                g.lineItems.sort(function(a, b) {
                     var da = String(a.date || '');
                     var db = String(b.date || '');
                     if (da < db) return -1;
                     if (da > db) return 1;
-                    return String(a.line || '').localeCompare(String(b.line || ''));
+                    return String(a.leaveTeacherName || '').localeCompare(String(b.leaveTeacherName || ''));
                 });
-                noteDisplay = "代課日期  請假人  備註  代課鐘點費\n" + g.noteRows.map(function(x){ return x.line; }).join('\n');
+
+                dateDisplay = g.lineItems.map(function(x){ return String(x.dateMD || ''); }).join('\n');
+                origDisplay = g.lineItems.map(function(x){ return String(x.leaveTeacherName || ''); }).join('\n');
+                noteDisplay = g.lineItems.map(function(x){ return String(x.note || ''); }).join('\n');
+                amountLines = g.lineItems.map(function(x){ return String(x.amountStr || '0'); }).join('\n');
+                dayLines = g.lineItems.map(function(x){ return String(x.daysStr || '0'); }).join('\n');
+                periodLines = g.lineItems.map(function(x){ return String(x.periodsStr || '0'); }).join('\n');
+                homeroomDayLines = g.lineItems.map(function(x){ return String(x.homeroomDaysStr || '0'); }).join('\n');
+                homeroomFeeLines = g.lineItems.map(function(x){ return String(x.homeroomFeeStr || '0'); }).join('\n');
             } else {
                 // fallback：維持舊格式
                 noteDisplay = (g.totalDays > 0 && g.totalPeriods === 0) ? (g.totalDays + "日") : (g.notes || []).join('\n');
+                dayLines = String(g.totalDays || 0);
+                periodLines = String(g.totalPeriods || 0);
+                amountLines = String(g.hourlyTotal || 0);
+                homeroomDayLines = String(g.homeroomDays || 0);
+                homeroomFeeLines = String(g.homeroomFee || 0);
             }
-            rows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, g.totalDays || '', g.totalPeriods || '', g.hourlyTotal || '', origDisplay, typeDisplay, reasonDisplay, noteDisplay, g.homeroomDays || '', g.homeroomFee || '', g.finalAmount, '', '', '', '', '' ]);
+
+            // 欄位維持原位置：A 日期、B 代課老師、E 天數、F 節數、G 金額、H 請假人、K 備註、L 代導日數、M 導師費
+            rows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, dayLines, periodLines, amountLines, origDisplay, typeDisplay, reasonDisplay, noteDisplay, homeroomDayLines, homeroomFeeLines, g.finalAmount, '', '', '', '', '' ]);
         }
         return rows;
     }
