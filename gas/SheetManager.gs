@@ -866,6 +866,8 @@ var SheetManager = {
                 leaveTypes: [], 
                 reasons: [], 
                 notes: [], 
+                // 新增：備註明細（以代課日 + 請假人逐列顯示，供清冊「備註」欄渲染）
+                noteRows: [],
                 subTeacherObj: teacherMap[subTeacherName] || null, 
                 totalDays: 0, 
                 totalPeriods: 0, 
@@ -922,6 +924,25 @@ var SheetManager = {
             note = subDays + "日0節";
         }
         group.notes.push(note);
+
+        // === NEW：清冊備註改為逐列明細（不改欄位位置，只改「備註」格子的內容） ===
+        // 格式（每行）：代課日期 請假人 備註 代課鐘點費
+        // 注意：請假人不合併，因此用 record.originalTeacherId 維持請假人維度
+        try {
+            var leaveTeacherName = teacherMap[record.originalTeacherId] ? teacherMap[record.originalTeacherId].name : record.originalTeacherId;
+            var amountStr = '';
+            if (detail.payType === '鐘點費') {
+                amountStr = String(Number(detail.calculatedAmount) || 0);
+            } else {
+                // 日薪/半日薪仍顯示金額（若你只想顯示鐘點費，可改為 ''）
+                amountStr = String(Number(detail.calculatedAmount) || 0);
+            }
+            var dateMD = String(detail.date).substring(5).replace('-', '/');
+            group.noteRows.push({
+                date: String(detail.date),
+                line: dateMD + "  " + String(leaveTeacherName) + "  " + String(note) + "  " + amountStr
+            });
+        } catch(e) {}
       });
     });
 
@@ -1054,7 +1075,22 @@ var SheetManager = {
             var origDisplay = (g.originalTeachers || []).join('\n');
             var typeDisplay = (g.leaveTypes || []).map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
             var reasonDisplay = (g.reasons || []).join('\n');
-            var noteDisplay = (g.totalDays > 0 && g.totalPeriods === 0) ? g.totalDays + "日" : (g.notes || []).join('\n');
+            // 備註欄：改為逐列明細（代課日期／請假人／備註／代課鐘點費），不更動欄位位置
+            var noteDisplay = '';
+            if (g.noteRows && g.noteRows.length > 0) {
+                // 依日期排序，再依字串排序，確保輸出穩定
+                g.noteRows.sort(function(a, b) {
+                    var da = String(a.date || '');
+                    var db = String(b.date || '');
+                    if (da < db) return -1;
+                    if (da > db) return 1;
+                    return String(a.line || '').localeCompare(String(b.line || ''));
+                });
+                noteDisplay = "代課日期  請假人  備註  代課鐘點費\n" + g.noteRows.map(function(x){ return x.line; }).join('\n');
+            } else {
+                // fallback：維持舊格式
+                noteDisplay = (g.totalDays > 0 && g.totalPeriods === 0) ? (g.totalDays + "日") : (g.notes || []).join('\n');
+            }
             rows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, g.totalDays || '', g.totalPeriods || '', g.hourlyTotal || '', origDisplay, typeDisplay, reasonDisplay, noteDisplay, g.homeroomDays || '', g.homeroomFee || '', g.finalAmount, '', '', '', '', '' ]);
         }
         return rows;

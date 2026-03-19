@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot } from '../types';
+import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot, HOURLY_RATE } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
@@ -251,31 +251,117 @@ const Records: React.FC = () => {
   const substituteGroups = useMemo(() => {
     if (viewMode !== 'bySubstituteTeacher') return [];
 
-    const allDetails: (SubstituteDetail & { originalTeacherId: string, recordId: string, slots: TimetableSlot[] })[] = [];
+    type Row = {
+      subTeacherId: string;
+      date: string;
+      originalTeacherId: string;
+      note: string;
+      amount: number;
+      payType: PayType;
+      periods?: string[];
+      recordId: string;
+    };
+
+    const periodOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
+    const sortPeriodsLocal = (periods: string[]) =>
+      [...periods].sort((a, b) => periodOrder.indexOf(String(a)) - periodOrder.indexOf(String(b)));
+
+    // 保留原本的明細（用於匯出課表圖片/週表）
+    const allDetails: (SubstituteDetail & { originalTeacherId: string; recordId: string; slots: TimetableSlot[] })[] = [];
+
+    const allRows: Row[] = [];
+
     filteredRecords.forEach(r => {
-        deduplicateDetails(r.details || []).forEach(d => {
-            // Only include details that fall within the selected month
-            if (d.substituteTeacherId && d.date.startsWith(selectedMonth)) {
-                const matchingSlots = r.slots ? r.slots.filter(s => 
-                    s.date === d.date && 
-                    s.substituteTeacherId === d.substituteTeacherId && 
-                    s.payType === d.payType
-                ) : [];
-                allDetails.push({ ...d, originalTeacherId: r.originalTeacherId, recordId: r.id, slots: matchingSlots });
-            }
+      if (!r.slots || r.slots.length === 0) return;
+      const detailsDeduped = deduplicateDetails(r.details || []);
+
+      // 供週表匯出用：依明細（含 slots）保留
+      detailsDeduped.forEach(d => {
+        if (d.substituteTeacherId && toYMD(d.date).startsWith(selectedMonth)) {
+          const matchingSlots = r.slots ? r.slots.filter(s =>
+            toYMD(s.date) === toYMD(d.date) &&
+            s.substituteTeacherId === d.substituteTeacherId &&
+            s.payType === d.payType
+          ) : [];
+          allDetails.push({ ...d, originalTeacherId: r.originalTeacherId, recordId: r.id, slots: matchingSlots });
+        }
+      });
+
+      // 依「代課教師 + 日期 + 支薪方式」彙整（同一請假老師的同一天不要合併到其他請假老師：因為 record 本身就是一位請假老師）
+      const keyOf = (subId: string, date: string, payType: PayType) => `${r.id}__${subId}__${date}__${payType}`;
+      const map = new Map<string, { subId: string; date: string; payType: PayType; periods: string[] }>();
+
+      r.slots.forEach(s => {
+        if (!s.substituteTeacherId) return;
+        const ymd = toYMD(s.date);
+        if (!ymd || !ymd.startsWith(selectedMonth)) return;
+        if (s.isOvertime === true) return; // 超鐘點不列入一般清冊備註（避免重複）
+        const payType = s.payType as PayType;
+        const k = keyOf(s.substituteTeacherId, ymd, payType);
+        if (!map.has(k)) map.set(k, { subId: s.substituteTeacherId, date: ymd, payType, periods: [] });
+        if (payType === PayType.HOURLY) {
+          map.get(k)!.periods.push(String(s.period));
+        }
+      });
+
+      map.forEach(v => {
+        const periodsSorted = v.payType === PayType.HOURLY ? sortPeriodsLocal(v.periods) : [];
+        const periodCount = periodsSorted.length;
+
+        // 備註文字（依你提供的格式）
+        let note = '';
+        if (v.payType === PayType.HOURLY) note = `0日${periodCount}節`;
+        else if (v.payType === PayType.HALF_DAY) note = '半日0節';
+        else note = '1日0節';
+
+        // 金額：鐘點費用 slots 計算（避免 details 匯總不含請假老師維度造成難拆）
+        // 日薪/半日薪：用該 record 的 details（同一 record 不會跨請假老師）
+        let amount = 0;
+        if (v.payType === PayType.HOURLY) {
+          amount = periodCount * HOURLY_RATE;
+        } else {
+          const d = detailsDeduped.find(x =>
+            toYMD(x.date) === v.date &&
+            x.substituteTeacherId === v.subId &&
+            x.payType === v.payType &&
+            x.isOvertime !== true
+          );
+          amount = Number(d?.calculatedAmount) || 0;
+        }
+
+        allRows.push({
+          subTeacherId: v.subId,
+          recordId: r.id,
+          date: v.date,
+          originalTeacherId: r.originalTeacherId,
+          note,
+          amount,
+          payType: v.payType,
+          periods: periodsSorted.length ? periodsSorted : undefined,
         });
+      });
     });
 
-    // Group by substitute teacher
-    const groups: Record<string, typeof allDetails> = {};
+    const bySub: Record<string, Row[]> = {};
+    allRows.forEach(r => {
+      if (!bySub[r.subTeacherId]) bySub[r.subTeacherId] = [];
+      bySub[r.subTeacherId].push(r);
+    });
+
+    const itemsBySub: Record<string, typeof allDetails> = {};
     allDetails.forEach(d => {
-        if (!groups[d.substituteTeacherId]) groups[d.substituteTeacherId] = [];
-        groups[d.substituteTeacherId].push(d);
+      if (!itemsBySub[d.substituteTeacherId]) itemsBySub[d.substituteTeacherId] = [];
+      itemsBySub[d.substituteTeacherId].push(d);
     });
 
-    return Object.keys(groups).map(subId => ({
-        subTeacherId: subId,
-        items: groups[subId].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    const allSubIds = Array.from(new Set([...Object.keys(itemsBySub), ...Object.keys(bySub)])).sort();
+
+    return allSubIds.map(subId => ({
+      subTeacherId: subId,
+      items: (itemsBySub[subId] || []).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      rows: (bySub[subId] || [])
+        .filter(r => r.amount !== 0 || r.note !== '0日0節')
+        .sort((a, b) => a.date.localeCompare(b.date) || a.originalTeacherId.localeCompare(b.originalTeacherId))
     }));
 
   }, [filteredRecords, viewMode, selectedMonth]);
@@ -1252,7 +1338,7 @@ const Records: React.FC = () => {
                     ) : (
                         substituteGroups.map(group => {
                             const subTeacher = teachers.find(t => t.id === group.subTeacherId);
-                            const totalIncome = group.items.reduce((sum, item) => sum + item.calculatedAmount, 0);
+                            const totalIncome = (group.rows || []).reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
                             
                             return (
                                 <tr key={group.subTeacherId} className="hover:bg-slate-50">
@@ -1391,45 +1477,36 @@ const Records: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="space-y-2">
-                                            {group.items.map(item => {
-                                                const originalTeacher = teachers.find(t => t.id === item.originalTeacherId);
-                                                return (
-                                                    <div key={item.id} className="flex items-center text-sm border-b border-slate-200 pb-1 last:border-0">
-                                                        <span className="font-mono text-slate-500 mr-3">{formatDateSimple(item.date)}</span>
-                                                        <div className="mr-2">
-                                                            <span className="text-slate-800">代 {originalTeacher?.name}</span>
-                                                            {originalTeacher?.phone && (
-                                                                <span className="text-xs text-slate-400 flex items-center scale-90 origin-left">
-                                                                    <Phone size={8} className="mr-1" />
-                                                                    {originalTeacher.phone}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs mr-2">
-                                                            {item.payType === PayType.HOURLY ? `${item.periodCount}節` : item.payType === PayType.HALF_DAY ? '半日' : `${item.periodCount}天`}
-                                                        </span>
-                                                        <div className="ml-auto flex items-center space-x-1">
-                                                            <span className="text-slate-400 text-xs">${item.calculatedAmount.toLocaleString()}</span>
-                                                            {item.payType === PayType.DAILY && subTeacher && (() => {
-                                                                const daysInMonth = getDaysInMonth(item.date);
-                                                                const expectedRate = getExpectedDailyRate(subTeacher, daysInMonth, true); // Assume homeroom for daily
-                                                                if (expectedRate !== null && Math.abs(item.calculatedAmount - expectedRate) > 30) {
-                                                                    return (
-                                                                        <div className="group relative flex items-center">
-                                                                            <AlertTriangle size={12} className="text-amber-500 cursor-help" />
-                                                                            <div className="absolute bottom-full right-0 mb-1 hidden group-hover:block w-48 p-2 bg-slate-800 text-white text-xs rounded shadow-lg z-10">
-                                                                                系統試算日薪為 ${item.calculatedAmount}，但根據薪級表標準應為 ${expectedRate} (差距大於30元)。請確認教師薪級或手動調整金額。
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                }
-                                                                return null;
-                                                            })()}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                        <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-slate-50 border-b border-slate-200">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-xs font-bold text-slate-600 whitespace-nowrap">代課日期</th>
+                                                        <th className="px-3 py-2 text-xs font-bold text-slate-600 whitespace-nowrap">請假人</th>
+                                                        <th className="px-3 py-2 text-xs font-bold text-slate-600 whitespace-nowrap">備註</th>
+                                                        <th className="px-3 py-2 text-xs font-bold text-slate-600 text-right whitespace-nowrap">代課鐘點費</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {(group.rows || []).length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={4} className="px-3 py-6 text-center text-slate-400">本月無代課明細</td>
+                                                        </tr>
+                                                    ) : (
+                                                        (group.rows || []).map((r: any, idx: number) => {
+                                                            const originalTeacher = teachers.find(t => t.id === r.originalTeacherId);
+                                                            return (
+                                                                <tr key={`${r.date}_${r.originalTeacherId}_${r.payType}_${idx}`} className="hover:bg-slate-50/60">
+                                                                    <td className="px-3 py-2 font-mono text-slate-600 whitespace-nowrap">{formatDateSimple(r.date)}</td>
+                                                                    <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{originalTeacher?.name || r.originalTeacherId || '未知'}</td>
+                                                                    <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{r.note || '-'}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold text-slate-700 whitespace-nowrap">{Number(r.amount || 0).toLocaleString()}</td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right align-top font-bold text-green-700">
