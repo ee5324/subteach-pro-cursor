@@ -932,9 +932,9 @@ var SheetManager = {
         try {
             var leaveTeacherName = teacherMap[record.originalTeacherId] ? teacherMap[record.originalTeacherId].name : record.originalTeacherId;
             var dateMD = String(detail.date).substring(5).replace('-', '/');
-            // G 欄：只顯示「鐘點費」；日薪/半日薪該行固定填 0（且不可省略）
             var payAmount = Number(detail.calculatedAmount) || 0;
-            var payAmountStr = (detail.payType === '鐘點費') ? String(payAmount) : '0';
+            // G 欄：逐筆金額（鐘點費/日薪皆列出；N 欄再做合計）
+            var payAmountStr = String(payAmount);
 
             // 逐筆欄位：天數/節數/代導日數/導師費（0 也要顯示）
             var lineDaysStr = '0';
