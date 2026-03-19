@@ -5,12 +5,12 @@ import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
-import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus } from 'lucide-react';
+import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer } from 'lucide-react';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
 const Settings: React.FC = () => {
-  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser } = useAppStore();
+  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser, teachers } = useAppStore();
   const [newHoliday, setNewHoliday] = useState('');
   const [whitelistEmail, setWhitelistEmail] = useState('');
   const [whitelistRole, setWhitelistRole] = useState<'admin' | 'user'>('user');
@@ -105,6 +105,55 @@ const Settings: React.FC = () => {
       () => setModal({ isOpen: true, title: '複製失敗', message: '無法寫入剪貼簿，請手動選取複製。', type: 'error' })
     );
   };
+
+  const sortedTeachers = useMemo(() => [...(teachers || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-TW')), [teachers]);
+
+  const handleExportTeacherListCsv = () => {
+    const headers = ['姓名', '職別', '電話', '任教科目', '任課班級', '類別'];
+    const escape = (v: string | undefined) => (v == null ? '' : String(v).replace(/"/g, '""'));
+    const row = (t: { name?: string; jobTitle?: string; phone?: string; subjects?: string; teachingClasses?: string; type?: string }) =>
+      [escape(t.name), escape(t.jobTitle), escape(t.phone), escape(t.subjects), escape(t.teachingClasses), escape(t.type)].map(c => `"${c}"`).join(',');
+    const csv = '\uFEFF' + headers.join(',') + '\n' + sortedTeachers.map(t => row(t)).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `學校教師名單_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrintTeacherList = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const tableRows = sortedTeachers.map(t => `
+      <tr>
+        <td>${escapeHtml(t.name ?? '')}</td>
+        <td>${escapeHtml(t.jobTitle ?? '')}</td>
+        <td>${escapeHtml(t.phone ?? '')}</td>
+        <td>${escapeHtml(t.subjects ?? '')}</td>
+        <td>${escapeHtml(t.teachingClasses ?? '')}</td>
+        <td>${escapeHtml(t.type ?? '')}</td>
+      </tr>
+    `).join('');
+    win.document.write(`
+      <!DOCTYPE html><html><head><meta charset="UTF-8"><title>學校教師名單</title>
+      <style>body{font-family:sans-serif;padding:1rem;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #333;padding:6px 10px;text-align:left;} th{background:#eee;}</style>
+      </head><body>
+      <h1>學校教師名單</h1>
+      <p>列印時間：${new Date().toLocaleString('zh-TW')}</p>
+      <table>
+        <thead><tr><th>姓名</th><th>職別</th><th>電話</th><th>任教科目</th><th>任課班級</th><th>類別</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      </body></html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 250);
+  };
+
+  const escapeHtml = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   return (
     <div className="p-8 pb-32 max-w-4xl mx-auto">
@@ -388,6 +437,66 @@ const Settings: React.FC = () => {
                                     <AlertCircle size={24} className="mb-2 opacity-50"/>
                                     尚未設定任何假日
                                 </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        {/* 匯出學校教師名單：以渲染表格呈現，含職別，可下載 CSV / 列印 */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6" id="teacher-list-print-area">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                <Users size={20} className="mr-2 text-slate-600"/>
+                匯出學校教師名單
+            </h2>
+            <p className="text-sm text-slate-600 mb-4">
+                以下為教師管理中的名單（含職別），可下載 CSV 或列印此表。
+            </p>
+            <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                    type="button"
+                    onClick={handleExportTeacherListCsv}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 font-medium text-sm"
+                >
+                    <FileDown size={18} />
+                    下載 CSV
+                </button>
+                <button
+                    type="button"
+                    onClick={handlePrintTeacherList}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium text-sm"
+                >
+                    <Printer size={18} />
+                    列印此表
+                </button>
+            </div>
+            <div className="border rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                        <tr>
+                            <th className="px-4 py-3 font-semibold text-slate-600">姓名</th>
+                            <th className="px-4 py-3 font-semibold text-slate-600">職別</th>
+                            <th className="px-4 py-3 font-semibold text-slate-600">電話</th>
+                            <th className="px-4 py-3 font-semibold text-slate-600">任教科目</th>
+                            <th className="px-4 py-3 font-semibold text-slate-600">任課班級</th>
+                            <th className="px-4 py-3 font-semibold text-slate-600">類別</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                        {sortedTeachers.map((t) => (
+                            <tr key={t.id} className="hover:bg-slate-50">
+                                <td className="px-4 py-3 font-medium text-slate-800">{t.name ?? '—'}</td>
+                                <td className="px-4 py-3 text-slate-700">{t.jobTitle?.trim() || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{t.phone?.trim() || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{t.subjects?.trim() || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{t.teachingClasses?.trim() || '—'}</td>
+                                <td className="px-4 py-3 text-slate-600">{t.type ?? '—'}</td>
+                            </tr>
+                        ))}
+                        {sortedTeachers.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">尚無教師資料（請至「教師管理」新增）</td>
                             </tr>
                         )}
                     </tbody>
