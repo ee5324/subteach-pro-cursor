@@ -933,7 +933,9 @@ var SheetManager = {
             var leaveTeacherName = teacherMap[record.originalTeacherId] ? teacherMap[record.originalTeacherId].name : record.originalTeacherId;
             var dateMD = String(detail.date).substring(5).replace('-', '/');
             var payAmount = Number(detail.calculatedAmount) || 0;
-            // G 欄：逐筆金額（鐘點費/日薪皆列出；N 欄再做合計）
+            // G 欄：逐筆金額（先不含導師費；N 欄再做合計）
+            // - 鐘點費：原樣顯示 calculatedAmount
+            // - 日薪/半日薪：扣掉導師費後的金額
             var payAmountStr = String(payAmount);
 
             // 逐筆欄位：天數/節數/代導日數/導師費（0 也要顯示）
@@ -954,12 +956,16 @@ var SheetManager = {
                 linePeriodsStr = '0';
                 lineHomeroomDaysStr = '0.5';
                 lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+                // G 欄顯示不含導師費
+                payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
             } else {
                 // 日薪：N 日 + 0 節；導師費依 N 日計
                 lineDaysStr = String(Number(detail.periodCount) || 0);
                 linePeriodsStr = '0';
                 lineHomeroomDaysStr = String(Number(detail.periodCount) || 0);
                 lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
+                // G 欄顯示不含導師費
+                payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
             }
 
             group.lineItems.push({
@@ -1103,7 +1109,9 @@ var SheetManager = {
                 var certStatus = subTeacherInfo.hasCertificate ? '(有證)' : '(無證)';
                 salaryGradeDisplay = subTeacherInfo.salaryPoints + "\n" + certStatus;
             }
-            var dailyRateDisplay = g.totalDays > 0 ? Math.round((g.finalAmount - g.homeroomFee) / g.totalDays) : '';
+            // D 欄（日薪）：用薪級計算（不含導師費）；不再用 (N-M)/E 反推平均
+            var daysInMonthForRate = (g.fullDates && g.fullDates.length > 0) ? SheetManagerHelpers.getSafeDaysInMonth(g.fullDates[0]) : 0;
+            var dailyRateDisplay = SheetManagerHelpers.getExpectedDailyRateNoHomeroom(subTeacherInfo, daysInMonthForRate);
             // H 欄：請假人（逐筆、多行、需與 A/K/G/E/F/L/M 行數對應）
             var origDisplay = (g.originalTeachers || []).join('\n');
             var typeDisplay = (g.leaveTypes || []).map(function(t) { return t.replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')'); }).join('\n');
@@ -1404,5 +1412,36 @@ var SheetManagerHelpers = {
     },
     formatDateRanges: function(dates) {
         return SheetManager._formatDateRanges(dates);
+    },
+    // D 欄（日薪）：依前端 DAILY_RATE_TABLE 規則，用薪級表推算（不含導師費）
+    getExpectedDailyRateNoHomeroom: function(teacher, daysInMonth) {
+        if (!teacher || !teacher.salaryPoints || !daysInMonth) return '';
+
+        // 與 utils/calculations.ts DAILY_RATE_TABLE 保持一致
+        var DAILY_RATE_TABLE = {
+            "170": { 31: 1354, 30: 1399, 29: 1448, 28: 1499 },
+            "180無教證": { 31: 1379, 30: 1425, 29: 1474, 28: 1527 },
+            "190": { 31: 1553, 30: 1604, 29: 1660, 28: 1719 },
+            "245無教證": { 31: 1630, 30: 1684, 29: 1742, 28: 1804 },
+            "245有教證": { 31: 1801, 30: 1861, 29: 1925, 28: 1994 },
+            "625有教證": { 31: 2901, 30: 2998, 29: 3101, 28: 3212 },
+            "650有教證": { 31: 2951, 30: 3049, 29: 3154, 28: 3267 },
+            "編制內教師": { 31: 405, 30: 405, 29: 405, 28: 405 },
+            "退休教師": { 31: 405, 30: 405, 29: 405, 28: 405 },
+            "180有教證": { 31: 1528, 30: 1579, 29: 1633, 28: 1692 }
+        };
+
+        var points = Number(teacher.salaryPoints) || 0;
+        if (!points) return '';
+        var key = String(points);
+        if (points === 180 || points === 245 || points === 625 || points === 650) {
+            key += (teacher.hasCertificate ? '有教證' : '無教證');
+        }
+
+        var rates = DAILY_RATE_TABLE[key];
+        if (!rates) return '';
+        var rate = rates[Number(daysInMonth)];
+        if (!rate) return '';
+        return rate;
     }
 };
