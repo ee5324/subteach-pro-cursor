@@ -849,10 +849,27 @@ var SheetManager = {
     var sheetsData = {};
 
     /** 請假人為固定兼課教師者：代課鐘點應入固定兼課印領清冊，不進一般代課清冊／憑證 */
+    var fixedOtLeaveKeySet = {};
+    var foList = exportOptions && exportOptions.fixedOvertimeTeacherIds;
+    if (foList && Array.isArray(foList)) {
+      foList.forEach(function(id) {
+        var k = String(id == null ? '' : id).trim();
+        if (k) fixedOtLeaveKeySet[k] = true;
+      });
+    }
+    if (teachers) {
+      teachers.forEach(function(t) {
+        if (t && t.isFixedOvertimeTeacher === true && t.id) {
+          fixedOtLeaveKeySet[String(t.id).trim()] = true;
+        }
+      });
+    }
     function isFixedOvertimeLeaveTeacher(leaveTeacherId) {
-      if (!leaveTeacherId) return false;
-      var t = teacherMap[leaveTeacherId];
-      return t && t.isFixedOvertimeTeacher === true;
+      if (leaveTeacherId == null || leaveTeacherId === '') return false;
+      var key = String(leaveTeacherId).trim();
+      if (fixedOtLeaveKeySet[key]) return true;
+      var t = teacherMap[key];
+      return !!(t && t.isFixedOvertimeTeacher === true);
     }
     
     records.forEach(function(record) {

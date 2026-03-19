@@ -34,7 +34,7 @@ const getMonday = (dateStr: string) => {
 
 const Records: React.FC = () => {
   const navigate = useNavigate();
-  const { records, teachers, deleteRecord, updateRecord, settings, updateSettings, holidays, salaryGrades } = useAppStore(); // Added updateRecord
+  const { records, teachers, fixedOvertimeConfig, deleteRecord, updateRecord, settings, updateSettings, holidays, salaryGrades } = useAppStore(); // Added updateRecord
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUrl, setTempUrl] = useState('');
   
@@ -467,12 +467,38 @@ const Records: React.FC = () => {
 
   // 固定兼課教師為「請假人」、他人代課：該筆應入「固定兼課」印領清冊（固定兼課頁匯出），
   // 不應入一般「代課」清冊／憑證。頁面列表仍完整顯示，僅匯出代課清冊時整筆排除。
+  // 辨識來源：(1) 教師管理「固定兼課教師」勾選 (2) 固定兼課設定內的教師（避免只設時段未勾選時漏判）
+  // 同時納入教師「姓名」：舊紀錄的 originalTeacherId 可能存姓名而非 id。
   const fixedOvertimeTeacherIdSet = useMemo(() => {
-    return new Set((teachers || []).filter(t => t.isFixedOvertimeTeacher).map(t => t.id));
-  }, [teachers]);
+    const s = new Set<string>();
+    const add = (v: string | undefined | null) => {
+      const x = String(v ?? '').trim();
+      if (x) s.add(x);
+    };
+    (teachers || []).forEach(t => {
+      if (t.isFixedOvertimeTeacher) {
+        add(t.id);
+        add(t.name);
+      }
+    });
+    (fixedOvertimeConfig || []).forEach(c => {
+      add(c.teacherId);
+      const t = (teachers || []).find(x => x.id === c.teacherId);
+      add(t?.name);
+    });
+    return s;
+  }, [teachers, fixedOvertimeConfig]);
 
   const shouldExcludeFromSubteachLedgerExport = (record: LeaveRecord) => {
-    return fixedOvertimeTeacherIdSet.has(record.originalTeacherId);
+    const oid = String(record.originalTeacherId ?? '').trim();
+    if (!oid) return false;
+    if (fixedOvertimeTeacherIdSet.has(oid)) return true;
+    // 若紀錄存 id，但集合裡只有曾用別名：再比對教師物件
+    const byId = (teachers || []).find(t => t.id === oid);
+    if (byId && (byId.isFixedOvertimeTeacher || (fixedOvertimeConfig || []).some(c => c.teacherId === byId.id))) {
+      return true;
+    }
+    return false;
   };
 
   const sliceRecordToSelectedMonth = (record: LeaveRecord): LeaveRecord | null => {
@@ -615,6 +641,8 @@ const Records: React.FC = () => {
               exportOptions: {
                   ledgers: Array.from(selectedLedgerTypes),
                   vouchers: Array.from(selectedVoucherTypes),
+                  // GAS 以此為準，避免 teachers JSON 缺欄位或試算表教師表未同步「固定兼課」旗標
+                  fixedOvertimeTeacherIds: Array.from(fixedOvertimeTeacherIdSet),
               }
           });
           
