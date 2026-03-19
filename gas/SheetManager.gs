@@ -1178,8 +1178,6 @@ var SheetManager = {
             summarySheet.getRange(startRow, 1, dataCount, 2).setWrap(true);
             summarySheet.getRange(startRow, 8, dataCount, 4).setWrap(true);
             var totalRowIndex = startRow + dataCount;
-            summarySheet.getRange(startRow, 4, dataCount + 1, 4).setFontSize(14);
-            summarySheet.getRange(startRow, 12, dataCount + 1, 14).setFontSize(14);
             summarySheet.getRange(totalRowIndex, 1, 1, 19).setBorder(true, true, true, true, true, true);
             summarySheet.getRange(totalRowIndex, 1, 1, 2).merge().setValue("合計").setHorizontalAlignment("center");
             summarySheet.getRange(totalRowIndex, 5).setValue(sumDays);
@@ -1188,6 +1186,10 @@ var SheetManager = {
             summarySheet.getRange(totalRowIndex, 12).setValue(sumHDays);
             summarySheet.getRange(totalRowIndex, 13).setValue(sumHFee);
             summarySheet.getRange(totalRowIndex, 14).setValue(sumTotal);
+            // 僅 E、F、G、H、L、M 欄（資料列 + 合計列）設 14 號字；其餘維持範本
+            var ledgerFontRows = totalRowIndex - startRow + 1;
+            summarySheet.getRange(startRow, 5, ledgerFontRows, 4).setFontSize(14); // E～H
+            summarySheet.getRange(startRow, 12, ledgerFontRows, 2).setFontSize(14); // L～M
             var footerStartRow = totalRowIndex + 1;
             summarySheet.getRange(footerStartRow, 1).setValue("製表人：");
             summarySheet.getRange(footerStartRow, 8).setValue("勞保承辦：");
