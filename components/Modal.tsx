@@ -62,7 +62,7 @@ const Modal: React.FC<ModalProps> = ({
           </div>
           <h3 className="text-lg font-bold text-slate-800 flex-1">{title}</h3>
           {mode === 'alert' && (
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
               <X size={20} />
             </button>
           )}
@@ -82,6 +82,7 @@ const Modal: React.FC<ModalProps> = ({
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end space-x-3 flex-shrink-0">
             {mode === 'confirm' && (
               <button
+                type="button"
                 onClick={onClose}
                 className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors focus:ring-2 focus:ring-slate-200"
               >
@@ -89,6 +90,7 @@ const Modal: React.FC<ModalProps> = ({
               </button>
             )}
             <button
+              type="button"
               onClick={() => {
                 if (onConfirm) onConfirm();
                 if (mode === 'alert') onClose();

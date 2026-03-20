@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { LeaveType, PayType, TimetableSlot, LeaveRecord, TeacherType, Teacher, COMMON_SUBJECTS } from '../types';
 import { convertSlotsToDetails, getDaysInMonth, parseLocalDate, normalizeDateString } from '../utils/calculations';
@@ -70,7 +70,13 @@ const EntryForm: React.FC = () => {
     isOpen: false, title: '', message: '', type: 'info', mode: 'alert', confirmText: undefined
   });
 
-  const closeModal = () => setModal(prev => ({ ...prev, isOpen: false }));
+  /** 避免刪除節次確認被連續觸發兩次（雙層 overlay / 重複 click） */
+  const deleteSlotConfirmLockRef = useRef(false);
+
+  const closeModal = () => {
+    deleteSlotConfirmLockRef.current = false;
+    setModal(prev => ({ ...prev, isOpen: false }));
+  };
   const showModal = (props: Partial<typeof modal>) => {
       setModal({
           isOpen: true, title: props.title || '訊息', message: props.message || '', type: props.type || 'info',
@@ -317,16 +323,23 @@ const EntryForm: React.FC = () => {
      setEditingSlot(null);
   };
 
-  const handleDeleteSlotClick = () => {
-    if (!editingSlot) return;
+  const handleDeleteSlotClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!editingSlot || deleteSlotConfirmLockRef.current) return;
+    deleteSlotConfirmLockRef.current = true;
+    const slotSnapshot = editingSlot;
     showModal({
       title: '確認刪除此節課',
-      message: `確定要刪除「${editingSlot.date} ${editingSlot.period}」${editingSlot.subject} ${editingSlot.className} 嗎？`,
+      message: `確定要刪除「${slotSnapshot.date} ${slotSnapshot.period}」${slotSnapshot.subject} ${slotSnapshot.className} 嗎？`,
       type: 'warning',
       mode: 'confirm',
       confirmText: '刪除',
       cancelText: '取消',
-      onConfirm: () => { handleDeleteSlot(); closeModal(); }
+      onConfirm: () => {
+        handleDeleteSlot();
+        closeModal();
+      }
     });
   };
 
@@ -553,8 +566,8 @@ const EntryForm: React.FC = () => {
           </div>
       )}
 
-      {/* Slot Editor (Existing) ... */}
-      {editingSlot && (
+      {/* Slot Editor：全域 Modal 開啟時隱藏，避免與確認視窗兩層 z-index 疊加或重複互動 */}
+      {editingSlot && !modal.isOpen && (
          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 border border-slate-200">
                 <div className="bg-slate-50 px-6 py-4 border-b flex justify-between items-center"><h3 className="font-bold text-slate-800">編輯課程</h3><button onClick={() => setEditingSlot(null)}><X size={20} className="text-slate-400"/></button></div>

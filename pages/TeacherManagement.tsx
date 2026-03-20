@@ -457,12 +457,16 @@ export default function TeacherManagement() {
     };
 
     if (editingId) {
-      if (editingId !== finalData.name) {
-          const exists = teachers.some(t => t.name === finalData.name);
-          if (exists) { alert(`教師姓名 "${finalData.name}" 已存在。`); return; }
-          renameTeacher(editingId, { ...finalData, id: finalData.name });
+      // 重要：teacher.id 不一定等於 teacher.name（歷史資料可能不一致）。
+      // 只有「使用者真的改了姓名」才嘗試 rename（因為 rename 會改 Firestore docId）。
+      const editingTeacher = teachers.find(t => t.id === editingId);
+      const nameChanged = editingTeacher ? editingTeacher.name !== finalData.name : false;
+      if (nameChanged) {
+        const exists = teachers.some(t => t.id !== editingId && t.name === finalData.name);
+        if (exists) { alert(`教師姓名 "${finalData.name}" 已存在。`); return; }
+        renameTeacher(editingId, { ...finalData, id: finalData.name });
       } else {
-          updateTeacher({ ...finalData, id: editingId });
+        updateTeacher({ ...finalData, id: editingId });
       }
     } else {
       const exists = teachers.some(t => t.name === finalData.name);

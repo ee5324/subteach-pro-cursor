@@ -149,19 +149,30 @@ const effectiveDateRules = [
   '其餘條文，自中華民國 114 年 10 月 10 日施行。'
 ];
 
+/** 法源：教育人員留職停薪辦法 */
+const leaveWithoutPayArticle9Intro =
+  '教育人員留職停薪期間所遺職（課）務，由現職人員代理、兼辦，並得依下列方式辦理：';
+
+const leaveWithoutPayArticle9Items = [
+  '一、教師：依規定聘任代課、代理或兼任教師。',
+  '二、未兼任或擔任主管職務之社會教育機構專業人員或學術研究機構研究人員：依約聘僱相關法令規定約聘或約僱人員。',
+  '三、運動教練：聘任依各級學校專任運動教練資格審定辦法審定合格，並取得教練證之人員代理；代理三個月以上者，應經教練評審委員會遴選之。'
+];
+
 const LeaveRules: React.FC = () => {
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-800">請假規則</h1>
         <p className="text-slate-500 mt-2 text-sm md:text-base">
-          依教師請假規則條文整理適用對象、各類假別、公假、休假、請假手續與私校特別規定。
+          依教師請假規則條文整理適用對象、各類假別、公假、休假、請假手續與私校特別規定；並摘錄教育人員留職停薪辦法第九條（留停期間職課務代理方式）。
         </p>
       </div>
 
       <InstructionPanel title="使用說明：請假規則" isOpenDefault>
         <p>本頁改以條文架構整理，避免僅列假別而忽略適用範圍、私校例外、公假事由與請假手續。</p>
         <p>如遇個案認定、證明文件、留職停薪或薪給爭議，仍應以正式法規、人事單位解釋及主管機關最新函釋為準。</p>
+        <p>留職停薪期間之職（課）務如何派代，請一併參照下方「教育人員留職停薪辦法」第九條摘錄。</p>
       </InstructionPanel>
 
       <div className="grid gap-6">
@@ -248,6 +259,23 @@ const LeaveRules: React.FC = () => {
                 {rule}
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-lg font-bold text-slate-800">教育人員留職停薪辦法：第九條</h2>
+            <p className="text-sm text-slate-500 mt-1">法源：教育人員留職停薪辦法。與教師請假規則所定課（職）務代理等規定併同參考。</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-slate-700 leading-7 font-medium">{leaveWithoutPayArticle9Intro}</p>
+            <div className="space-y-3">
+              {leaveWithoutPayArticle9Items.map(item => (
+                <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 leading-7">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
