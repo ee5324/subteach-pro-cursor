@@ -2,8 +2,8 @@
  * 教師請假申請（Vercel 表單）— 老師自行填寫，寫入 Firestore 待審，由「教師自行申請假單」頁匯入系統
  * 路由：#/teacher-request（公開，不需登入）
  */
-import React, { useState, useMemo, useEffect } from 'react';
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { collection, addDoc, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
 import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react';
 import { TEACHER_REQUEST_LEAVE_TYPES, type TeacherRequestLeaveType } from '../types';
@@ -42,6 +42,68 @@ export default function TeacherLeaveRequest() {
   const [error, setError] = useState('');
   const [showLeaveGuide, setShowLeaveGuide] = useState(false);
   const [scheduleLoadStatus, setScheduleLoadStatus] = useState<'idle' | 'loading' | 'ok' | 'empty' | 'error'>('idle');
+
+  /** 公開課表集合中的教師姓名（文件 ID），供姓名自動完成 */
+  const [publicTeacherNames, setPublicTeacherNames] = useState<string[]>([]);
+  const [namesListLoading, setNamesListLoading] = useState(false);
+  const [nameFieldFocused, setNameFieldFocused] = useState(false);
+  const [nameHighlightIndex, setNameHighlightIndex] = useState(0);
+  const nameBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** 進入頁面時載入已同步至公開查詢的教師姓名 */
+  useEffect(() => {
+    if (!db) return;
+    let cancelled = false;
+    setNamesListLoading(true);
+    void (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'publicTeacherSchedules'));
+        if (cancelled) return;
+        const names = snap.docs
+          .map((d) => d.id)
+          .filter((id) => id && String(id).trim().length > 0)
+          .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+        setPublicTeacherNames(names);
+      } catch {
+        if (!cancelled) setPublicTeacherNames([]);
+      } finally {
+        if (!cancelled) setNamesListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (nameBlurTimerRef.current) clearTimeout(nameBlurTimerRef.current);
+    },
+    [],
+  );
+
+  const nameQueryTrim = teacherName.trim();
+  const filteredTeacherNames = useMemo(() => {
+    if (nameQueryTrim.length < 1 || publicTeacherNames.length === 0) return [];
+    return publicTeacherNames.filter((n) => n.includes(nameQueryTrim)).slice(0, 20);
+  }, [publicTeacherNames, nameQueryTrim]);
+
+  const showNameSuggestions =
+    nameFieldFocused && nameQueryTrim.length >= 1 && filteredTeacherNames.length > 0;
+
+  useEffect(() => {
+    if (showNameSuggestions) setNameHighlightIndex(0);
+    else setNameHighlightIndex(-1);
+  }, [showNameSuggestions, nameQueryTrim, filteredTeacherNames.length]);
+
+  const selectTeacherName = (name: string) => {
+    if (nameBlurTimerRef.current) {
+      clearTimeout(nameBlurTimerRef.current);
+      nameBlurTimerRef.current = null;
+    }
+    setTeacherName(name);
+    setNameFieldFocused(false);
+  };
 
   const datesInRange = useMemo(() => {
     if (!startDate || !endDate) return [];
@@ -279,7 +341,7 @@ export default function TeacherLeaveRequest() {
         </h3>
         <ol className="text-sm text-amber-900 list-decimal list-inside space-y-1">
           <li>請先填寫基本資料（申請人、假別、事由、請假區間）與代課安排。選「公假派代（研習、帶隊參賽等）」時須填寫公文文號。</li>
-          <li>填妥<strong>申請人姓名</strong>與<strong>請假起訖日</strong>後，系統會自動從公開課表帶入週課表（無須再按按鈕）；若查無課表請手動點選節次填寫。</li>
+          <li><strong>申請人姓名</strong>請輸入至少一個字，會顯示已同步公開課表之教師姓名供點選；填妥姓名與<strong>請假起訖日</strong>後，系統會自動帶入週課表（無須再按按鈕）；若查無課表請手動點選節次填寫。</li>
           <li>在「週課表」中可點選格子修改科目、班級；可切換週次填寫多日。</li>
           <li>送出後請靜候教學組審核，必要時將與您聯繫確認。</li>
         </ol>
@@ -309,9 +371,84 @@ export default function TeacherLeaveRequest() {
         <section className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-slate-200">
           <h3 className="font-bold text-slate-800 mb-3 sm:mb-4 text-base sm:text-lg">基本資料</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1.5">申請人姓名 *</label>
-              <input type="text" value={teacherName} onChange={(e) => setTeacherName(e.target.value)} required className="w-full min-h-[44px] px-3 py-2.5 text-base border border-slate-200 rounded-lg touch-manipulation" placeholder="請輸入姓名" autoComplete="name" enterKeyHint="next" />
+            <div className="relative">
+              <label className="block text-sm font-medium text-slate-600 mb-1.5" htmlFor="teacher-request-name">
+                申請人姓名 *
+              </label>
+              <input
+                id="teacher-request-name"
+                type="text"
+                value={teacherName}
+                onChange={(e) => setTeacherName(e.target.value)}
+                onFocus={() => {
+                  if (nameBlurTimerRef.current) {
+                    clearTimeout(nameBlurTimerRef.current);
+                    nameBlurTimerRef.current = null;
+                  }
+                  setNameFieldFocused(true);
+                }}
+                onBlur={() => {
+                  nameBlurTimerRef.current = setTimeout(() => setNameFieldFocused(false), 200);
+                }}
+                onKeyDown={(e) => {
+                  if (!showNameSuggestions) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setNameHighlightIndex((i) =>
+                      Math.min(i + 1, filteredTeacherNames.length - 1),
+                    );
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setNameHighlightIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === 'Enter' && nameHighlightIndex >= 0) {
+                    e.preventDefault();
+                    const pick = filteredTeacherNames[nameHighlightIndex];
+                    if (pick) selectTeacherName(pick);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setNameFieldFocused(false);
+                  }
+                }}
+                required
+                className="w-full min-h-[44px] px-3 py-2.5 text-base border border-slate-200 rounded-lg touch-manipulation"
+                placeholder="請輸入姓名（至少一字可選清單）"
+                autoComplete="off"
+                enterKeyHint="next"
+                role="combobox"
+                aria-expanded={showNameSuggestions}
+                aria-controls="teacher-name-suggestions"
+                aria-autocomplete="list"
+              />
+              {namesListLoading && (
+                <p className="text-xs text-slate-400 mt-1">載入姓名清單中…</p>
+              )}
+              {showNameSuggestions && (
+                <ul
+                  id="teacher-name-suggestions"
+                  role="listbox"
+                  className="absolute z-40 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1"
+                >
+                  {filteredTeacherNames.map((n, idx) => (
+                    <li key={n} role="option" aria-selected={idx === nameHighlightIndex}>
+                      <button
+                        type="button"
+                        className={`w-full text-left px-3 py-2.5 text-base touch-manipulation ${
+                          idx === nameHighlightIndex
+                            ? 'bg-indigo-100 text-indigo-900'
+                            : 'text-slate-800 hover:bg-slate-50'
+                        }`}
+                        onMouseDown={(ev) => {
+                          ev.preventDefault();
+                          selectTeacherName(n);
+                        }}
+                        onMouseEnter={() => setNameHighlightIndex(idx)}
+                      >
+                        {n}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1.5">假別 *</label>
