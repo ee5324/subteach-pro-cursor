@@ -219,7 +219,7 @@ var OvertimeManager = {
   _remarksRichText: function(plain) {
       var s = plain == null ? '' : String(plain);
       var builder = SpreadsheetApp.newRichTextValue().setText(s);
-      var redBold = SpreadsheetApp.newTextStyle().setForeground('#b91c1c').setBold(true).build();
+      var redBold = SpreadsheetApp.newTextStyle().setForegroundColor('#b91c1c').setBold(true).build();
 
       function applyAll(patternSource) {
           var m;
