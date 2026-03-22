@@ -26,10 +26,10 @@ export enum LeaveType {
  * 匯入主系統時請用 mapTeacherRequestLeaveTypeToSystemLeaveType 對應至 LeaveType；管理員可在代課單編輯頁再調整。
  */
 export const TEACHER_REQUEST_LEAVE_TYPES = [
-  '公假派帶(研習、帶隊參賽等，需檢附公文)',
-  '身心調適假(無需公文，每年三天)',
+  '公假派代(研習、帶隊參賽等，需檢附公文)',
+  '身心調適假派代(無需公文，每年三天)',
   '自理(事病假等)',
-  '公假(喪產等)',
+  '公假派代(喪產等)',
   '其他假別',
 ] as const;
 
@@ -43,11 +43,18 @@ export function mapTeacherRequestLeaveTypeToSystemLeaveType(requestLeaveType: st
   const raw = (requestLeaveType || '').trim();
   if (!raw) return LeaveType.PERSONAL;
 
-  // 新版公開表單（順序：先比對較具體字串，避免「公假」誤判）
-  if (raw.includes('公假派帶')) return LeaveType.PUBLIC_OFFICIAL;
+  // 新版公開表單（順序：先比對較具體字串；「公假派代」含研習與喪產兩種，須先判喪產）
+  if (raw.includes('公假派帶')) return LeaveType.PUBLIC_OFFICIAL; // 舊版錯字，仍相容
+  if (
+    (raw.includes('公假派代') && (raw.includes('喪產') || raw.includes('產假'))) ||
+    raw.includes('公假(喪產') ||
+    raw.includes('公假（喪產')
+  ) {
+    return LeaveType.PUBLIC_GENERAL;
+  }
+  if (raw.includes('公假派代')) return LeaveType.PUBLIC_OFFICIAL;
   if (raw.includes('身心調適假')) return LeaveType.PUBLIC_MENTAL;
   if (raw.includes('自理(事病假') || raw.includes('自理（事病假') || raw === '自理') return LeaveType.PERSONAL;
-  if (raw.includes('公假(喪產') || raw.includes('公假（喪產')) return LeaveType.PUBLIC_GENERAL;
   if (raw.includes('其他假別')) return LeaveType.PUBLIC_AFFAIRS;
 
   // 舊版公開表單

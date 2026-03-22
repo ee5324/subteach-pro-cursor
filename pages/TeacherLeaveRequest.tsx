@@ -12,14 +12,14 @@ const PERIOD_ROWS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
 
 /** 公開表單假別說明（與 TEACHER_REQUEST_LEAVE_TYPES 順序一致） */
 const LEAVE_TYPE_GUIDE: { type: TeacherRequestLeaveType; text: string }[] = [
-  { type: '公假派帶(研習、帶隊參賽等，需檢附公文)', text: '研習、帶隊參賽、公務派代等，請檢附公文；匯入系統後對應「公付 (公假)」，教學組可再調整。' },
-  { type: '身心調適假(無需公文，每年三天)', text: '依校內規定之身心調適假（每年三天等）；無需公文。匯入後對應「公付 (身心)」，教學組可再調整。' },
+  { type: '公假派代(研習、帶隊參賽等，需檢附公文)', text: '研習、帶隊參賽、公務派代等，請檢附公文；匯入系統後對應「公付 (公假)」，教學組可再調整。' },
+  { type: '身心調適假派代(無需公文，每年三天)', text: '依校內規定之身心調適假（每年三天等），學校派代；無需公文。匯入後對應「公付 (身心)」，教學組可再調整。' },
   { type: '自理(事病假等)', text: '事假、病假等由個人負擔或依校規辦理者。匯入後對應「自理 (事假/病假)」。' },
-  { type: '公假(喪產等)', text: '喪假、產假等法定或校定公假。匯入後對應「公付 (喪病產等)」。' },
+  { type: '公假派代(喪產等)', text: '喪假、產假等法定或校定公假，學校派代。匯入後對應「公付 (喪病產等)」。' },
   { type: '其他假別', text: '未列於上列者請選此並於事由說明；匯入後暫對應「公付 (其他事務費)」，請教學組於主系統代課單改為正確假別。' },
 ];
 
-const REQUIRES_DOC_LEAVE: TeacherRequestLeaveType = '公假派帶(研習、帶隊參賽等，需檢附公文)';
+const REQUIRES_DOC_LEAVE: TeacherRequestLeaveType = '公假派代(研習、帶隊參賽等，需檢附公文)';
 
 type SlotDetail = { date: string; period: string; subject: string; className: string };
 
@@ -278,7 +278,7 @@ export default function TeacherLeaveRequest() {
           填寫說明
         </h3>
         <ol className="text-sm text-amber-900 list-decimal list-inside space-y-1">
-          <li>請先填寫基本資料（申請人、假別、事由、請假區間）與代課安排。選「公假派帶…」時須填寫公文文號。</li>
+          <li>請先填寫基本資料（申請人、假別、事由、請假區間）與代課安排。選「公假派代（研習、帶隊參賽等）」時須填寫公文文號。</li>
           <li>填妥<strong>申請人姓名</strong>與<strong>請假起訖日</strong>後，系統會自動從公開課表帶入週課表（無須再按按鈕）；若查無課表請手動點選節次填寫。</li>
           <li>在「週課表」中可點選格子修改科目、班級；可切換週次填寫多日。</li>
           <li>送出後請靜候教學組審核，必要時將與您聯繫確認。</li>
