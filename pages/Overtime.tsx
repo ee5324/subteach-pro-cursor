@@ -13,6 +13,31 @@ import { getStandardBase, parseLocalDate, normalizeDateString, getEffectiveFixed
 import { callGasApi } from '../utils/api';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
+/** 超鐘點清冊「備註」匯出：週二34 週三23（同日節次連寫，不同日空白分隔） */
+function buildOvertimeExportWeekPattern(
+  slots: { day: number; period: string }[],
+  periodOrder: string[],
+): string {
+  if (!slots?.length) return '';
+  const byDay = new Map<number, string[]>();
+  slots.forEach((s) => {
+    if (s.day < 1 || s.day > 5) return;
+    if (!byDay.has(s.day)) byDay.set(s.day, []);
+    byDay.get(s.day)!.push(String(s.period));
+  });
+  const parts: string[] = [];
+  for (let day = 1; day <= 5; day++) {
+    const arr = byDay.get(day);
+    if (!arr?.length) continue;
+    const sorted = [...new Set(arr)].sort(
+      (a, b) => periodOrder.indexOf(a) - periodOrder.indexOf(b),
+    );
+    const dayName = ['一', '二', '三', '四', '五'][day - 1];
+    parts.push(`週${dayName}${sorted.join('')}`);
+  }
+  return parts.join(' ');
+}
+
 const ScheduleSlot: React.FC<{ 
     label: string; 
     isOvertime: boolean; 
@@ -399,11 +424,12 @@ const Overtime: React.FC = () => {
           }
       }
       const log: string[] = [];
-      graduateDates.forEach(d => log.push(`${d} (畢業後)`));
-      leaveByDate.forEach((periods, shortDate) => {
+      const sortedLeave = Array.from(leaveByDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      sortedLeave.forEach(([shortDate, periods]) => {
           const sorted = Array.from(periods).sort((a, b) => periodOrderOvertime.indexOf(a) - periodOrderOvertime.indexOf(b));
-          log.push(`${shortDate}(${sorted.join('、')}節)請假扣除`);
+          log.push(`${shortDate}請假-${sorted.length}`);
       });
+      Array.from(graduateDates).sort().forEach((d) => log.push(`${d}畢業後`));
       return { grossCount, netCount, details: log };
   };
 
@@ -508,11 +534,16 @@ const Overtime: React.FC = () => {
               });
           }
       });
-      const details: string[] = [];
+      const detailLines: { key: string; text: string }[] = [];
       groupByDateOriginal.forEach(({ date, originalName, periods }) => {
-          const sorted = Array.from(periods).sort((a, b) => periodOrderOvertime.indexOf(a) - periodOrderOvertime.indexOf(b));
-          details.push(`${date}(${sorted.join('、')}節)代${originalName}`);
+          const n = periods.size;
+          detailLines.push({
+              key: `${date}_${originalName}`,
+              text: `${date}代${originalName}+${n}`,
+          });
       });
+      detailLines.sort((a, b) => a.key.localeCompare(b.key));
+      const details = detailLines.map((x) => x.text);
       const sessionsByDate = Array.from(countByDate.entries())
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([date, count]) => ({ date, count }));
@@ -586,9 +617,9 @@ const Overtime: React.FC = () => {
           }
       });
       const details: string[] = [];
-      leaveByDate.forEach((periods, shortDate) => {
-          const sorted = Array.from(periods).sort((a, b) => periodOrderOvertime.indexOf(a) - periodOrderOvertime.indexOf(b));
-          details.push(`${shortDate}(${sorted.join('、')}節)請假扣除`);
+      const sortedEntries = Array.from(leaveByDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      sortedEntries.forEach(([shortDate, periods]) => {
+          details.push(`${shortDate}請假-${periods.size}`);
       });
       return { count, details };
   };
@@ -935,17 +966,23 @@ const Overtime: React.FC = () => {
               // Reduction Details Text
               const reductionDetail = (row.teacher.reductions || []).map(r => `${r.title}(${r.periods})`).join('、');
               
-              // Slot Details Text
-              const slotDetail = row.hasPreciseConfig ? row.overtimeSlots.map(s => {
-                  const dayName = ['一','二','三','四','五'][s.day-1];
-                  return `週${dayName}${s.period}`;
-              }).join('、') : '';
-
-              const remarks = [
-                  row.adjustmentReason,
+              // 備註欄（與紙本習慣一致）：第一行 週二34；換行後 MMDD請假-N、MMDD代姓名+N …
+              const weekPattern = row.hasPreciseConfig
+                  ? buildOvertimeExportWeekPattern(row.overtimeSlots, periodOrderOvertime)
+                  : '';
+              const tailLines = [
                   ...(row.leaveDeductions || []),
-                  ...((row.subAdditions && row.subAdditions.details) || [])
-              ].filter(Boolean).join('；');
+                  ...((row.subAdditions && row.subAdditions.details) || []),
+              ];
+              if (row.adjustmentReason?.trim()) tailLines.push(row.adjustmentReason.trim());
+
+              let remarks = '';
+              if (weekPattern) {
+                  remarks =
+                      tailLines.length > 0 ? `${weekPattern}；\n${tailLines.join('\n')}` : weekPattern;
+              } else {
+                  remarks = tailLines.join('\n');
+              }
 
               return {
                   teacherId: row.teacher.id,
@@ -970,13 +1007,11 @@ const Overtime: React.FC = () => {
                   
                   // Adjustment & Reason
                   adjustment: row.adjustment,
-                  adjustmentReason: row.adjustmentReason + 
-                      (row.leaveDeductions ? " " + row.leaveDeductions.join(' ') : "") + 
-                      (row.subAdditions && row.subAdditions.details.length > 0 ? " " + row.subAdditions.details.join(' ') : ""),
+                  adjustmentReason: row.adjustmentReason || '',
                   
-                  // Text Fields for P & Q columns
+                  // Text Fields for P & Q columns（O 欄備註由 remarks 承載完整格式；不重複寫入 slotDetail）
                   reductionDetail: reductionDetail,
-                  slotDetail: slotDetail
+                  slotDetail: ''
               };
           });
 
@@ -1129,6 +1164,7 @@ const Overtime: React.FC = () => {
           </CollapsibleItem>
           <CollapsibleItem title="匯出報表">
             <p>設定完成後，可匯出 Excel 清冊或列印檢核報表。建議先點擊「統計總表」確認總額後再匯出。</p>
+            <p className="mt-2"><strong>清冊「備註」欄格式（精確模式）：</strong>第一行為超鐘點週課表，例如「週二34 週三23」（同日多節連寫）；句號式分號「；」後換行，下列為請假扣除「MMDD請假-節數」、協助代課「MMDD代姓名+節數」，與紙本核銷習慣一致。簡易模式僅列請假／代課行。手動調整原因列在最後一行。</p>
           </CollapsibleItem>
         </div>
       </InstructionPanel>
@@ -1235,7 +1271,7 @@ const Overtime: React.FC = () => {
                                  <td className="px-2 py-3 text-center">{onlySubstitute ? (<span className="text-slate-300 text-xs">—</span>) : row.hasPreciseConfig ? (<span className="text-xs text-slate-300">-</span>) : (<input type="number" step="0.1" className="w-14 text-center border border-slate-200 rounded py-1 text-slate-700" value={row.weeksCount} onChange={(e) => handleCellChange(row.teacher.id, 'weeksCount', e.target.value)} />)}</td>
                                  <td className="px-2 py-3 text-center bg-indigo-50/20"><span className="font-bold text-lg text-indigo-700">{row.displayCount}</span><div className="text-[9px] text-slate-400">{onlySubstitute ? '代課加計' : calcMethod === 'precise' ? `日曆累計 (共${row.preciseGross}節)` : `概算 (x${row.weeksCount}週)`}</div></td>
                                  <td className="px-2 py-3 text-center bg-amber-50/20"><input type="number" className="w-16 text-center border border-amber-200 rounded py-1 focus:ring-2 focus:ring-amber-500 outline-none text-amber-700 font-medium" placeholder="0" value={row.adjustment} onChange={(e) => handleCellChange(row.teacher.id, 'adjustment', e.target.value)} /></td>
-                                 <td className="px-4 py-3"><div className="flex flex-col space-y-1"><input type="text" className="w-full text-xs border border-slate-200 rounded px-2 py-1 placeholder-slate-300" placeholder="手動調整原因..." value={row.adjustmentReason} onChange={(e) => handleCellChange(row.teacher.id, 'adjustmentReason', e.target.value)} />{row.leaveDeductions && row.leaveDeductions.length > 0 && (<div className="text-[10px] text-rose-500 bg-rose-50 p-1 rounded mt-1">{row.leaveDeductions.map((d, i) => (<div key={i}>- {d}</div>))}</div>)}{row.subAdditions && row.subAdditions.details.length > 0 && (<div className="text-[10px] text-emerald-600 bg-emerald-50 p-1 rounded mt-1">{row.subAdditions.details.map((d, i) => (<div key={i}>+ {d}</div>))}</div>)}</div></td>
+                                 <td className="px-4 py-3"><div className="flex flex-col space-y-1"><input type="text" className="w-full text-xs border border-slate-200 rounded px-2 py-1 placeholder-slate-300" placeholder="手動調整原因..." value={row.adjustmentReason} onChange={(e) => handleCellChange(row.teacher.id, 'adjustmentReason', e.target.value)} />{row.leaveDeductions && row.leaveDeductions.length > 0 && (<div className="text-[10px] text-rose-500 bg-rose-50 p-1 rounded mt-1">{row.leaveDeductions.map((d, i) => (<div key={i}>{d}</div>))}</div>)}{row.subAdditions && row.subAdditions.details.length > 0 && (<div className="text-[10px] text-emerald-600 bg-emerald-50 p-1 rounded mt-1">{row.subAdditions.details.map((d, i) => (<div key={i}>{d}</div>))}</div>)}</div></td>
                                  <td className="px-4 py-3 text-right"><div className="font-bold text-slate-800">${totalPay.toLocaleString()}</div></td>
                                  <td className="px-4 py-3 text-center">
                                      <div className="flex items-center justify-center gap-1">

@@ -132,6 +132,7 @@ var OvertimeManager = {
           var totalColValue = payablePeriods > 0 ? payablePeriods : "=SUM(H" + currentRowNum + ":L" + currentRowNum + ")";
           var amountFormula = "=ROUND(M" + currentRowNum + "*405, 0)";
 
+          // 備註：前端已組好（週課表；換行 + MMDD請假-N / MMDD代姓名+N）；slotDetail 可留空
           var combinedDetail = [item.slotDetail, item.remarks].filter(Boolean).join('；');
 
           var row = [
