@@ -6,7 +6,21 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { collection, addDoc, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../src/lib/firebase';
 import { FileText, Loader2, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Info } from 'lucide-react';
-import { TEACHER_REQUEST_LEAVE_TYPES, type TeacherRequestLeaveType } from '../types';
+import { TEACHER_REQUEST_LEAVE_TYPES, type TeacherRequestLeaveType, TeacherType } from '../types';
+
+/** 公開課表文件上的教師類型／固定兼課標記，用於姓名清單篩選 */
+type PublicScheduleMeta = { teacherType?: string; isFixedOvertimeTeacher?: boolean };
+
+/** 校外／語言教師僅在固定兼課時出現在申請人姓名建議；無欄位之舊資料仍顯示（相容） */
+function showNameInLeaveRequestSuggestions(meta: PublicScheduleMeta): boolean {
+  const hasType = meta.teacherType !== undefined;
+  const hasFixed = meta.isFixedOvertimeTeacher !== undefined;
+  if (!hasType && !hasFixed) return true;
+  if (meta.isFixedOvertimeTeacher === true) return true;
+  const t = meta.teacherType;
+  if (t === TeacherType.EXTERNAL || t === TeacherType.LANGUAGE) return false;
+  return true;
+}
 
 const PERIOD_ROWS = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
 
@@ -60,6 +74,7 @@ export default function TeacherLeaveRequest() {
         const snap = await getDocs(collection(db, 'publicTeacherSchedules'));
         if (cancelled) return;
         const names = snap.docs
+          .filter((d) => showNameInLeaveRequestSuggestions(d.data() as PublicScheduleMeta))
           .map((d) => d.id)
           .filter((id) => id && String(id).trim().length > 0)
           .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
@@ -341,7 +356,7 @@ export default function TeacherLeaveRequest() {
         </h3>
         <ol className="text-sm text-amber-900 list-decimal list-inside space-y-1">
           <li>請先填寫基本資料（申請人、假別、事由、請假區間）與代課安排。選「公假派代（研習、帶隊參賽等）」時須填寫公文文號。</li>
-          <li><strong>申請人姓名</strong>請輸入至少一個字，會顯示已同步公開課表之教師姓名供點選；填妥姓名與<strong>請假起訖日</strong>後，系統會自動帶入週課表（無須再按按鈕）；若查無課表請手動點選節次填寫。</li>
+          <li><strong>申請人姓名</strong>請輸入至少一個字，會顯示已同步公開課表之教師姓名供點選（一般僅校內教師；校外／語言教師僅「固定兼課」者會出現）。仍可手動輸入全名；填妥姓名與<strong>請假起訖日</strong>後，系統會自動帶入週課表；若查無課表請手動點選節次填寫。</li>
           <li>在「週課表」中可點選格子修改科目、班級；可切換週次填寫多日。</li>
           <li>送出後請靜候教學組審核，必要時將與您聯繫確認。</li>
         </ol>

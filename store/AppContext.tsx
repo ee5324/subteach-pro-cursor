@@ -363,13 +363,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await deleteDoc(doc(db, 'languagePayrolls', id));
   };
 
-  /** 同步教師預設課表至公開 collection，供請假表單依姓名帶入課表 */
-  const syncPublicTeacherSchedule = async (teacher: Teacher) => {
+  /**
+   * 同步教師預設課表至公開 collection，供請假表單依姓名帶入課表。
+   * 一併寫入 teacherType、isFixedOvertimeTeacher，供公開表單篩選姓名（校外/語言僅固定兼課者顯示）。
+   * fixedOvertimeConfigForCheck：更新 fixedOvertimeConfig 當下 state 可能尚未更新，可傳入合併後列表。
+   */
+  const syncPublicTeacherSchedule = async (
+    teacher: Teacher,
+    options?: { fixedOvertimeConfigForCheck?: FixedOvertimeConfig[] },
+  ) => {
     if (!db || !teacher.name?.trim()) return;
     const schedule = teacher.defaultSchedule && teacher.defaultSchedule.length > 0
       ? teacher.defaultSchedule.map(s => ({ day: s.day, period: s.period, subject: s.subject || '', className: s.className || '' }))
       : [];
-    await setDoc(doc(db, 'publicTeacherSchedules', teacher.name.trim()), { schedule });
+    const fo = options?.fixedOvertimeConfigForCheck ?? fixedOvertimeConfig;
+    const inFixedConfig = fo.some((c) => c.teacherId === teacher.id);
+    const isFixedOvertime = Boolean(teacher.isFixedOvertimeTeacher) || inFixedConfig;
+    await setDoc(
+      doc(db, 'publicTeacherSchedules', teacher.name.trim()),
+      sanitizeForFirestore({
+        schedule,
+        teacherType: teacher.type,
+        isFixedOvertimeTeacher: isFixedOvertime,
+        updatedAt: Date.now(),
+      }),
+    );
   };
 
   const addTeacher = async (teacher: Teacher) => {
@@ -481,10 +499,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateFixedOvertimeConfig = async (config: FixedOvertimeConfig) => { 
     if (!db) throw new Error("Firebase not initialized");
     await setDoc(doc(db, 'fixedOvertimeConfig', config.teacherId), sanitizeForFirestore(config));
+    const t = teachers.find((x) => x.id === config.teacherId);
+    if (t) {
+      const merged = [...fixedOvertimeConfig.filter((c) => c.teacherId !== config.teacherId), config];
+      await syncPublicTeacherSchedule(t, { fixedOvertimeConfigForCheck: merged });
+    }
   };
   const removeFixedOvertimeConfig = async (teacherId: string) => { 
     if (!db) throw new Error("Firebase not initialized");
     await deleteDoc(doc(db, 'fixedOvertimeConfig', teacherId));
+    const t = teachers.find((x) => x.id === teacherId);
+    if (t) {
+      const merged = fixedOvertimeConfig.filter((c) => c.teacherId !== teacherId);
+      await syncPublicTeacherSchedule(t, { fixedOvertimeConfigForCheck: merged });
+    }
   };
   const addGradeEvent = async (event: GradeEvent) => { 
     if (!db) throw new Error("Firebase not initialized");
