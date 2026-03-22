@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot, HOURLY_RATE } from '../types';
+import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
@@ -49,6 +49,8 @@ const Records: React.FC = () => {
 
   // Selection State (New)
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
+  /** 多選批次變更憑證狀態時的目標值 */
+  const [batchVoucherStatus, setBatchVoucherStatus] = useState<ProcessingStatus>('已印代課單');
 
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -382,6 +384,28 @@ const Records: React.FC = () => {
   const handleStatusChange = (record: LeaveRecord, newStatus: string) => {
       const updatedRecord = { ...record, processingStatus: newStatus as ProcessingStatus };
       updateRecord(updatedRecord);
+  };
+
+  /** 將憑證狀態（processingStatus）批次套用至已勾選的代課單 */
+  const handleBatchApplyVoucherStatus = () => {
+      if (selectedRecordIds.size === 0) {
+          showModal({ title: '未選取', message: '請先勾選至少一筆代課紀錄。', type: 'warning' });
+          return;
+      }
+      const ids = [...selectedRecordIds];
+      let applied = 0;
+      ids.forEach((id) => {
+          const record = records.find((r) => r.id === id);
+          if (record) {
+              updateRecord({ ...record, processingStatus: batchVoucherStatus });
+              applied += 1;
+          }
+      });
+      showModal({
+          title: '已更新',
+          message: `已將 ${applied} 筆紀錄的憑證狀態設為「${batchVoucherStatus}」。`,
+          type: 'success',
+      });
   };
 
   const handleDeleteRecord = (record: LeaveRecord) => {
@@ -992,9 +1016,10 @@ const Records: React.FC = () => {
             <p><strong>匯出清冊/憑證：</strong>產生當月的印領清冊與黏貼憑證 (Google Doc/Sheet)，用於核銷。</p>
             <p><strong>匯出彙整表：</strong>產生代課單彙整表 (Excel/Sheet)，方便進行大數據分析或存檔。</p>
           </CollapsibleItem>
-          <CollapsibleItem title="備註與列印提醒">
+          <CollapsibleItem title="備註與憑證狀態">
             <p><strong>備註：</strong>每筆紀錄有「備註」欄，點擊即可填寫或修改（例：已列印 3/8、未印、跑章中），方便辨識該筆是否已列印紙本代課單。</p>
-            <p><strong>狀態：</strong>列印紙本後請將狀態改為「已印代課單」，可搭配備註記錄列印日期，避免重複列印或遺漏。</p>
+            <p><strong>憑證狀態：</strong>列印紙本後請改為「已印代課單」，可搭配備註記錄列印日期。</p>
+            <p><strong>多選批次：</strong>在「依請假人」檢視勾選左側方框後，可用上方「批次變更憑證狀態」一次套用至多筆紀錄。</p>
           </CollapsibleItem>
           <CollapsibleItem title="重新計算金額">
             <p>若代課教師的薪級有變動 (例如補登證書或薪級)，可點擊列表右側的「計算機圖示」按鈕，系統將依據最新薪級重新計算該筆紀錄的代課費。</p>
@@ -1081,6 +1106,42 @@ const Records: React.FC = () => {
                 </div>
            </div>
       </div>
+
+      {/* 多選：批次變更憑證狀態（依請假人 + 有勾選時顯示） */}
+      {viewMode === 'byLeaveTeacher' && selectedRecordIds.size > 0 && (
+        <div className="mb-6 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-bold text-indigo-900">
+            <CheckSquare size={18} className="text-indigo-600 shrink-0" />
+            <span>已選 {selectedRecordIds.size} 筆</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            <label className="text-xs font-semibold text-indigo-800 whitespace-nowrap">憑證狀態改為</label>
+            <select
+              className="min-h-[40px] px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm font-medium text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={batchVoucherStatus}
+              onChange={(e) => setBatchVoucherStatus(e.target.value as ProcessingStatus)}
+            >
+              {PROCESSING_STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleBatchApplyVoucherStatus}
+              className="min-h-[40px] px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-sm"
+            >
+              套用至已選
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRecordIds(new Set())}
+              className="min-h-[40px] px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm text-indigo-700 hover:bg-white/80"
+            >
+              清除選取
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Error Log Section */}
       {errorLog && (
@@ -1123,7 +1184,7 @@ const Records: React.FC = () => {
                     <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">期間</th>
                     <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課明細 ({selectedMonth})</th>
                     <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">當月總金額</th>
-                    <th className="px-4 py-4 font-semibold text-slate-700 text-center w-32 whitespace-nowrap">狀態</th>
+                    <th className="px-4 py-4 font-semibold text-slate-700 text-center w-32 whitespace-nowrap">憑證狀態</th>
                     <th className="px-4 py-4 font-semibold text-slate-700 text-center w-28 whitespace-nowrap">備註</th>
                     <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">操作</th>
                   </tr>
@@ -1280,11 +1341,11 @@ const Records: React.FC = () => {
                                 className={`text-xs font-bold px-2 py-1 rounded-full border appearance-none text-center cursor-pointer outline-none shadow-sm w-24 ${getStatusColor(record.processingStatus)}`}
                                 value={status}
                                 onChange={(e) => handleStatusChange(record, e.target.value)}
+                                title="憑證／行政處理狀態"
                               >
-                                  <option value="待處理">待處理</option>
-                                  <option value="已印代課單">已印代課單</option>
-                                  <option value="跑章中">跑章中</option>
-                                  <option value="結案待算">結案待算</option>
+                                  {PROCESSING_STATUS_OPTIONS.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
                               </select>
                               {status === '待處理' && (
                                 <p className="text-[10px] text-amber-600 mt-1 whitespace-nowrap" title="列印紙本後請改為「已印代課單」並可填備註">列印後請改狀態</p>

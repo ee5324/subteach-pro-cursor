@@ -87,6 +87,13 @@ const EntryForm: React.FC = () => {
       });
   };
 
+  const handleLeaveTypeChange = (v: LeaveType) => {
+    setLeaveType(v);
+    if (v === LeaveType.PUBLIC_MENTAL) {
+      setReason('身心調適');
+    }
+  };
+
   // --- Section 1: Leave Info ---
   const [originalTeacherId, setOriginalTeacherId] = useState('');
   const [leaveType, setLeaveType] = useState<LeaveType>(LeaveType.PUBLIC_OFFICIAL);
@@ -637,7 +644,7 @@ const EntryForm: React.FC = () => {
              </div>
              <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-500 mb-1">假別</label>
-                <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white" value={leaveType} onChange={e => setLeaveType(e.target.value as LeaveType)}>{Object.values(LeaveType).map(t => <option key={t} value={t}>{t}</option>)}</select>
+                <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white" value={leaveType} onChange={e => handleLeaveTypeChange(e.target.value as LeaveType)}>{Object.values(LeaveType).map(t => <option key={t} value={t}>{t}</option>)}</select>
              </div>
              <div className="md:col-span-3">
                 <label className="block text-xs font-bold text-slate-500 mb-1">公文字號</label>

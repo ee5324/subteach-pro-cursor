@@ -61,6 +61,9 @@ export function mapTeacherRequestLeaveTypeToSystemLeaveType(requestLeaveType: st
 // 新增：處理狀態
 export type ProcessingStatus = '待處理' | '已印代課單' | '跑章中' | '結案待算';
 
+/** 代課清冊「憑證狀態」（與 LeaveRecord.processingStatus 一致） */
+export const PROCESSING_STATUS_OPTIONS: readonly ProcessingStatus[] = ['待處理', '已印代課單', '跑章中', '結案待算'] as const;
+
 /** 代課系統白名單：文件 ID = email，僅 admin 可寫入；白名單內可讀自己 */
 export interface SubteachAllowedUser {
   email: string;   // 與文件 ID 一致
