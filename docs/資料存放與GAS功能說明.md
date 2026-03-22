@@ -31,7 +31,7 @@
 | **系統設定－資料遷移** | 從舊版 GAS/試算表載入資料、遷移至 Firebase | `LOAD_DATA` |
 | **公開缺額**（若 GAS 有參與） | 同步公開缺額至 GAS 端 | `SYNC_PUBLIC_VACANCIES` |
 
-**說明**：外部請假申請僅使用 Firebase（老師從「老師填寫請假單」送出，存於 `teacherLeaveRequests`），不需 GAS。
+**說明**：教師自行申請假單僅使用 Firebase（老師從「老師填寫請假單」送出，存於 `teacherLeaveRequests`），不需 GAS。
 
 **結論**：**匯出報表、代課單、各類報表與檔案產生**都需 GAS；未設定或未連線時，這些按鈕會提示「請先設定 GAS URL」或無法執行。
 

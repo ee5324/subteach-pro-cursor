@@ -1,5 +1,5 @@
 /**
- * 教師請假申請（Vercel 表單）— 老師自行填寫，寫入 Firestore 待審，由外部申請頁匯入系統
+ * 教師請假申請（Vercel 表單）— 老師自行填寫，寫入 Firestore 待審，由「教師自行申請假單」頁匯入系統
  * 路由：#/teacher-request（公開，不需登入）
  */
 import React, { useState, useMemo, useEffect } from 'react';

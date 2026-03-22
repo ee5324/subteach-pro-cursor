@@ -27,7 +27,7 @@ const IncomingRequests: React.FC = () => {
         setModal({ isOpen: true, title: props.title || '訊息', message: props.message || '', type: props.type || 'info', mode: props.mode || 'alert', onConfirm: props.onConfirm });
     };
 
-    // 外部申請僅走 Firestore（本系統表單）
+    // 教師自行申請假單僅走 Firestore（本系統表單）
     const pending = useMemo(() => teacherLeaveRequests.filter(r => r.status === 'pending'), [teacherLeaveRequests]);
     const archived = useMemo(() => teacherLeaveRequests.filter(r => r.status === 'archived'), [teacherLeaveRequests]);
 
@@ -116,7 +116,7 @@ const IncomingRequests: React.FC = () => {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800 flex items-center">
                         <FileText className="mr-3 text-indigo-600" />
-                        外部請假申請
+                        教師自行申請假單
                     </h1>
                     <p className="text-slate-500 mt-2">
                         審核並匯入老師透過公開網頁提交的請假單。
@@ -133,7 +133,7 @@ const IncomingRequests: React.FC = () => {
                 </a>
             </header>
 
-            <InstructionPanel title="使用說明：外部請假申請">
+            <InstructionPanel title="使用說明：教師自行申請假單">
                 <ul className="list-disc pl-5 space-y-1">
                     <li><strong>功能概述：</strong>此頁面顯示老師透過「老師填寫請假單」提交的請假申請，資料存於 Firebase，不需 GAS。請將上方連結提供給老師填寫。</li>
                     <li><strong>匯入操作：</strong>
@@ -221,7 +221,7 @@ const IncomingRequests: React.FC = () => {
                                                 <button
                                                     onClick={() => showModal({
                                                         title: '確認刪除此筆申請',
-                                                        message: `確定要刪除此筆外部申請嗎？\n\n申請人：${req.teacherName}\n請假區間：${req.startDate} ~ ${req.endDate}\n\n此操作無法復原，刪除後將無法還原。`,
+                                                        message: `確定要刪除此筆教師自行申請假單嗎？\n\n申請人：${req.teacherName}\n請假區間：${req.startDate} ~ ${req.endDate}\n\n此操作無法復原，刪除後將無法還原。`,
                                                         type: 'warning',
                                                         mode: 'confirm',
                                                         onConfirm: async () => {

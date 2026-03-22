@@ -17,7 +17,7 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       return acc + (r.slots?.filter(s => !s.substituteTeacherId).length || 0);
   }, 0);
 
-  // 外部申請待處理筆數（教師請假申請 status 為 pending）
+  // 教師自行申請假單待處理筆數（teacherLeaveRequests status 為 pending）
   const externalRequestsCount = (teacherLeaveRequests || []).filter(r => r.status === 'pending').length;
 
   // 公開缺額報名筆數（有新報名時於導覽列顯示提示）
@@ -78,6 +78,16 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           <span>代課總表</span>
         </NavLink>
 
+        <NavLink to="/entry" className={linkClass} onClick={onClose}>
+          <FilePlus size={18} />
+          <span>新增代課單</span>
+        </NavLink>
+
+        <NavLink to="/records" className={linkClass} onClick={onClose}>
+          <FileText size={18} />
+          <span>代課清冊/憑證</span>
+        </NavLink>
+
         <NavLink to="/leave-rules" className={linkClass} onClick={onClose}>
           <BookOpenText size={18} />
           <span>請假規則</span>
@@ -85,11 +95,6 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
         {/* Group 1: 日常作業 */}
         <div className={groupTitleClass}>日常作業</div>
-        
-        <NavLink to="/entry" className={linkClass} onClick={onClose}>
-          <FilePlus size={18} />
-          <span>新增代課單</span>
-        </NavLink>
         
         <NavLink to="/pending" className={linkClass} onClick={onClose}>
           <AlertCircle size={18} />
@@ -103,7 +108,7 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         
         <NavLink to="/requests" className={linkClass} onClick={onClose}>
           <Inbox size={18} />
-          <span>外部申請</span>
+          <span>教師自行申請假單</span>
           {externalRequestsCount > 0 && (
             <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm" title={`${externalRequestsCount} 筆待處理`}>
               {externalRequestsCount}
@@ -152,11 +157,6 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         {/* Group 3: 薪資與報表 */}
         <div className={groupTitleClass}>薪資結算</div>
         
-        <NavLink to="/records" className={linkClass} onClick={onClose}>
-          <FileText size={18} />
-          <span>代課清冊/憑證</span>
-        </NavLink>
-
         <NavLink to="/extra-voucher" className={linkClass} onClick={onClose}>
           <FileOutput size={18} />
           <span>額外憑證</span>

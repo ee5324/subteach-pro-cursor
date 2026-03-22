@@ -23,6 +23,9 @@ const PERIOD_ROWS = [
 
 const ALL_PERIOD_IDS = PERIOD_ROWS.map(p => p.id);
 
+/** 建立/編輯代課單：是否顯示「科目」快速選擇鈕（國語、數學…）；關閉時仍可手動輸入科目 */
+const SHOW_SUBJECT_QUICK_PICK = false;
+
 // Helper: Get Local Date String (YYYY-MM-DD) correctly in Taiwan Time
 const getLocalTodayDate = () => {
     const d = new Date();
@@ -578,8 +581,9 @@ const EntryForm: React.FC = () => {
                          <div>
                             <label className="block text-xs font-bold text-slate-500 mb-1">科目</label>
                             <input type="text" className="w-full px-3 py-2 border rounded text-sm" value={editingSlot.subject} onChange={e => setEditingSlot({...editingSlot, subject: e.target.value})}/>
-                            {/* Quick Tags in Editor */}
+                            {SHOW_SUBJECT_QUICK_PICK && (
                             <div className="flex flex-wrap gap-1 mt-1">{COMMON_SUBJECTS.map(s => <button key={s} type="button" onClick={()=>setEditingSlot({...editingSlot, subject: s})} className="text-[10px] bg-slate-100 px-2 py-0.5 rounded hover:bg-indigo-50 hover:text-indigo-600">{s}</button>)}</div>
+                            )}
                          </div>
                          <div><label className="block text-xs font-bold text-slate-500 mb-1">班級</label><input type="text" className="w-full px-3 py-2 border rounded text-sm" value={editingSlot.className} onChange={e => setEditingSlot({...editingSlot, className: e.target.value})}/></div>
                     </div>
@@ -689,7 +693,7 @@ const EntryForm: React.FC = () => {
                    <div>
                       <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center"><BookOpen size={12} className="mr-1"/> 科目</label>
                       <input type="text" placeholder="例: 國語" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" value={activeSubject} onChange={e => setActiveSubject(e.target.value)}/>
-                      {/* Subject Tags */}
+                      {SHOW_SUBJECT_QUICK_PICK && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                           {COMMON_SUBJECTS.map(sub => (
                               <button key={sub} type="button" onClick={() => setActiveSubject(sub)} className="text-[10px] px-2 py-0.5 bg-white border border-slate-200 rounded-full hover:border-indigo-300 hover:text-indigo-600 transition-colors shadow-sm">
@@ -697,6 +701,7 @@ const EntryForm: React.FC = () => {
                               </button>
                           ))}
                       </div>
+                      )}
                    </div>
                    <div className="relative self-start">
                       <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center justify-between"><span className="flex items-center"><Users size={12} className="mr-1"/> 班級</span></label>
