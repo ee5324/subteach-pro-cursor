@@ -21,6 +21,43 @@ export enum LeaveType {
   PERSONAL = '自理 (事假/病假)',
 }
 
+/**
+ * 教師請假公開表單 #/teacher-request 專用之假別（寫入 teacherLeaveRequests.leaveType）。
+ * 匯入主系統時請用 mapTeacherRequestLeaveTypeToSystemLeaveType 對應至 LeaveType；管理員可在代課單編輯頁再調整。
+ */
+export const TEACHER_REQUEST_LEAVE_TYPES = [
+  '公假派帶(研習、帶隊參賽等，需檢附公文)',
+  '身心調適假(無需公文，每年三天)',
+  '自理(事病假等)',
+  '公假(喪產等)',
+  '其他假別',
+] as const;
+
+export type TeacherRequestLeaveType = (typeof TEACHER_REQUEST_LEAVE_TYPES)[number];
+
+/**
+ * 將公開請假表單之假別對應到主系統 LeaveType（清冊／GAS 分類與 EntryForm 一致）。
+ * 含舊版表單選項（公付、身心假、自理）相容。
+ */
+export function mapTeacherRequestLeaveTypeToSystemLeaveType(requestLeaveType: string | undefined): LeaveType {
+  const raw = (requestLeaveType || '').trim();
+  if (!raw) return LeaveType.PERSONAL;
+
+  // 新版公開表單（順序：先比對較具體字串，避免「公假」誤判）
+  if (raw.includes('公假派帶')) return LeaveType.PUBLIC_OFFICIAL;
+  if (raw.includes('身心調適假')) return LeaveType.PUBLIC_MENTAL;
+  if (raw.includes('自理(事病假') || raw.includes('自理（事病假') || raw === '自理') return LeaveType.PERSONAL;
+  if (raw.includes('公假(喪產') || raw.includes('公假（喪產')) return LeaveType.PUBLIC_GENERAL;
+  if (raw.includes('其他假別')) return LeaveType.PUBLIC_AFFAIRS;
+
+  // 舊版公開表單
+  if (raw === '公付' || raw.startsWith('公付')) return LeaveType.PUBLIC_OFFICIAL;
+  if (raw.includes('身心假')) return LeaveType.PUBLIC_MENTAL;
+  if (raw.includes('自理')) return LeaveType.PERSONAL;
+
+  return LeaveType.PUBLIC_AFFAIRS;
+}
+
 // 新增：處理狀態
 export type ProcessingStatus = '待處理' | '已印代課單' | '跑章中' | '結案待算';
 

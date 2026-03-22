@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Loader2, Download, UserPlus, FileText, CheckCircle, ExternalLink, Calendar, Archive, RefreshCcw, EyeOff, LayoutList, Trash2 } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
-import { LeaveRecord, Teacher, TeacherType, PayType, TimetableSlot, LeaveType } from '../types';
+import { LeaveRecord, Teacher, TeacherType, PayType, TimetableSlot, mapTeacherRequestLeaveTypeToSystemLeaveType } from '../types';
 import type { TeacherLeaveRequestDoc } from '../types';
 import { convertSlotsToDetails } from '../utils/calculations';
 import InstructionPanel from '../components/InstructionPanel';
@@ -59,11 +59,12 @@ const IncomingRequests: React.FC = () => {
                 slots.forEach(s => { s.substituteTeacherId = subId; });
             }
             const details = convertSlotsToDetails(slots, teachers, salaryGrades);
-            const categoryNote = req.leaveType ? `【教師勾選：${req.leaveType}】` : "";
+            const mappedLeaveType = mapTeacherRequestLeaveTypeToSystemLeaveType(req.leaveType);
+            const categoryNote = req.leaveType ? `【教師表單假別：${req.leaveType}】` : "";
             const newRecord: LeaveRecord = {
                 id: crypto.randomUUID(),
                 originalTeacherId: teacherId,
-                leaveType: LeaveType.PERSONAL,
+                leaveType: mappedLeaveType,
                 reason: categoryNote + req.reason,
                 docId: req.docId,
                 applicationDate: new Date(req.createdAt).toISOString().split('T')[0],
@@ -139,6 +140,8 @@ const IncomingRequests: React.FC = () => {
                     <li><strong>匯入操作：</strong>
                         <ul className="list-circle pl-5 mt-1 text-slate-500">
                             <li>點擊「匯入系統」按鈕，系統將自動建立對應的代課單與教師資料。</li>
+                            <li>老師在公開表單勾選的假別會<strong>自動對應</strong>到主系統假別（清冊分類用）；事由前會保留「【教師表單假別：…】」備註。</li>
+                            <li>匯入後可在「代課登錄／編輯代課單」<strong>更改假別</strong>，以教學組認定為準。</li>
                             <li>若為新教師，系統會自動建立教師檔案並標記為「新教師」。</li>
                         </ul>
                     </li>
@@ -188,6 +191,7 @@ const IncomingRequests: React.FC = () => {
                         const isNewTeacher = !teachers.some(t => t.name === req.teacherName);
                         const isImported = req.status === 'imported';
                         const isProcessing = actionLoadingId === req.id;
+                        const importPreviewLeaveType = mapTeacherRequestLeaveTypeToSystemLeaveType(req.leaveType);
                         return (
                             <div key={req.id} className={`bg-white rounded-xl shadow-sm border p-6 flex flex-col relative overflow-hidden ${isImported ? 'border-green-200 ring-1 ring-green-100' : 'border-slate-200'}`}>
                                 {isNewTeacher && currentTab === 'pending' && !isImported && (
@@ -206,6 +210,11 @@ const IncomingRequests: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 mb-4 space-y-2 border border-slate-200">
+                                    <p className="text-xs text-slate-500 border-b border-slate-200 pb-2 mb-2">
+                                        <span className="font-semibold text-slate-600">匯入後預設假別（主系統）：</span>
+                                        {importPreviewLeaveType}
+                                        <span className="block mt-0.5 text-slate-400">可在代課單編輯頁修改</span>
+                                    </p>
                                     <p><span className="font-bold text-slate-500">事由：</span>{req.reason}</p>
                                     <p><span className="font-bold text-slate-500">文號：</span>{req.docId || '無'}</p>
                                     <p><span className="font-bold text-slate-500">代課：</span>{req.substituteTeacher}</p>
