@@ -158,9 +158,11 @@ var OvertimeManager = {
           var range = sheet.getRange(startRow, 1, rowsData.length, numCols);
           range.setValues(rowsData);
           range.setHorizontalAlignment("center").setVerticalAlignment("middle")
-               .setBorder(true, true, true, true, true, true).setFontSize(11);
-          sheet.getRange(startRow, 14, rowsData.length, 1).setNumberFormat("#,##0"); // Amount
-          sheet.getRange(startRow, 15, rowsData.length, 2).setWrap(true).setFontSize(9); // Details
+               .setBorder(true, true, true, true, true, true);
+          // A～N（含職別、姓名、鐘點欄位、週分列、合計、金額）：14 號；備註 O、行政減授項目 P 維持較小字
+          sheet.getRange(startRow, 1, rowsData.length, 14).setFontSize(14);
+          sheet.getRange(startRow, 14, rowsData.length, 1).setNumberFormat("#,##0"); // N 金額
+          sheet.getRange(startRow, 15, rowsData.length, 2).setWrap(true).setFontSize(9); // O 備註、P 減授明細
       }
 
       // Total Row
@@ -171,7 +173,9 @@ var OvertimeManager = {
           var formula = "=SUM(" + colLetter + startRow + ":" + colLetter + (totalRow - 1) + ")";
           sheet.getRange(totalRow, col).setFormula(formula).setNumberFormat(col === 14 ? "#,##0" : "0");
       }
-      sheet.getRange(totalRow, 1, 1, 16).setFontWeight("bold").setBorder(true, true, true, true, true, true);
+      sheet.getRange(totalRow, 1, 1, 16).setBorder(true, true, true, true, true, true);
+      sheet.getRange(totalRow, 1, 1, 14).setFontSize(14).setFontWeight("bold");
+      sheet.getRange(totalRow, 15, 1, 2).setFontSize(9).setFontWeight("bold");
 
       // --- 2. 核章區 (修正版面配置) ---
       var signRow = totalRow + 2; // 與合計列保持 1 行間隔
