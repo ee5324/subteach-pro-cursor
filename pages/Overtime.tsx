@@ -10,6 +10,10 @@ import { TeacherType, OvertimeRecord, HOURLY_RATE, Teacher, ReductionItem, PayTy
 import { Calendar, Calculator, Coins, Save, AlertCircle, ChevronLeft, ChevronRight, GraduationCap, X, Clock, Info, RefreshCcw, RefreshCw, Flag, CloudUpload, Loader2, Search, Filter, MinusCircle, Plus, Trash2, Edit2, Settings, AlertTriangle, ArrowDownToLine, Printer, FileText, FileOutput, Users, Copy, BarChart3, RotateCcw, GripVertical } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import { getStandardBase, parseLocalDate, normalizeDateString, getEffectiveFixedOvertimeSlots } from '../utils/calculations';
+import {
+  getMonthlyWeeksStructureForOvertimeExport,
+  computeWeeklyExportCountsForPreciseOvertime,
+} from '../utils/overtimeExport';
 import { callGasApi } from '../utils/api';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
@@ -950,7 +954,14 @@ const Overtime: React.FC = () => {
       setIsGenerating(true);
       try {
           const [year, month] = selectedMonth.split('-').map(Number);
-          
+          const exportWeekStructure = getMonthlyWeeksStructureForOvertimeExport(
+              year,
+              month,
+              settings?.semesterStart,
+              settings?.semesterEnd,
+              holidays || [],
+          );
+
           const reportPayload = exportableData.map(row => {
               // Convert Overtime Slots to Mon-Fri counts for Precise Mode
               const periods = [0, 0, 0, 0, 0];
@@ -984,6 +995,24 @@ const Overtime: React.FC = () => {
                   remarks = tailLines.join('\n');
               }
 
+              /** 精確模式：週欄依「日曆」逐日扣除請假節次後加總（與備註一致），避免整週套用週課表模板 */
+              const weeklyExportCounts =
+                  row.hasPreciseConfig && (row.overtimeSlots?.length ?? 0) > 0
+                      ? computeWeeklyExportCountsForPreciseOvertime(
+                            row.teacher.id,
+                            row.overtimeSlots,
+                            exportWeekStructure,
+                            year,
+                            month,
+                            leaveRecords || [],
+                            row.teacher,
+                            graduationDate || undefined,
+                            settings?.semesterStart,
+                            settings?.semesterEnd,
+                            holidays || [],
+                        )
+                      : undefined;
+
               return {
                   teacherId: row.teacher.id,
                   teacherName: row.teacher.name,
@@ -1003,8 +1032,9 @@ const Overtime: React.FC = () => {
                   isSimpleMode: !row.hasPreciseConfig,
                   
                   // Precise Mode Data
-                  overtimePattern: periods, // [1, 0, 1, 0, 0]
-                  
+                  overtimePattern: periods, // [1, 0, 1, 0, 0]（GAS 後備；有 weeklyExportCounts 時以週欄為準）
+                  weeklyExportCounts: weeklyExportCounts,
+
                   // Adjustment & Reason
                   adjustment: row.adjustment,
                   adjustmentReason: row.adjustmentReason || '',
@@ -1165,6 +1195,8 @@ const Overtime: React.FC = () => {
           <CollapsibleItem title="匯出報表">
             <p>設定完成後，可匯出 Excel 清冊或列印檢核報表。建議先點擊「統計總表」確認總額後再匯出。</p>
             <p className="mt-2"><strong>清冊「備註」欄格式（精確模式）：</strong>第一行為超鐘點週課表，例如「週二34 週三23」（同日多節連寫）；句號式分號「；」後換行，下列為請假扣除「MMDD請假-節數」、協助代課「MMDD代姓名+節數」，與紙本核銷習慣一致。簡易模式僅列請假／代課行。手動調整原因列在最後一行。</p>
+            <p className="mt-2"><strong>週次分列（H～L）：</strong>精確模式下會依<strong>日曆日</strong>計算，若該日該節已請假則不計入該週欄位（與備註請假扣除一致）；請一併更新並部署 GAS，以讀取 <code>weeklyExportCounts</code>。</p>
+            <p className="mt-2"><strong>備註欄格式：</strong>匯出後「MMDD請假-N」「MMDD畢業後」等<strong>被扣節</strong>文字，在試算表中以<strong>紅色粗體</strong>顯示（需部署含 <code>OvertimeManager._remarksRichText</code> 之 GAS）。</p>
           </CollapsibleItem>
         </div>
       </InstructionPanel>

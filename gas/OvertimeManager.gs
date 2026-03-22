@@ -91,9 +91,13 @@ var OvertimeManager = {
                       // 簡單模式：只要該週有任何「有效工作日」，就算一週
                       if (week.hasDays) val = item.weeklyOvertime;
                   } else {
-                      // 精確模式：依照當週實際有效天數計算
-                      for (var d = 0; d < 5; d++) {
-                          if (week.days[d] === 1) val += (item.overtimePattern[d] || 0);
+                      // 精確模式：優先用前端傳入「逐日淨超鐘點」加總之週欄（已扣請假），與備註一致
+                      if (item.weeklyExportCounts && item.weeklyExportCounts.length > w) {
+                          val = Number(item.weeklyExportCounts[w]) || 0;
+                      } else {
+                          for (var d = 0; d < 5; d++) {
+                              if (week.days[d] === 1) val += (item.overtimePattern[d] || 0);
+                          }
                       }
                   }
                   count = val;
@@ -163,6 +167,17 @@ var OvertimeManager = {
           sheet.getRange(startRow, 1, rowsData.length, 14).setFontSize(14);
           sheet.getRange(startRow, 14, rowsData.length, 1).setNumberFormat("#,##0"); // N 金額
           sheet.getRange(startRow, 15, rowsData.length, 2).setWrap(true).setFontSize(9); // O 備註、P 減授明細
+
+          // 備註 O 欄：被扣掉之請假／畢業後等片段改為紅色粗體
+          var self = this;
+          for (var rr = 0; rr < rowsData.length; rr++) {
+              var remarkCell = rowsData[rr][14];
+              if (remarkCell != null && String(remarkCell) !== '') {
+                  var oRange = sheet.getRange(startRow + rr, 15);
+                  oRange.setRichTextValue(self._remarksRichText(String(remarkCell)));
+                  oRange.setWrap(true).setFontSize(9).setHorizontalAlignment('center').setVerticalAlignment('middle');
+              }
+          }
       }
 
       // Total Row
@@ -196,6 +211,29 @@ var OvertimeManager = {
 
       // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
       this._scaleRowHeights(sheet, 4, nextSignRow, 1.25);
+  },
+
+  /**
+   * 備註欄：將「請假扣除」「畢業後」等被扣節片段標示為紅色粗體（其餘維持儲存格預設字級／顏色）
+   */
+  _remarksRichText: function(plain) {
+      var s = plain == null ? '' : String(plain);
+      var builder = SpreadsheetApp.newRichTextValue().setText(s);
+      var redBold = SpreadsheetApp.newTextStyle().setForeground('#b91c1c').setBold(true).build();
+
+      function applyAll(patternSource) {
+          var m;
+          var rx = new RegExp(patternSource, 'g');
+          while ((m = rx.exec(s)) !== null) {
+              builder.setTextStyle(m.index, m.index + m[0].length, redBold);
+          }
+      }
+
+      applyAll('\\d{4}請假-\\d+');
+      applyAll('\\d{4}\\([^)]*\\)請假扣除');
+      applyAll('\\d{4}畢業後');
+
+      return builder.build();
   },
 
   /**
