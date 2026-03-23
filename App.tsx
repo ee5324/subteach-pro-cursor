@@ -46,6 +46,7 @@ import IncomingRequests from './pages/IncomingRequests';
 import FixedOvertimePage from './pages/FixedOvertimePage'; 
 import SubPool from './pages/SubPool';
 import SubstituteOverview from './pages/SubstituteOverview';
+import SubstituteBusyBlocksPage from './pages/SubstituteBusyBlocks';
 import ExtraVoucher from './pages/ExtraVoucher';
 import LanguageTeachers from './pages/LanguageTeachers';
 import LanguageSalary from './pages/LanguageSalary';
@@ -118,6 +119,7 @@ const App: React.FC = () => {
         }>
           <Route index element={<SubstituteOverview />} />
           <Route path="overview" element={<SubstituteOverview />} />
+          <Route path="substitute-busy" element={<SubstituteBusyBlocksPage />} />
           <Route path="pending" element={<PendingItems />} />
           <Route path="requests" element={<IncomingRequests />} />
           <Route path="public-applications" element={<PublicBoardApplicationsPage />} />

@@ -1,9 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, ArrowRight, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ArrowRight, BookOpen, AlertTriangle } from 'lucide-react';
 import { TeacherType } from '../types';
 import InstructionPanel from '../components/InstructionPanel';
+import { getSubstituteBusyMatch } from '../utils/substituteBusyBlocks';
 
 const PERIOD_ROWS = [
   { id: '早', label: '早自習' },
@@ -41,7 +43,7 @@ const getWeekDays = (baseDate: Date) => {
 };
 
 const SubstituteOverview: React.FC = () => {
-    const { records, teachers, holidays } = useAppStore();
+    const { records, teachers, holidays, substituteBusyBlocks } = useAppStore();
     const [viewDate, setViewDate] = useState(new Date());
 
     const currentWeekDays = useMemo(() => getWeekDays(viewDate), [viewDate]);
@@ -63,6 +65,7 @@ const SubstituteOverview: React.FC = () => {
                 map.get(key)?.push({
                     originalName: originalTeacher?.name || record.originalTeacherId,
                     subName: subTeacher?.name || slot.substituteTeacherId || '待聘',
+                    substituteTeacherId: slot.substituteTeacherId || null,
                     subject: slot.subject,
                     className: slot.className,
                     isPending: !slot.substituteTeacherId,
@@ -84,7 +87,7 @@ const SubstituteOverview: React.FC = () => {
 
     return (
         <div className="p-8 h-full flex flex-col">
-            <header className="mb-6 flex justify-between items-end">
+            <header className="mb-6 flex flex-col gap-4 md:flex-row md:justify-between md:items-end">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800 flex items-center">
                         <CalendarIcon className="mr-3 text-indigo-600" />
@@ -93,9 +96,15 @@ const SubstituteOverview: React.FC = () => {
                     <p className="text-slate-500 mt-2">
                         以週課表形式檢視全校代課狀況，掌握實際派代情形。
                     </p>
+                    <Link
+                        to="/substitute-busy"
+                        className="inline-block mt-2 text-sm font-semibold text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline"
+                    >
+                        維護代課忙碌／不接時段
+                    </Link>
                 </div>
                 
-                <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">
                     <button onClick={() => handleWeekNav('prev')} className="p-2 hover:bg-slate-100 rounded text-slate-600">
                         <ChevronLeft size={20} />
                     </button>
@@ -116,9 +125,10 @@ const SubstituteOverview: React.FC = () => {
                             <li><span className="text-emerald-600 font-bold">綠色文字</span>：已安排代課教師。</li>
                             <li><span className="text-red-600 font-bold">紅色區塊</span>：尚未安排代課教師 (待聘)。</li>
                             <li><span className="bg-amber-100 text-amber-700 px-1 rounded text-xs">日薪</span>：日薪制；<span className="bg-amber-50 text-amber-600 px-1 rounded text-xs">半日薪</span>：半日薪制代課紀錄。</li>
+                            <li><span className="text-amber-700 font-bold">琥珀邊框＋「忙碌」</span>：該節代課老師於「代課忙碌／不接時段」有登記（單日或每週固定），請核對是否仍適合派代。</li>
                         </ul>
                     </li>
-                    <li><strong>詳細資訊：</strong>滑鼠游標停留在代課卡片上，可查看請假事由與詳細狀態。</li>
+                    <li><strong>詳細資訊：</strong>滑鼠游標停留在代課卡片上，可查看請假事由、忙碌備註與詳細狀態。</li>
                 </ul>
             </InstructionPanel>
 
@@ -152,14 +162,25 @@ const SubstituteOverview: React.FC = () => {
                                         return (
                                             <td key={key} className={`p-2 border-r border-slate-200 align-top h-24 ${isHoliday ? 'bg-rose-50/30' : 'hover:bg-slate-50'} transition-colors`}>
                                                 <div className="flex flex-col gap-2">
-                                                    {items.map((item, idx) => (
+                                                    {items.map((item, idx) => {
+                                                        const busy = !item.isPending && item.substituteTeacherId
+                                                            ? getSubstituteBusyMatch(
+                                                                  item.substituteTeacherId,
+                                                                  day.dateStr,
+                                                                  period.id,
+                                                                  substituteBusyBlocks
+                                                              )
+                                                            : { matched: false, notes: [] as string[] };
+                                                        return (
                                                         <div 
                                                             key={idx} 
                                                             className={`
                                                                 rounded-lg p-2 text-xs border shadow-sm relative group
                                                                 ${item.isPending 
                                                                     ? 'bg-red-50 border-red-200' 
-                                                                    : 'bg-white border-indigo-100 hover:border-indigo-300'}
+                                                                    : busy.matched
+                                                                      ? 'bg-amber-50/90 border-amber-300 ring-1 ring-amber-200/80 hover:border-amber-400'
+                                                                      : 'bg-white border-indigo-100 hover:border-indigo-300'}
                                                             `}
                                                         >
                                                             {/* Header: Original -> Sub */}
@@ -186,14 +207,26 @@ const SubstituteOverview: React.FC = () => {
                                                             {item.payType === '半日薪' && (
                                                                 <span className="absolute top-0 right-0 bg-amber-50 text-amber-600 text-[9px] px-1 rounded-bl-md font-bold">半日</span>
                                                             )}
+                                                            {busy.matched && (
+                                                                <span className="absolute bottom-0 left-0 bg-amber-600 text-white text-[9px] px-1.5 rounded-tr-md font-bold flex items-center gap-0.5">
+                                                                    <AlertTriangle size={10} className="shrink-0" />
+                                                                    忙碌
+                                                                </span>
+                                                            )}
                                                             
                                                             {/* Tooltip on Hover */}
-                                                            <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block w-48 bg-slate-800 text-white text-[10px] p-2 rounded shadow-xl z-20 pointer-events-none">
+                                                            <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block w-52 bg-slate-800 text-white text-[10px] p-2 rounded shadow-xl z-20 pointer-events-none">
                                                                 <div>事由: {item.reason}</div>
                                                                 <div>狀態: {item.isPending ? '待聘中' : '已安排'}</div>
+                                                                {busy.matched && busy.notes.length > 0 && (
+                                                                    <div className="mt-1 pt-1 border-t border-slate-600 text-amber-200">
+                                                                        忙碌登記: {busy.notes.join('；')}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    ))}
+                                                    );
+                                                    })}
                                                 </div>
                                             </td>
                                         );

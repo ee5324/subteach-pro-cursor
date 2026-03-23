@@ -186,6 +186,31 @@ export interface SubPoolItem {
   teachingSubject?: string; // 專長領域 (Pool 專屬的備註，預設帶入教師專長)
 }
 
+/**
+ * 代課老師「忙碌／已接其他工作／固定不接」紀錄（Firestore: substituteBusyBlocks）
+ * — 供代課資料總表對照，不影響薪資計算。
+ */
+export type SubstituteBusyBlockKind = 'date' | 'weekly';
+
+export interface SubstituteBusyBlock {
+  id: string;
+  teacherId: string;
+  kind: SubstituteBusyBlockKind;
+  /** 節次：早、1–7、午（與代課總表一致） */
+  period: string;
+  /** kind === 'date'：YYYY-MM-DD */
+  date?: string;
+  /**
+   * kind === 'weekly'：1=週一 … 5=週五（與 TeacherScheduleSlot.day、JS getDay 一致）
+   */
+  weekday?: number;
+  note?: string;
+  /** 每週規則選填：僅套用 validFrom～validTo（含）內之日期 */
+  validFrom?: string;
+  validTo?: string;
+  createdAt: number;
+}
+
 /** 對外代課教師報名表單（未登入可送出；主系統審核） */
 export interface SubstituteApplication {
   id: string;

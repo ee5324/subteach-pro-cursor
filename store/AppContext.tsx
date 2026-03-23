@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc, SubteachAllowedUser } from '../types';
+import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc, SubteachAllowedUser, SubstituteBusyBlock } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
@@ -53,6 +53,8 @@ interface AppContextType {
   semesters: SemesterDefinition[];
   activeSemesterId: string | null;
   subPool: SubPoolItem[];
+  /** 代課老師忙碌／不接時段（代課資料總表對照） */
+  substituteBusyBlocks: SubstituteBusyBlock[];
   languagePayrolls: LanguagePayroll[];
   substituteApplications: SubstituteApplication[];
   publicBoardApplications: PublicBoardApplication[];
@@ -110,6 +112,9 @@ interface AppContextType {
   removeFromSubPool: (teacherId: string) => Promise<void>;
   updateSubPoolItem: (item: SubPoolItem) => Promise<void>;
 
+  addSubstituteBusyBlock: (block: Omit<SubstituteBusyBlock, 'id' | 'createdAt'>) => Promise<void>;
+  deleteSubstituteBusyBlock: (id: string) => Promise<void>;
+
   addLanguagePayroll: (payroll: LanguagePayroll) => Promise<void>;
   updateLanguagePayroll: (updatedPayroll: LanguagePayroll) => Promise<void>;
   deleteLanguagePayroll: (id: string) => Promise<void>;
@@ -139,6 +144,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [activeSemesterId, setActiveSemesterId] = useState<string | null>(null);
   
   const [subPool, setSubPool] = useState<SubPoolItem[]>([]);
+  const [substituteBusyBlocks, setSubstituteBusyBlocks] = useState<SubstituteBusyBlock[]>([]);
   const [languagePayrolls, setLanguagePayrolls] = useState<LanguagePayroll[]>([]);
   const [substituteApplications, setSubstituteApplications] = useState<SubstituteApplication[]>([]);
   const [publicBoardApplications, setPublicBoardApplications] = useState<PublicBoardApplication[]>([]);
@@ -281,6 +287,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Sub Pool
     unsubs.push(onSnapshot(collection(db, 'subPool'), (snap) => {
       setSubPool(snap.docs.map(d => d.data() as SubPoolItem));
+    }));
+
+    unsubs.push(onSnapshot(collection(db, 'substituteBusyBlocks'), (snap) => {
+      setSubstituteBusyBlocks(
+        snap.docs.map(d => {
+          const data = d.data() as Omit<SubstituteBusyBlock, 'id'>;
+          return { ...data, id: d.id } as SubstituteBusyBlock;
+        })
+      );
     }));
 
     // Language Payrolls
@@ -573,6 +588,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await setDoc(doc(db, 'subPool', item.teacherId), sanitizeForFirestore({ ...item, updatedAt: Date.now() }));
   };
 
+  const addSubstituteBusyBlock = async (input: Omit<SubstituteBusyBlock, 'id' | 'createdAt'>) => {
+    if (!db) throw new Error("Firebase not initialized");
+    const id = crypto.randomUUID();
+    const block: SubstituteBusyBlock = { ...input, id, createdAt: Date.now() };
+    await setDoc(doc(db, 'substituteBusyBlocks', id), sanitizeForFirestore(block));
+  };
+
+  const deleteSubstituteBusyBlock = async (blockId: string) => {
+    if (!db) throw new Error("Firebase not initialized");
+    await deleteDoc(doc(db, 'substituteBusyBlocks', blockId));
+  };
+
   const deleteSubstituteApplication = async (id: string) => {
     if (!db) throw new Error("Firebase not initialized");
     await deleteDoc(doc(db, 'substituteApplications', id));
@@ -815,7 +842,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = {
     currentUser,
     teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
-    semesters, activeSemesterId, subPool, languagePayrolls,     substituteApplications, publicBoardApplications, teacherLeaveRequests,
+    semesters, activeSemesterId, subPool, substituteBusyBlocks, languagePayrolls, substituteApplications, publicBoardApplications, teacherLeaveRequests,
     loading,
     notAllowed, subteachAllowedUsers, isSubteachAdmin, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser,
     updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest,
@@ -825,7 +852,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addGradeEvent, removeGradeEvent,
     addSemester, updateSemester, removeSemester, setSemesterActive,
     updateSettings, addHoliday, removeHoliday, 
-    addToSubPool, removeFromSubPool, updateSubPoolItem,
+    addToSubPool, removeFromSubPool, updateSubPoolItem, addSubstituteBusyBlock, deleteSubstituteBusyBlock,
     deleteSubstituteApplication, deletePublicBoardApplication, approveSubstituteApplication,
     addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,
     loadFromGas, migrateToFirebase, syncToPublicBoard, releaseVacanciesToTier2, checkGasConnection,
