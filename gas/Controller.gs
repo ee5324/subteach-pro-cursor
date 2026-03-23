@@ -257,8 +257,8 @@ function doPost(e) {
       result = { status: 'success', data: { url: res.url }, message: '固定兼課報表產生成功' };
 
     } else if (action === 'GENERATE_OVERTIME_REPORT') {
-      // 呼叫 OvertimeManager
-      var res = OvertimeManager.generateReport(data.year, data.month, data.reportData, data.semesterStart, data.semesterEnd, data.docNumber, CONFIG.OVERTIME_TEMPLATE_NAME, data.holidays);
+      // 呼叫 OvertimeManager（data.overtimeReportOptions 可含 ledgerLabelSuffix，供族語專職等變體檔名／憑證標題）
+      var res = OvertimeManager.generateReport(data.year, data.month, data.reportData, data.semesterStart, data.semesterEnd, data.docNumber, CONFIG.OVERTIME_TEMPLATE_NAME, data.holidays, data.overtimeReportOptions || null);
       result = { status: 'success', data: { url: res.url }, message: '超鐘點報表產生成功' };
 
     } else if (action === 'EXPORT_LANGUAGE_PAYROLL') {

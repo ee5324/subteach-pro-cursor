@@ -6,10 +6,13 @@
 var OvertimeManager = {
 
   // 1. 產生超鐘點報表 (Weekly Based)
-  generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays) {
+  // options.ledgerLabelSuffix：檔名與憑證標題後綴，預設「超鐘點印領清冊」；族語專職頁可傳「族語專職超鐘點印領清冊」
+  generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays, options) {
+    options = options || {};
+    var labelSuffix = options.ledgerLabelSuffix || '超鐘點印領清冊';
     var rocYear = year - 1911;
     var rocDateStr = rocYear + "年" + month + "月";
-    var fileName = rocDateStr + "_超鐘點印領清冊";
+    var fileName = rocDateStr + "_" + labelSuffix;
     
     var templateName = targetTemplateName || CONFIG.OVERTIME_TEMPLATE_NAME || '超鐘點清冊範例';
     
@@ -54,7 +57,7 @@ var OvertimeManager = {
         SpreadsheetApp.flush();
         var totalRow = sheet.getLastRow();
         var sumTotal = sheet.getRange(totalRow, 14).getValue() || 0; // N 欄為金額合計
-        var title = "加昌國小" + rocDateStr + "超鐘點印領清冊";
+        var title = "加昌國小" + rocDateStr + labelSuffix;
         if (typeof SheetManager === 'undefined') {
             throw new Error('SheetManager 未定義。請在 GAS 專案中確認已加入「SheetManager.gs」檔案並重新部署。');
         }

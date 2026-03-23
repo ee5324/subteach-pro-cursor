@@ -68,7 +68,9 @@ const OvertimeStatsModal: React.FC<{
     data: any[];
     month: string;
     grandTotal: number;
-}> = ({ isOpen, onClose, data, month, grandTotal }) => {
+    /** 例如「族語專職」插入於月份與「超鐘點」之間 */
+    statsTitleInfix?: string;
+}> = ({ isOpen, onClose, data, month, grandTotal, statsTitleInfix }) => {
     if (!isOpen) return null;
 
     const handlePrint = () => {
@@ -76,7 +78,9 @@ const OvertimeStatsModal: React.FC<{
     };
 
     const [year, m] = month.split('-');
-    const title = `${Number(year) - 1911}年${Number(m)}月 超鐘點經費核銷統計與檢核表`;
+    const title = statsTitleInfix
+        ? `${Number(year) - 1911}年${Number(m)}月 ${statsTitleInfix} 超鐘點經費核銷統計與檢核表`
+        : `${Number(year) - 1911}年${Number(m)}月 超鐘點經費核銷統計與檢核表`;
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
@@ -277,7 +281,14 @@ const OvertimeScheduleModal: React.FC<{
     );
 };
 
-const Overtime: React.FC = () => {
+export type OvertimePageVariant = 'general' | 'indigenousFullTime';
+
+export interface OvertimePageProps {
+  /** general：全校超鐘點；indigenousFullTime：僅 teacherCategory 為「族語專職教師」者（與語言教師頁設定一致） */
+  variant?: OvertimePageVariant;
+}
+
+const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
   const { teachers, overtimeRecords, updateOvertimeRecord, updateTeacher, records: leaveRecords, holidays, settings, fixedOvertimeConfig } = useAppStore();
 
   // State: Month Selection
@@ -355,6 +366,17 @@ const Overtime: React.FC = () => {
     const list = teachers ?? [];
     return list.filter((t): t is Teacher => !!t && !!t.id);
   }, [teachers]);
+
+  /**
+   * general：排除「族語專職教師」（該類僅在「族語專職超鐘點」分頁作業，避免重複列示與重複匯出）。
+   * indigenousFullTime：僅該類別。
+   */
+  const scopeTeachers = useMemo(() => {
+    if (variant === 'indigenousFullTime') {
+      return internalTeachers.filter((t) => t.teacherCategory === 'IndigenousFullTime');
+    }
+    return internalTeachers.filter((t) => t.teacherCategory !== 'IndigenousFullTime');
+  }, [internalTeachers, variant]);
 
   const calculateDefaultBasic = (teacher: Teacher) => {
       const standard = getStandardBase(teacher);
@@ -629,7 +651,7 @@ const Overtime: React.FC = () => {
   };
 
   const rowData = useMemo(() => {
-    return (internalTeachers || []).map(t => {
+    return (scopeTeachers || []).map(t => {
         const recordId = `${selectedMonth}_${t.id}`;
         const existing = (overtimeRecords || []).find(r => r.id === recordId);
         const standardBase = getStandardBase(t);
@@ -688,7 +710,7 @@ const Overtime: React.FC = () => {
             isSubstituteOnly,
         };
     });
-  }, [internalTeachers, overtimeRecords, selectedMonth, calculatedWeeks, leaveRecords, holidays, settings?.semesterStart, settings?.semesterEnd, graduationDate, fixedOvertimeConfig]);
+  }, [scopeTeachers, overtimeRecords, selectedMonth, calculatedWeeks, leaveRecords, holidays, settings?.semesterStart, settings?.semesterEnd, graduationDate, fixedOvertimeConfig]);
 
   const compareRowsBySortOrder = (a: typeof rowData[number], b: typeof rowData[number]) => {
       const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
@@ -849,7 +871,7 @@ const Overtime: React.FC = () => {
 
   const handleSaveSchedule = (slots: { day: number; period: string }[]) => { if (!scheduleModal.teacherId) return; handleCellChange(scheduleModal.teacherId, 'overtimeSlots', slots); };
   const handleResetToSchedule = (teacherId: string) => { const teacher = (teachers || []).find(t => t.id === teacherId); if (teacher?.defaultSchedule) { handleCellChange(teacherId, 'weeklyActual', teacher.defaultSchedule.length); } };
-  const handleBatchResetToSchedule = () => { if (!confirm(`確定要將本月 (${selectedMonth}) 所有教師的「實授節數」重設為「預設課表總節數」嗎？\n此操作將覆蓋目前的手動輸入值。`)) return; let updateCount = 0; (internalTeachers || []).forEach(t => { if (t.defaultSchedule && t.defaultSchedule.length > 0) { handleCellChange(t.id, 'weeklyActual', t.defaultSchedule.length); updateCount++; } }); showModal('完成', `已更新 ${updateCount} 位教師的實授節數。`, 'success'); };
+  const handleBatchResetToSchedule = () => { if (!confirm(`確定要將本月 (${selectedMonth}) ${variant === 'indigenousFullTime' ? '本清冊內' : '所有'}教師的「實授節數」重設為「預設課表總節數」嗎？\n此操作將覆蓋目前的手動輸入值。`)) return; let updateCount = 0; (scopeTeachers || []).forEach(t => { if (t.defaultSchedule && t.defaultSchedule.length > 0) { handleCellChange(t.id, 'weeklyActual', t.defaultSchedule.length); updateCount++; } }); showModal('完成', `已更新 ${updateCount} 位教師的實授節數。`, 'success'); };
   
   const handleLoadFromTeacherDefaults = () => {
     showModal(
@@ -858,7 +880,7 @@ const Overtime: React.FC = () => {
         'warning',
         () => {
             let count = 0;
-            (internalTeachers || []).forEach(teacher => {
+            (scopeTeachers || []).forEach(teacher => {
                 if (teacher.defaultOvertimeSlots && teacher.defaultOvertimeSlots.length > 0) {
                     const newRecordId = `${selectedMonth}_${teacher.id}`;
                     const existing = (overtimeRecords || []).find(r => r.id === newRecordId);
@@ -896,14 +918,15 @@ const Overtime: React.FC = () => {
     const prevDate = new Date(year, month - 2, 1);
     const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
     
-    const prevRecords = (overtimeRecords || []).filter(r => r.yearMonth === prevMonthStr);
+    const scopeIds = new Set(scopeTeachers.map(t => t.id));
+    const prevRecords = (overtimeRecords || []).filter(r => r.yearMonth === prevMonthStr && scopeIds.has(r.teacherId));
     
     if (prevRecords.length === 0) {
-        showModal('無資料', `找不到 ${prevMonthStr} 的設定資料。`, 'warning');
+        showModal('無資料', `找不到 ${prevMonthStr} 的設定資料${variant === 'indigenousFullTime' ? '（僅含本清冊追蹤之族語專職教師）' : ''}。`, 'warning');
         return;
     }
     
-    if (!confirm(`確定要從 ${prevMonthStr} 複製所有教師的超鐘點設定（含時段與節數）到 ${selectedMonth} 嗎？\n這將會覆蓋目前已有的設定（不包含特殊調整與備註）。`)) {
+    if (!confirm(`確定要從 ${prevMonthStr} 複製${variant === 'indigenousFullTime' ? '本清冊內教師' : '所有教師'}的超鐘點設定（含時段與節數）到 ${selectedMonth} 嗎？\n這將會覆蓋目前已有的設定（不包含特殊調整與備註）。`)) {
         return;
     }
     
@@ -1053,7 +1076,11 @@ const Overtime: React.FC = () => {
               semesterStart: settings?.semesterStart,
               semesterEnd: settings?.semesterEnd,
               docNumber: docNumber, // Pass document number
-              holidays: holidays // New: Pass holidays from store
+              holidays: holidays, // New: Pass holidays from store
+              overtimeReportOptions:
+                variant === 'indigenousFullTime'
+                  ? { ledgerLabelSuffix: '族語專職超鐘點印領清冊' }
+                  : undefined,
           });
           
           if (result.status === 'success' && result.data.url) {
@@ -1105,12 +1132,21 @@ const Overtime: React.FC = () => {
         onConfirm={modal.onConfirm ? () => { modal.onConfirm!(); setModal({...modal, isOpen: false}); } : undefined}
       />
       {activeTeacher && <OvertimeScheduleModal isOpen={scheduleModal.isOpen} onClose={() => setScheduleModal({ ...scheduleModal, isOpen: false })} teacher={activeTeacher} record={activeRecord} onSave={handleSaveSchedule} />}
-      <OvertimeStatsModal isOpen={showStatsModal} onClose={() => setShowStatsModal(false)} data={filteredRowData} month={selectedMonth} grandTotal={grandTotal} />
+      <OvertimeStatsModal isOpen={showStatsModal} onClose={() => setShowStatsModal(false)} data={filteredRowData} month={selectedMonth} grandTotal={grandTotal} statsTitleInfix={variant === 'indigenousFullTime' ? '族語專職' : undefined} />
 
       <header className="mb-6 flex justify-between items-end">
         <div>
-           <h1 className="text-3xl font-bold text-slate-800 flex items-center"><Coins className="mr-3 text-amber-500" /> 超鐘點計算清冊</h1>
-           <p className="text-slate-500 mt-2">清冊僅顯示：本頁點選姓名設定超鐘點週課表者、以及當月協助代課的教師（固定兼課為獨立清冊）。依據台灣日曆精確計算每月上班日。<br/><span className="text-rose-500 font-bold">注意：超鐘點計算不受國定假日影響，僅排除非學期日與畢業後日期。</span></p>
+           <h1 className="text-3xl font-bold text-slate-800 flex items-center"><Coins className="mr-3 text-amber-500" /> {variant === 'indigenousFullTime' ? '族語專職超鐘點清冊' : '超鐘點計算清冊'}</h1>
+           <p className="text-slate-500 mt-2">
+             {variant === 'indigenousFullTime' ? (
+               <>
+                 僅列出在「語言教師」中類別為<strong className="text-slate-700">族語專職教師</strong>者；計算、匯出邏輯與「超鐘點計算」相同，產出檔名為<strong className="text-slate-700">〇〇年〇月_族語專職超鐘點印領清冊</strong>。
+                 <br />
+               </>
+             ) : (
+               <>清冊僅顯示：本頁點選姓名設定超鐘點週課表者、以及當月協助代課的教師（固定兼課為獨立清冊）。<strong className="text-slate-600">族語專職教師</strong>請至「族語專職超鐘點」分頁。</>
+             )}
+             依據台灣日曆精確計算每月上班日。<br/><span className="text-rose-500 font-bold">注意：超鐘點計算不受國定假日影響，僅排除非學期日與畢業後日期。</span></p>
         </div>
         <div className="flex items-center space-x-4">
              <div className="flex items-center bg-white border border-slate-300 rounded-lg shadow-sm">
@@ -1136,8 +1172,13 @@ const Overtime: React.FC = () => {
         </div>
       </header>
 
-      <InstructionPanel title="使用說明：超鐘點計算清冊" isOpenDefault={false}>
+      <InstructionPanel title={variant === 'indigenousFullTime' ? '使用說明：族語專職超鐘點清冊' : '使用說明：超鐘點計算清冊'} isOpenDefault={false}>
         <div className="space-y-1">
+          {variant === 'indigenousFullTime' && (
+            <CollapsibleItem title="誰會出現在這裡？">
+              <p className="text-xs text-slate-600">僅 <strong>teacherCategory = 族語專職教師</strong> 的資料（在「語言教師」編輯該師並選擇類別「族語專職教師」）。若清冊為空，請先至語言教師確認類別已儲存。</p>
+            </CollapsibleItem>
+          )}
           <CollapsibleItem title="節數計算細節">
             <div className="space-y-3 text-xs text-slate-600">
               <div>
@@ -1342,7 +1383,7 @@ const Overtime: React.FC = () => {
                              </tr>
                          );
                      })}
-                     {filteredRowData.length === 0 && (<tr><td colSpan={10} className="py-12 text-center text-slate-400">{showConfiguredOnly ? <div><p className="mb-2">目前清冊中無符合條件的教師（需為：本頁已設超鐘點週課表、或當月有協助代課者）。</p><button onClick={() => setShowConfiguredOnly(false)} className="text-indigo-600 underline hover:text-indigo-800">顯示全部教師以進行設定</button></div> : (searchTerm ? '找不到符合搜尋條件的教師' : '尚無校內教師資料。請先至「教師管理」新增類別為「校內教師」的人員。')}</td></tr>)}
+                     {filteredRowData.length === 0 && (<tr><td colSpan={10} className="py-12 text-center text-slate-400">{variant === 'indigenousFullTime' && scopeTeachers.length === 0 ? <div><p className="mb-2">沒有任何「族語專職教師」類別的教師。請至「語言教師」編輯該師並選擇類別「族語專職教師」。</p></div> : showConfiguredOnly ? <div><p className="mb-2">目前清冊中無符合條件的教師（需為：本頁已設超鐘點週課表、或當月有協助代課者）。</p><button onClick={() => setShowConfiguredOnly(false)} className="text-indigo-600 underline hover:text-indigo-800">顯示全部教師以進行設定</button></div> : (searchTerm ? '找不到符合搜尋條件的教師' : '尚無校內教師資料。請先至「教師管理」新增類別為「校內教師」的人員。')}</td></tr>)}
                  </tbody>
              </table>
          </div>

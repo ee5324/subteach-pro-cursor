@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Teacher, TeacherType, COMMON_SUBJECTS, APPLY_TEACHING_ITEMS, TeacherScheduleSlot, ReductionItem, TeacherDocument } from '../types';
+import { Teacher, TeacherType, COMMON_SUBJECTS, APPLY_TEACHING_ITEMS, TeacherScheduleSlot, ReductionItem, TeacherDocument, HOMEROOM_FEE_MONTHLY } from '../types';
 import { Plus, Edit2, Trash2, Search, X, CloudUpload, Loader2, HelpCircle, GraduationCap, Award, Briefcase, Book, RefreshCw, Star, FileSpreadsheet, AlertTriangle, ArrowRight, CheckCircle, Calendar, Info, Clock, Eraser, MousePointerClick, MinusCircle, FileText, ExternalLink, Paperclip } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
@@ -486,6 +486,15 @@ export default function TeacherManagement() {
       return Array.from(titles).sort();
   }, [teachers]);
 
+  // 當月日薪顯示：以「本月天數」估算，方便教師管理頁即時查閱
+  const currentMonthInfo = useMemo(() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      return { year, month, daysInMonth };
+  }, []);
+
   const filteredTeachers = teachers.filter(t => {
       if (filterType === 'INTERNAL' && t.type !== TeacherType.INTERNAL) return false;
       if (filterType === 'EXTERNAL' && t.type !== TeacherType.EXTERNAL) return false;
@@ -745,6 +754,12 @@ export default function TeacherManagement() {
               <tr>
                 <th className="px-6 py-4 font-semibold text-slate-700">姓名</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">薪級</th>
+                <th className="px-6 py-4 font-semibold text-slate-700">
+                  當月日薪/導師費
+                  <div className="text-[11px] font-normal text-slate-500">
+                    {currentMonthInfo.month}月（{currentMonthInfo.daysInMonth}天）
+                  </div>
+                </th>
                 <th className="px-6 py-4 font-semibold text-slate-700">類別/職別</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">資格/學歷</th>
                 <th className="px-6 py-4 font-semibold text-slate-700">專長/任教</th>
@@ -797,6 +812,20 @@ export default function TeacherManagement() {
                             本俸 {teacher.baseSalary || 0} / 研究費 {teacher.researchFee || 0}
                           </span>
                         )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600">
+                    {teacher.baseSalary > 0 || teacher.researchFee > 0 ? (
+                      <div className="flex flex-col">
+                        <span className="font-mono font-semibold text-emerald-700">
+                          日薪 {Math.round(((teacher.baseSalary || 0) + (teacher.researchFee || 0)) / currentMonthInfo.daysInMonth)}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          導師費 {Math.round(HOMEROOM_FEE_MONTHLY / currentMonthInfo.daysInMonth)}/日
+                        </span>
                       </div>
                     ) : (
                       <span className="text-slate-400">—</span>
@@ -885,7 +914,7 @@ export default function TeacherManagement() {
               )})}
               {filteredTeachers.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-slate-400">找不到符合的教師資料</td>
+                  <td colSpan={9} className="px-6 py-8 text-center text-slate-400">找不到符合的教師資料</td>
                 </tr>
               )}
             </tbody>

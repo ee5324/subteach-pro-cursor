@@ -134,7 +134,8 @@ const App: React.FC = () => {
           <Route path="records" element={<Records />} />
           <Route path="leave-rules" element={<LeaveRules />} />
           <Route path="extra-voucher" element={<ExtraVoucher />} />
-          <Route path="overtime" element={<PageErrorBoundary fallbackTitle="超鐘點頁面錯誤"><Overtime /></PageErrorBoundary>} /> 
+          <Route path="overtime" element={<PageErrorBoundary fallbackTitle="超鐘點頁面錯誤"><Overtime /></PageErrorBoundary>} />
+          <Route path="overtime-indigenous" element={<PageErrorBoundary fallbackTitle="族語專職超鐘點頁面錯誤"><Overtime variant="indigenousFullTime" /></PageErrorBoundary>} />
           <Route path="fixed-overtime" element={<FixedOvertimePage />} />
           <Route path="hakka-salary" element={<LanguageSalary />} />
           <Route path="settings" element={<Settings />} />

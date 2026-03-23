@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -209,6 +209,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/overtime" className={linkClass} onClick={onClose}>
           <Coins size={18} />
           <span>超鐘點計算</span>
+        </NavLink>
+
+        <NavLink to="/overtime-indigenous" className={linkClass} onClick={onClose}>
+          <Mic2 size={18} />
+          <span>族語專職超鐘點</span>
         </NavLink>
 
         <NavLink to="/hakka-salary" className={linkClass} onClick={onClose}>
