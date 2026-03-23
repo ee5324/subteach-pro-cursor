@@ -52,6 +52,21 @@ service cloud.firestore {
       return isEduTrackAllowedUser()
         && get(/databases/$(database)/documents/edutrack_allowed_users/$(request.auth.token.email)).data.role == 'admin';
     }
+
+    // 段考填報（導師）白名單：需登入且列於 exam_submit_allowed_users 且 enabled
+    function isExamSubmitAllowedUser() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/exam_submit_allowed_users/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/exam_submit_allowed_users/$(request.auth.token.email)).data.enabled == true;
+    }
+
+    // 取得活動的預設鎖定設定（找不到活動時，預設鎖定=true）
+    function examCampaignLockedByDefault(campaignId) {
+      return !exists(/databases/$(database)/documents/edutrack_exam_campaigns/$(campaignId))
+        || get(/databases/$(database)/documents/edutrack_exam_campaigns/$(campaignId)).data.lockedByDefault == true;
+    }
     
     // =========================================================
     // 代課系統 (Subteach)：白名單制；首次登入者自動取得權限並寫入白名單
@@ -81,6 +96,10 @@ service cloud.firestore {
       allow read, write: if canAccessSubteach();
     }
     match /subPool/{teacherId} {
+      allow read, write: if canAccessSubteach();
+    }
+    // 代課老師單日／每週固定「忙碌不接」紀錄（Subteach 專用；與 EduTrack／段考填報無涉）
+    match /substituteBusyBlocks/{blockId} {
       allow read, write: if canAccessSubteach();
     }
     match /languagePayrolls/{payrollId} {
@@ -118,6 +137,16 @@ service cloud.firestore {
       allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
       allow update, delete: if isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
     }
+
+    // =========================================================
+    // 段考填報（對外導師網站）
+    // =========================================================
+    match /exam_submit_allowed_users/{email} {
+      // 允許使用者讀自己的白名單狀態；管理者可讀全部
+      allow read: if (isSignedIn() && request.auth.token.email == email) || isEduTrackAdmin();
+      // 僅教學組管理者可新增/修改/刪除
+      allow create, update, delete: if isEduTrackAdmin();
+    }
     
     // =========================================================
     // 教學組事務管理系統 (EduTrack) - 外掛集合，前綴 edutrack_
@@ -140,6 +169,9 @@ service cloud.firestore {
     match /edutrack_todos/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
+    match /edutrack_monthly_recurring_todos/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
     match /edutrack_exam_papers/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
@@ -152,6 +184,37 @@ service cloud.firestore {
     match /edutrack_language_elective/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
+    // 段考提報：活動、獎項設定、提報資料
+    match /edutrack_exam_campaigns/{id} {
+      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
+      allow write: if isEduTrackAdmin();
+    }
+    match /edutrack_exam_system/{docId} {
+      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
+      allow write: if isEduTrackAdmin();
+    }
+    match /edutrack_exam_submissions/{id} {
+      // 管理端與導師白名單可讀
+      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
+      // 導師送出：新建（預設鎖定）
+      allow create: if isExamSubmitAllowedUser()
+        && request.resource.data.submittedByEmail == request.auth.token.email
+        && request.resource.data.locked == examCampaignLockedByDefault(request.resource.data.campaignId);
+      // 導師修改：
+      // - 活動預設鎖定=true：僅在已解鎖狀態下，且修改後需重新鎖定
+      // - 活動預設鎖定=false：允許在未鎖定狀態下更新（仍需維持 locked=false）
+      allow update: if isExamSubmitAllowedUser()
+        && resource.data.locked == false
+        && request.resource.data.locked == examCampaignLockedByDefault(resource.data.campaignId)
+        && request.resource.data.submittedByEmail == request.auth.token.email
+        && request.resource.data.campaignId == resource.data.campaignId
+        && request.resource.data.className == resource.data.className;
+      // 管理者解鎖/管理（可將 locked 改 false）
+      allow update: if isEduTrackAdmin()
+        && request.resource.data.campaignId == resource.data.campaignId
+        && request.resource.data.className == resource.data.className;
+      allow delete: if isEduTrackAdmin();
+    }
     match /edutrack_allowed_users/{email} {
       allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
       allow create, update, delete: if isEduTrackAdmin();
@@ -159,6 +222,15 @@ service cloud.firestore {
     
     // （保留）若未來改回用 edutrack_calendar_settings，也能存取
     match /edutrack_calendar_settings/{docId} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
+    match /edutrack_budget_plans/{planId} {
+      allow read, write: if isEduTrackAllowedUser();
+      match /ledger_entries/{entryId} {
+        allow read, write: if isEduTrackAllowedUser();
+      }
+    }
+    match /edutrack_budget_plan_advances/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
     
