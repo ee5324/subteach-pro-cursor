@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
@@ -11,6 +11,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const hasGasUrl = Boolean(settings?.gasWebAppUrl?.trim());
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline' | 'unset'>(hasGasUrl ? 'checking' : 'unset');
   const navigate = useNavigate();
+  const location = useLocation();
+  const isOverviewGroupActive =
+    location.pathname === '/' ||
+    location.pathname === '/overview' ||
+    location.pathname === '/substitute-busy';
 
   // Calculate pending items count (待聘清單)
   const pendingCount = records.reduce((acc, r) => {
@@ -56,6 +61,14 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
     }`;
 
+  /** 代課總表巢狀子項目 */
+  const overviewSubLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-2.5 pl-3 pr-3 py-2 rounded-md transition-colors text-sm font-medium border-l-2 ml-2 ${
+      isActive
+        ? 'border-indigo-400 bg-indigo-600/25 text-white'
+        : 'border-transparent text-slate-400 hover:bg-slate-800/90 hover:text-white'
+    }`;
+
   const groupTitleClass = "px-4 pt-4 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider";
 
   return (
@@ -73,15 +86,36 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       </div>
 
       <nav className="flex-1 px-3 py-2 space-y-1 mt-4">
-        <NavLink to="/" className={linkClass} onClick={onClose}>
-          <CalendarDays size={18} />
-          <span>代課總表</span>
-        </NavLink>
-
-        <NavLink to="/substitute-busy" className={linkClass} onClick={onClose}>
-          <Ban size={18} />
-          <span>忙碌／不接時段</span>
-        </NavLink>
+        {/* 代課總表（巢狀：資料總表 + 忙碌時段） */}
+        <div
+          className={`rounded-xl border overflow-hidden ${
+            isOverviewGroupActive ? 'border-indigo-500/35 bg-slate-800/40' : 'border-slate-800/80 bg-slate-800/15'
+          }`}
+        >
+          <div className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-700/50 flex items-center gap-2">
+            <CalendarDays size={15} className="text-indigo-400 shrink-0" />
+            <span>代課總表</span>
+          </div>
+          <div className="py-1.5 space-y-0.5">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                overviewSubLinkClass({
+                  isActive: isActive || location.pathname === '/overview',
+                })
+              }
+              onClick={onClose}
+            >
+              <CalendarDays size={16} className="shrink-0 opacity-90" />
+              <span>代課資料總表</span>
+            </NavLink>
+            <NavLink to="/substitute-busy" className={overviewSubLinkClass} onClick={onClose}>
+              <Ban size={16} className="shrink-0 opacity-90" />
+              <span>忙碌／不接時段</span>
+            </NavLink>
+          </div>
+        </div>
 
         <NavLink to="/entry" className={linkClass} onClick={onClose}>
           <FilePlus size={18} />
