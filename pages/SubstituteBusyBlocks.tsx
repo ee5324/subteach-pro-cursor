@@ -5,10 +5,11 @@ import { ArrowLeft, Ban, Calendar, Plus, Trash2, Loader2 } from 'lucide-react';
 import SearchableSelect, { SelectOption } from '../components/SearchableSelect';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel from '../components/InstructionPanel';
-import type { SubstituteBusyBlockKind } from '../types';
+import type { SubstituteBusyBlock, SubstituteBusyBlockKind, SubstituteBusyPeriodMode } from '../types';
 import {
   SUBSTITUTE_BUSY_PERIOD_OPTIONS,
   formatSubstituteBusyBlockSummary,
+  expandSubstituteBusyPeriods,
 } from '../utils/substituteBusyBlocks';
 import { normalizeDateString } from '../utils/calculations';
 
@@ -20,14 +21,25 @@ const WEEKDAY_OPTIONS: { value: string; label: string }[] = [
   { value: '5', label: '週五' },
 ];
 
+const PERIOD_SCOPE_OPTIONS: { value: SubstituteBusyPeriodMode; label: string; hint?: string }[] = [
+  { value: 'single', label: '單一節次', hint: '僅一格' },
+  { value: 'range', label: '節次起迄', hint: '例：第2節～第5節（含兩端）' },
+  { value: 'morning', label: '上午', hint: '早自習～第4節' },
+  { value: 'afternoon', label: '下午', hint: '午休～第7節' },
+  { value: 'fullday', label: '整天', hint: '早～第7節（含午休）' },
+];
+
 const SubstituteBusyBlocksPage: React.FC = () => {
   const { teachers, substituteBusyBlocks, addSubstituteBusyBlock, deleteSubstituteBusyBlock } = useAppStore();
 
   const [teacherId, setTeacherId] = useState('');
   const [kind, setKind] = useState<SubstituteBusyBlockKind>('date');
+  const [periodScope, setPeriodScope] = useState<SubstituteBusyPeriodMode>('single');
   const [dateStr, setDateStr] = useState('');
   const [weekday, setWeekday] = useState('3');
   const [period, setPeriod] = useState('3');
+  const [periodFrom, setPeriodFrom] = useState('2');
+  const [periodTo, setPeriodTo] = useState('5');
   const [validFrom, setValidFrom] = useState('');
   const [validTo, setValidTo] = useState('');
   const [note, setNote] = useState('');
@@ -57,7 +69,9 @@ const SubstituteBusyBlocksPage: React.FC = () => {
       if (na !== 0) return na;
       if (a.kind !== b.kind) return a.kind === 'date' ? -1 : 1;
       if (a.kind === 'date' && b.kind === 'date') return (a.date || '').localeCompare(b.date || '');
-      return (a.weekday || 0) - (b.weekday || 0);
+      const wd = (a.weekday || 0) - (b.weekday || 0);
+      if (wd !== 0) return wd;
+      return (a.periodMode || 'single').localeCompare(b.periodMode || 'single');
     });
   }, [substituteBusyBlocks, teachers]);
 
@@ -65,73 +79,98 @@ const SubstituteBusyBlocksPage: React.FC = () => {
     setModal({ isOpen: true, title, message, type, mode: 'alert' });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const buildPayload = (): Record<string, unknown> | null => {
     if (!teacherId) {
       showAlert('欄位未填', '請選擇教師。');
-      return;
+      return null;
     }
-    if (!period) {
-      showAlert('欄位未填', '請選擇節次。');
-      return;
+
+    if (periodScope === 'single') {
+      if (!period) {
+        showAlert('欄位未填', '請選擇節次。');
+        return null;
+      }
     }
+    if (periodScope === 'range') {
+      if (!periodFrom || !periodTo) {
+        showAlert('欄位未填', '請選擇節次起迄。');
+        return null;
+      }
+      const test = expandSubstituteBusyPeriods({
+        id: '_',
+        teacherId: '_',
+        kind: 'date',
+        createdAt: 0,
+        date: '2000-01-01',
+        periodMode: 'range',
+        periodFrom,
+        periodTo,
+      });
+      if (test.length === 0) {
+        showAlert('範圍錯誤', '起迄節必須為總表上的節次（早、1～7、午）。');
+        return null;
+      }
+    }
+
+    const base: Record<string, unknown> = {
+      teacherId,
+      kind,
+      note: note.trim() || undefined,
+      periodMode: periodScope,
+    };
+
+    if (periodScope === 'single') {
+      base.period = period;
+    } else if (periodScope === 'range') {
+      base.periodFrom = periodFrom;
+      base.periodTo = periodTo;
+    }
+
     if (kind === 'date') {
       const d = normalizeDateString(dateStr);
       if (!d) {
         showAlert('日期錯誤', '請選擇或輸入正確日期。');
-        return;
+        return null;
       }
-      setSaving(true);
-      try {
-        await addSubstituteBusyBlock({
-          teacherId,
-          kind: 'date',
-          period,
-          date: d,
-          note: note.trim() || undefined,
-        });
-        setNote('');
-        setDateStr('');
-      } catch (err: any) {
-        showAlert('儲存失敗', String(err?.message || err), 'error');
-      } finally {
-        setSaving(false);
-      }
-      return;
+      base.date = d;
+      return base;
     }
 
     const wd = parseInt(weekday, 10);
     if (wd < 1 || wd > 5) {
       showAlert('欄位錯誤', '請選擇週一至週五。');
-      return;
+      return null;
     }
     const vf = validFrom.trim() ? normalizeDateString(validFrom) : undefined;
     const vt = validTo.trim() ? normalizeDateString(validTo) : undefined;
     if (validFrom.trim() && !vf) {
       showAlert('日期錯誤', '有效起日格式不正確。');
-      return;
+      return null;
     }
     if (validTo.trim() && !vt) {
       showAlert('日期錯誤', '有效迄日格式不正確。');
-      return;
+      return null;
     }
     if (vf && vt && vf > vt) {
       showAlert('日期錯誤', '有效起日不能晚於迄日。');
-      return;
+      return null;
     }
+    base.weekday = wd;
+    if (vf) base.validFrom = vf;
+    if (vt) base.validTo = vt;
+    return base;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = buildPayload();
+    if (!payload) return;
 
     setSaving(true);
     try {
-      await addSubstituteBusyBlock({
-        teacherId,
-        kind: 'weekly',
-        period,
-        weekday: wd,
-        validFrom: vf,
-        validTo: vt,
-        note: note.trim() || undefined,
-      });
+      await addSubstituteBusyBlock(payload as Omit<SubstituteBusyBlock, 'id' | 'createdAt'>);
       setNote('');
+      if (kind === 'date') setDateStr('');
     } catch (err: any) {
       showAlert('儲存失敗', String(err?.message || err), 'error');
     } finally {
@@ -181,7 +220,7 @@ const SubstituteBusyBlocksPage: React.FC = () => {
           代課忙碌／不接時段
         </h1>
         <p className="text-slate-500 mt-2 text-sm md:text-base">
-          登記代課老師「單日某節已接其他工作」或「每週固定某節不接」。資料會顯示在
+          可登記<strong>單節、連續節次、上午、下午或整天</strong>。資料顯示於
           <strong className="text-slate-700">代課資料總表</strong>
           對照，不影響薪資計算。
         </p>
@@ -190,12 +229,15 @@ const SubstituteBusyBlocksPage: React.FC = () => {
       <InstructionPanel title="使用說明" isOpenDefault>
         <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
           <li>
-            <strong>單日</strong>：指定某一天＋節次（例如監考、外校活動）。
+            <strong>單日</strong>：指定某一天，再選涵蓋範圍（單節／起迄節／上午／下午／整天）。
           </li>
           <li>
-            <strong>每週固定</strong>：週一至週五中固定某節（配合老師常態）。可選填「有效起迄日」限制在某一學期內。
+            <strong>每週固定</strong>：週一至週五中固定重複；可選填有效起迄日（例如僅本學期）。
           </li>
-          <li>與人力庫文字欄「不接課時段」可並存；本頁與總表格線一致，較利於核對。</li>
+          <li>
+            <strong>節次起迄</strong>：順序與總表欄位相同（早→1→…→午→5→…→7），起迄皆含在內。
+          </li>
+          <li>與人力庫「不接課時段」文字欄可並存。</li>
         </ul>
       </InstructionPanel>
 
@@ -244,33 +286,15 @@ const SubstituteBusyBlocksPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">節次</label>
-            <select
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
-              value={period}
-              onChange={e => setPeriod(e.target.value)}
-            >
-              {SUBSTITUTE_BUSY_PERIOD_OPTIONS.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {kind === 'date' ? (
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1">日期</label>
+            <label className="block text-xs font-bold text-slate-500 mb-1">日期／週幾</label>
+            {kind === 'date' ? (
               <input
                 type="date"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                 value={dateStr}
                 onChange={e => setDateStr(e.target.value)}
               />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1">週幾</label>
+            ) : (
               <select
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                 value={weekday}
@@ -282,6 +306,73 @@ const SubstituteBusyBlocksPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            )}
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-500 mb-1">涵蓋範圍</label>
+            <select
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              value={periodScope}
+              onChange={e => setPeriodScope(e.target.value as SubstituteBusyPeriodMode)}
+            >
+              {PERIOD_SCOPE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                  {o.hint ? ` — ${o.hint}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {periodScope === 'single' && (
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-1">節次</label>
+              <select
+                className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                value={period}
+                onChange={e => setPeriod(e.target.value)}
+              >
+                {SUBSTITUTE_BUSY_PERIOD_OPTIONS.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {periodScope === 'range' && (
+            <div className="md:col-span-2 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">起節</label>
+                <select
+                  className="w-full min-w-[140px] px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  value={periodFrom}
+                  onChange={e => setPeriodFrom(e.target.value)}
+                >
+                  {SUBSTITUTE_BUSY_PERIOD_OPTIONS.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-slate-400 pb-2">～</span>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">迄節</label>
+                <select
+                  className="w-full min-w-[140px] px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  value={periodTo}
+                  onChange={e => setPeriodTo(e.target.value)}
+                >
+                  {SUBSTITUTE_BUSY_PERIOD_OPTIONS.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 

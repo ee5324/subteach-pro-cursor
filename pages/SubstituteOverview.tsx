@@ -125,7 +125,7 @@ const SubstituteOverview: React.FC = () => {
                             <li><span className="text-emerald-600 font-bold">綠色文字</span>：已安排代課教師。</li>
                             <li><span className="text-red-600 font-bold">紅色區塊</span>：尚未安排代課教師 (待聘)。</li>
                             <li><span className="bg-amber-100 text-amber-700 px-1 rounded text-xs">日薪</span>：日薪制；<span className="bg-amber-50 text-amber-600 px-1 rounded text-xs">半日薪</span>：半日薪制代課紀錄。</li>
-                            <li><span className="text-amber-700 font-bold">琥珀邊框＋「忙碌」</span>：該節代課老師於「代課忙碌／不接時段」有登記（單日或每週固定），請核對是否仍適合派代。</li>
+                            <li><span className="text-amber-700 font-bold">琥珀邊框＋「忙碌」</span>：該節代課老師於「代課忙碌／不接時段」有登記（可為單節、節次範圍、上午／下午或整天；單日或每週固定），請核對是否仍適合派代。</li>
                         </ul>
                     </li>
                     <li><strong>詳細資訊：</strong>滑鼠游標停留在代課卡片上，可查看請假事由、忙碌備註與詳細狀態。</li>

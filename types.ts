@@ -192,12 +192,27 @@ export interface SubPoolItem {
  */
 export type SubstituteBusyBlockKind = 'date' | 'weekly';
 
+/**
+ * 節次涵蓋方式（與代課總表列順序一致）
+ * - single：單一節
+ * - range：起迄節（含兩端，順序可與總表欄位順序對齊）
+ * - morning：早自習～第 4 節
+ * - afternoon：午休～第 7 節
+ * - fullday：早～第 7 節（含午休）
+ */
+export type SubstituteBusyPeriodMode = 'single' | 'range' | 'morning' | 'afternoon' | 'fullday';
+
 export interface SubstituteBusyBlock {
   id: string;
   teacherId: string;
   kind: SubstituteBusyBlockKind;
-  /** 節次：早、1–7、午（與代課總表一致） */
-  period: string;
+  /** 未填視為 single（相容舊資料僅有 period） */
+  periodMode?: SubstituteBusyPeriodMode;
+  /** periodMode === 'single' 或舊資料：單一節次 id */
+  period?: string;
+  /** periodMode === 'range'：起、迄節次 id（含兩端） */
+  periodFrom?: string;
+  periodTo?: string;
   /** kind === 'date'：YYYY-MM-DD */
   date?: string;
   /**
