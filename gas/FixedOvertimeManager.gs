@@ -68,10 +68,12 @@ var FixedOvertimeManager = {
   },
 
   // 3. 產生固定兼課報表 (Daily Based)，含固定兼課教師與當月協助代課教師
-  generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays, substituteTeachers) {
+  // formatOptions（可選）：fileNameSuffix、identityLabel、sheetTitleText、voucherTitle、replaceTitlePhraseFrom/To
+  generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays, substituteTeachers, formatOptions) {
+    formatOptions = formatOptions || {};
     var rocYear = year - 1911;
     var rocDateStr = rocYear + "年" + month + "月";
-    var fileName = rocDateStr + "_固定兼課印領清冊";
+    var fileName = rocDateStr + (formatOptions.fileNameSuffix || "_固定兼課印領清冊");
     
     var templateName = targetTemplateName || CONFIG.FIXED_OVERTIME_TEMPLATE_NAME || '固定兼課清冊範本';
     
@@ -105,11 +107,21 @@ var FixedOvertimeManager = {
         // --- 表頭設定 ---
         // Title Update (A1)
         var titleCell = sheet.getRange("A1");
-        var title = titleCell.getValue();
-        // 替換範本中的佔位符
-        title = title.replace(/000年00月/, rocDateStr);
-        title = title.replace(/(\d+)年(\d+)月/, rocDateStr); 
+        var title;
+        if (formatOptions.sheetTitleText) {
+          title = String(formatOptions.sheetTitleText);
+        } else {
+          title = String(titleCell.getValue());
+          title = title.replace(/000年00月/, rocDateStr);
+          title = title.replace(/(\d+)年(\d+)月/, rocDateStr);
+          if (formatOptions.replaceTitlePhraseFrom) {
+            var fromP = String(formatOptions.replaceTitlePhraseFrom);
+            var toP = String(formatOptions.replaceTitlePhraseTo || '');
+            title = title.split(fromP).join(toP);
+          }
+        }
         titleCell.setValue(title);
+        var voucherTitle = formatOptions.voucherTitle ? String(formatOptions.voucherTitle) : title;
 
         // A3: 計算區間
         var rangeText = "計算區間： " + month + "/1 - " + month + "/" + lastDay;
@@ -132,7 +144,7 @@ var FixedOvertimeManager = {
         var dayCounts = this._getMonthlyWeekdayCounts(year, month, semesterStart, semesterEnd, holidays);
         
         // --- 填寫資料（固定兼課教師 + 協助代課教師）---
-        this._fillFixedOvertimeReport(sheet, reportData, dayCounts, substituteTeachers || []);
+        this._fillFixedOvertimeReport(sheet, reportData, dayCounts, substituteTeachers || [], formatOptions);
 
         // --- 黏貼憑證（總額含固定兼課與協助代課）---
         var sumTotal = 0;
@@ -145,7 +157,7 @@ var FixedOvertimeManager = {
         if (typeof SheetManager === 'undefined') {
             throw new Error('SheetManager 未定義。請在 GAS 專案中確認已加入「SheetManager.gs」檔案並重新部署。');
         }
-        SheetManager.addVoucherSheetToSpreadsheet(newSS, sumTotal, title, rocYear, month, year);
+        SheetManager.addVoucherSheetToSpreadsheet(newSS, sumTotal, voucherTitle, rocYear, month, year);
 
         SpreadsheetApp.flush();
         return { url: newSS.getUrl(), success: true };
@@ -156,7 +168,10 @@ var FixedOvertimeManager = {
   },
 
   // 內部函式：填寫資料（reportData = 固定兼課教師，substituteTeachers = 當月協助代課教師）
-  _fillFixedOvertimeReport: function(sheet, reportData, dayCounts, substituteTeachers) {
+  // item.payablePeriods：若提供，則 I 欄為「週節數×當月平日次數」加總數字，J = payablePeriods - I（與族語專職超鐘點等淨節數對齊）
+  _fillFixedOvertimeReport: function(sheet, reportData, dayCounts, substituteTeachers, formatOptions) {
+      formatOptions = formatOptions || {};
+      var identityLabel = formatOptions.identityLabel || '固定兼課教師';
       substituteTeachers = substituteTeachers || [];
       var weekDays = ['一', '二', '三', '四', '五'];
       var substituteMap = {};
@@ -189,16 +204,32 @@ var FixedOvertimeManager = {
           var netFormula = "=I" + r + "+J" + r;
           var amountFormula = "=ROUND(K" + r + "*405, 0)";
 
-          // J 欄「本次增減」須含活動扣除、請假扣除（與憑證一致），前端傳入 item.adjustment = 手動 - 活動扣除 - 請假扣除
-          var netAdjustment = (item.adjustment != null && item.adjustment !== '') ? Number(item.adjustment) : (item.manualAdjustment || 0);
+          var grossI = 0;
+          for (var gi = 0; gi < 5; gi++) {
+            grossI += (Number(periods[gi]) || 0) * dayCounts[gi];
+          }
+          var usePayableOverride = (item.payablePeriods != null && item.payablePeriods !== '');
+
+          var iCell;
+          var jCell;
+          if (usePayableOverride) {
+            var targetPayable = Number(item.payablePeriods) || 0;
+            iCell = grossI;
+            jCell = targetPayable - grossI;
+          } else {
+            // J 欄「本次增減」須含活動扣除、請假扣除（與憑證一致），前端傳入 item.adjustment = 手動 - 活動扣除 - 請假扣除
+            var netAdjustment = (item.adjustment != null && item.adjustment !== '') ? Number(item.adjustment) : (item.manualAdjustment || 0);
+            iCell = grossFormula;
+            jCell = netAdjustment;
+          }
 
           var row = [
               item.teacherName,
-              "固定兼課教師",
+              identityLabel,
               periods[0], periods[1], periods[2], periods[3], periods[4],
               "=SUM(C"+r+":G"+r+")",
-              grossFormula,
-              netAdjustment,
+              iCell,
+              jCell,
               netFormula,
               405,
               amountFormula,

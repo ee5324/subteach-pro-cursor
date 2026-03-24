@@ -977,111 +977,172 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
       setIsGenerating(true);
       try {
           const [year, month] = selectedMonth.split('-').map(Number);
-          const exportWeekStructure = getMonthlyWeeksStructureForOvertimeExport(
-              year,
-              month,
-              settings?.semesterStart,
-              settings?.semesterEnd,
-              holidays || [],
-          );
 
-          const reportPayload = exportableData.map(row => {
-              // Convert Overtime Slots to Mon-Fri counts for Precise Mode
-              const periods = [0, 0, 0, 0, 0];
-              
-              if (row.hasPreciseConfig) {
-                  row.overtimeSlots.forEach(s => {
-                      if (s.day >= 1 && s.day <= 5) periods[s.day - 1]++;
-                  });
-              } 
-              // Note: For Simple Mode, the backend uses 'weeklyOvertime' directly if flags set correctly, 
-              // but we send periods array anyway as backup for patterns.
-              
-              // Reduction Details Text
-              const reductionDetail = (row.teacher.reductions || []).map(r => `${r.title}(${r.periods})`).join('、');
-              
-              // 備註欄（與紙本習慣一致）：第一行 週二34；換行後 MMDD請假-N、MMDD代姓名+N …
-              const weekPattern = row.hasPreciseConfig
-                  ? buildOvertimeExportWeekPattern(row.overtimeSlots, periodOrderOvertime)
-                  : '';
-              const tailLines = [
-                  ...(row.leaveDeductions || []),
-                  ...((row.subAdditions && row.subAdditions.details) || []),
-              ];
-              if (row.adjustmentReason?.trim()) tailLines.push(row.adjustmentReason.trim());
+          let result: Awaited<ReturnType<typeof callGasApi>>;
 
-              let remarks = '';
-              if (weekPattern) {
-                  remarks =
-                      tailLines.length > 0 ? `${weekPattern}；\n${tailLines.join('\n')}` : weekPattern;
-              } else {
-                  remarks = tailLines.join('\n');
-              }
+          if (variant === 'indigenousFullTime') {
+              /** 族語專職：與「固定兼課」同一清冊範本與列結構；淨節數以 payablePeriods 對齊畫面 displayCount */
+              const fixedReportData = exportableData.map(row => {
+                  const periods = [0, 0, 0, 0, 0];
+                  if (row.hasPreciseConfig) {
+                      row.overtimeSlots.forEach(s => {
+                          if (s.day >= 1 && s.day <= 5) periods[s.day - 1]++;
+                      });
+                  }
+                  const reductionDetail = (row.teacher.reductions || [])
+                      .map(r => `${r.title}(${r.periods})`)
+                      .join('、');
+                  const weekPattern = row.hasPreciseConfig
+                      ? buildOvertimeExportWeekPattern(row.overtimeSlots, periodOrderOvertime)
+                      : '';
+                  const tailLines = [
+                      ...(row.leaveDeductions || []),
+                      ...((row.subAdditions && row.subAdditions.details) || []),
+                  ];
+                  if (row.adjustmentReason?.trim()) tailLines.push(row.adjustmentReason.trim());
+                  let remarks = '';
+                  if (weekPattern) {
+                      remarks =
+                          tailLines.length > 0 ? `${weekPattern}；\n${tailLines.join('\n')}` : weekPattern;
+                  } else {
+                      remarks = tailLines.join('\n');
+                  }
+                  return {
+                      teacherId: row.teacher.id,
+                      teacherName: row.teacher.name,
+                      jobTitle: formatExportJobTitle(row.teacher),
+                      overtimePattern: periods,
+                      payablePeriods: row.displayCount,
+                      adjustment: 0,
+                      manualAdjustment: 0,
+                      adjustmentReason: remarks,
+                      pay: Math.round(row.displayCount * HOURLY_RATE),
+                      reductionDetail,
+                      slotDetail: '',
+                  };
+              });
 
-              /** 精確模式：週欄依「日曆」逐日扣除請假節次後加總（與備註一致），避免整週套用週課表模板 */
-              const weeklyExportCounts =
-                  row.hasPreciseConfig && (row.overtimeSlots?.length ?? 0) > 0
-                      ? computeWeeklyExportCountsForPreciseOvertime(
-                            row.teacher.id,
-                            row.overtimeSlots,
-                            exportWeekStructure,
-                            year,
-                            month,
-                            leaveRecords || [],
-                            row.teacher,
-                            graduationDate || undefined,
-                            settings?.semesterStart,
-                            settings?.semesterEnd,
-                            holidays || [],
-                        )
-                      : undefined;
+              result = await callGasApi(settings!.gasWebAppUrl, 'GENERATE_FIXED_OVERTIME_REPORT', {
+                  year,
+                  month,
+                  reportData: fixedReportData,
+                  substituteTeachers: [],
+                  semesterStart: settings?.semesterStart,
+                  semesterEnd: settings?.semesterEnd,
+                  docNumber,
+                  holidays,
+                  fixedOvertimeReportOptions: {
+                      fileNameSuffix: '_族語專職超鐘點印領清冊',
+                      identityLabel: '族語專職教師',
+                      replaceTitlePhraseFrom: '固定兼課印領清冊',
+                      replaceTitlePhraseTo: '族語專職超鐘點印領清冊',
+                  },
+              });
+          } else {
+              const exportWeekStructure = getMonthlyWeeksStructureForOvertimeExport(
+                  year,
+                  month,
+                  settings?.semesterStart,
+                  settings?.semesterEnd,
+                  holidays || [],
+              );
+              const reportPayload = exportableData.map(row => {
+                  // Convert Overtime Slots to Mon-Fri counts for Precise Mode
+                  const periods = [0, 0, 0, 0, 0];
 
-              return {
-                  teacherId: row.teacher.id,
-                  teacherName: row.teacher.name,
-                  jobTitle: formatExportJobTitle(row.teacher),
-                  payablePeriods: row.displayCount,
-                  remarks,
-                  isSubstituteOnly: row.isSubstituteOnly,
-                  substituteSessionsByDate: row.subAdditions?.sessionsByDate || [],
-                  
-                  // Columns C, D, E, F
-                  standard: row.standardBase,
-                  weeklyActual: row.weeklyActual,
-                  adminReduction: row.reduction,
-                  weeklyOvertime: row.hasPreciseConfig ? row.overtimeSlots.length : Math.max(0, row.weeklyActual - row.weeklyBasic),
-                  
-                  // Mode Flag
-                  isSimpleMode: !row.hasPreciseConfig,
-                  
-                  // Precise Mode Data
-                  overtimePattern: periods, // [1, 0, 1, 0, 0]（GAS 後備；有 weeklyExportCounts 時以週欄為準）
-                  weeklyExportCounts: weeklyExportCounts,
+                  if (row.hasPreciseConfig) {
+                      row.overtimeSlots.forEach(s => {
+                          if (s.day >= 1 && s.day <= 5) periods[s.day - 1]++;
+                      });
+                  }
+                  // Note: For Simple Mode, the backend uses 'weeklyOvertime' directly if flags set correctly,
+                  // but we send periods array anyway as backup for patterns.
 
-                  // Adjustment & Reason
-                  adjustment: row.adjustment,
-                  adjustmentReason: row.adjustmentReason || '',
-                  
-                  // Text Fields for P & Q columns（O 欄備註由 remarks 承載完整格式；不重複寫入 slotDetail）
-                  reductionDetail: reductionDetail,
-                  slotDetail: ''
-              };
-          });
+                  // Reduction Details Text
+                  const reductionDetail = (row.teacher.reductions || [])
+                      .map(r => `${r.title}(${r.periods})`)
+                      .join('、');
 
-          // Call the NEW API action for Overtime Report
-          const result = await callGasApi(settings!.gasWebAppUrl, 'GENERATE_OVERTIME_REPORT', { 
-              year, 
-              month, 
-              reportData: reportPayload,
-              semesterStart: settings?.semesterStart,
-              semesterEnd: settings?.semesterEnd,
-              docNumber: docNumber, // Pass document number
-              holidays: holidays, // New: Pass holidays from store
-              overtimeReportOptions:
-                variant === 'indigenousFullTime'
-                  ? { ledgerLabelSuffix: '族語專職超鐘點印領清冊' }
-                  : undefined,
-          });
+                  // 備註欄（與紙本習慣一致）：第一行 週二34；換行後 MMDD請假-N、MMDD代姓名+N …
+                  const weekPattern = row.hasPreciseConfig
+                      ? buildOvertimeExportWeekPattern(row.overtimeSlots, periodOrderOvertime)
+                      : '';
+                  const tailLines = [
+                      ...(row.leaveDeductions || []),
+                      ...((row.subAdditions && row.subAdditions.details) || []),
+                  ];
+                  if (row.adjustmentReason?.trim()) tailLines.push(row.adjustmentReason.trim());
+
+                  let remarks = '';
+                  if (weekPattern) {
+                      remarks =
+                          tailLines.length > 0 ? `${weekPattern}；\n${tailLines.join('\n')}` : weekPattern;
+                  } else {
+                      remarks = tailLines.join('\n');
+                  }
+
+                  /** 精確模式：週欄依「日曆」逐日扣除請假節次後加總（與備註一致），避免整週套用週課表模板 */
+                  const weeklyExportCounts =
+                      row.hasPreciseConfig && (row.overtimeSlots?.length ?? 0) > 0
+                          ? computeWeeklyExportCountsForPreciseOvertime(
+                                row.teacher.id,
+                                row.overtimeSlots,
+                                exportWeekStructure,
+                                year,
+                                month,
+                                leaveRecords || [],
+                                row.teacher,
+                                graduationDate || undefined,
+                                settings?.semesterStart,
+                                settings?.semesterEnd,
+                                holidays || [],
+                            )
+                          : undefined;
+
+                  return {
+                      teacherId: row.teacher.id,
+                      teacherName: row.teacher.name,
+                      jobTitle: formatExportJobTitle(row.teacher),
+                      payablePeriods: row.displayCount,
+                      remarks,
+                      isSubstituteOnly: row.isSubstituteOnly,
+                      substituteSessionsByDate: row.subAdditions?.sessionsByDate || [],
+
+                      // Columns C, D, E, F
+                      standard: row.standardBase,
+                      weeklyActual: row.weeklyActual,
+                      adminReduction: row.reduction,
+                      weeklyOvertime: row.hasPreciseConfig
+                          ? row.overtimeSlots.length
+                          : Math.max(0, row.weeklyActual - row.weeklyBasic),
+
+                      // Mode Flag
+                      isSimpleMode: !row.hasPreciseConfig,
+
+                      // Precise Mode Data
+                      overtimePattern: periods, // [1, 0, 1, 0, 0]（GAS 後備；有 weeklyExportCounts 時以週欄為準）
+                      weeklyExportCounts: weeklyExportCounts,
+
+                      // Adjustment & Reason
+                      adjustment: row.adjustment,
+                      adjustmentReason: row.adjustmentReason || '',
+
+                      // Text Fields for P & Q columns（O 欄備註由 remarks 承載完整格式；不重複寫入 slotDetail）
+                      reductionDetail: reductionDetail,
+                      slotDetail: '',
+                  };
+              });
+
+              result = await callGasApi(settings!.gasWebAppUrl, 'GENERATE_OVERTIME_REPORT', {
+                  year,
+                  month,
+                  reportData: reportPayload,
+                  semesterStart: settings?.semesterStart,
+                  semesterEnd: settings?.semesterEnd,
+                  docNumber: docNumber,
+                  holidays: holidays,
+              });
+          }
           
           if (result.status === 'success' && result.data.url) {
               const url = result.data.url;
