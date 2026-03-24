@@ -7,6 +7,7 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Phone, MapPin, MessageSquare, Plus, Trash2, Printer, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LeaveRecord, TimetableSlot } from '../types';
+import { Link } from 'react-router-dom';
 
 interface ContactRow {
   key: string;
@@ -316,6 +317,12 @@ export default function SubstituteContactExchange() {
         <p className="text-slate-500 mt-2">
           將要列印的項目加入下方「通知單」，再列印成雙方通知單。介面僅顯示您已添加的項目，保持簡潔。
         </p>
+        <Link
+          to="/sub-weekly"
+          className="inline-block mt-2 text-sm font-semibold text-indigo-700 hover:text-indigo-800 underline-offset-2 hover:underline"
+        >
+          前往代課老師週課表查詢（手機末四碼）
+        </Link>
       </header>
 
       {/* 可加入的項目：僅在未加入時顯示，簡潔列表 */}

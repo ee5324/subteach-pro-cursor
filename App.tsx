@@ -58,6 +58,7 @@ import PublicBoard from './pages/PublicBoard';
 import PublicBoardApplicationsPage from './pages/PublicBoardApplicationsPage';
 import TeacherLeaveRequest from './pages/TeacherLeaveRequest';
 import SubstituteContactExchange from './pages/SubstituteContactExchange';
+import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
 import { useAppStore } from './store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from './src/lib/firebase';
@@ -111,6 +112,7 @@ const App: React.FC = () => {
         <Route path="/apply" element={<ApplySubstitute />} />
         <Route path="/public" element={<PublicBoard />} />
         <Route path="/teacher-request" element={<TeacherLeaveRequest />} />
+        <Route path="/sub-weekly" element={<SubstituteWeeklyLookup />} />
 
         <Route path="/" element={
           <ProtectedRoute>

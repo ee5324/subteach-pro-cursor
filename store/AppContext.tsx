@@ -4,7 +4,7 @@ import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
 import { db, auth } from '../src/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, updateDoc, getDoc, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 /** Firestore 不支援 undefined、NaN、Infinity，寫入前清理 */
@@ -405,15 +405,125 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
+  /**
+   * 將「代課老師個人週課表」同步到公開集合（publicSubstituteSchedules）。
+   * 僅輸出代課老師自己的代課節次與手機末四碼，避免公開 teachers/records 全量資料。
+   */
+  const syncPublicSubstituteSchedules = async (
+    teachersForBuild: Teacher[] = teachers,
+    recordsForBuild: LeaveRecord[] = records,
+  ) => {
+    if (!db) return;
+
+    const teacherById = new Map(teachersForBuild.map((t) => [t.id, t]));
+    const scheduleBySubId = new Map<
+      string,
+      {
+        teacherId: string;
+        teacherName: string;
+        phoneLast4: string;
+        slots: Array<{
+          date: string;
+          period: string;
+          subject: string;
+          className: string;
+          originalTeacherName: string;
+          payType: string;
+          recordId: string;
+        }>;
+      }
+    >();
+
+    const normalizePhoneLast4 = (raw: string | undefined): string => {
+      const digits = String(raw || '').replace(/\D/g, '');
+      return digits.length >= 4 ? digits.slice(-4) : '';
+    };
+
+    recordsForBuild.forEach((record) => {
+      if (!record.slots || record.slots.length === 0) return;
+      const originalTeacherName = teacherById.get(record.originalTeacherId)?.name || '';
+      record.slots.forEach((slot) => {
+        if (!slot.substituteTeacherId) return;
+        const subId = slot.substituteTeacherId;
+        const subTeacher = teacherById.get(subId);
+        if (!subTeacher) return;
+        const phoneLast4 = normalizePhoneLast4(subTeacher.phone);
+        if (!phoneLast4) return;
+        if (!scheduleBySubId.has(subId)) {
+          scheduleBySubId.set(subId, {
+            teacherId: subId,
+            teacherName: subTeacher.name || '',
+            phoneLast4,
+            slots: [],
+          });
+        }
+        scheduleBySubId.get(subId)?.slots.push({
+          date: slot.date,
+          period: String(slot.period ?? ''),
+          subject: String(slot.subject ?? ''),
+          className: String(slot.className ?? ''),
+          originalTeacherName,
+          payType: String(slot.payType ?? ''),
+          recordId: record.id,
+        });
+      });
+    });
+
+    for (const item of scheduleBySubId.values()) {
+      item.slots.sort((a, b) => a.date.localeCompare(b.date) || a.period.localeCompare(b.period));
+    }
+
+    const publicCollectionRef = collection(db, 'publicSubstituteSchedules');
+    const existingSnap = await getDocs(publicCollectionRef);
+    const existingIds = new Set(existingSnap.docs.map((d) => d.id));
+    const nextIds = new Set<string>(scheduleBySubId.keys());
+
+    const batch = writeBatch(db);
+    scheduleBySubId.forEach((item, teacherId) => {
+      batch.set(
+        doc(db, 'publicSubstituteSchedules', teacherId),
+        sanitizeForFirestore({
+          teacherId: item.teacherId,
+          teacherName: item.teacherName,
+          phoneLast4: item.phoneLast4,
+          slots: item.slots,
+          updatedAt: Date.now(),
+        }),
+      );
+    });
+    existingIds.forEach((id) => {
+      if (!nextIds.has(id)) {
+        batch.delete(doc(db, 'publicSubstituteSchedules', id));
+      }
+    });
+    await batch.commit();
+  };
+
+  /**
+   * 自動維護公開代課週課表（供代課老師自行查詢）。
+   * 只在已登入且主資料載入完成後執行，並做簡單 debounce 降低頻繁寫入。
+   */
+  useEffect(() => {
+    if (!currentUser || loading) return;
+    if (currentUser.uid === 'dev-mock') return;
+    const timer = setTimeout(() => {
+      void syncPublicSubstituteSchedules();
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- teachers/records 變動時重建公開查詢資料，避免依賴函式參考造成無限重綁
+  }, [currentUser, loading, teachers, records]);
+
   const addTeacher = async (teacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
     await setDoc(doc(db, 'teachers', teacher.id), sanitizeForFirestore(teacher));
     await syncPublicTeacherSchedule(teacher);
+    await syncPublicSubstituteSchedules([...teachers.filter((t) => t.id !== teacher.id), teacher], records);
   };
   const updateTeacher = async (updatedTeacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
     await updateDoc(doc(db, 'teachers', updatedTeacher.id), sanitizeForFirestore(updatedTeacher as Record<string, unknown>) as any);
     await syncPublicTeacherSchedule(updatedTeacher);
+    await syncPublicSubstituteSchedules([...teachers.filter((t) => t.id !== updatedTeacher.id), updatedTeacher], records);
   };
   const setAllTeachers = async (newTeachers: Teacher[]) => {
     if (!db) throw new Error("Firebase not initialized");
@@ -425,10 +535,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     for (const t of newTeachers) {
       await syncPublicTeacherSchedule(t);
     }
+    await syncPublicSubstituteSchedules(newTeachers, records);
   };
   const deleteTeacher = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
     await deleteDoc(doc(db, 'teachers', id));
+    await syncPublicSubstituteSchedules(teachers.filter((t) => t.id !== id), records);
   };
   
   const renameTeacher = async (oldId: string, newTeacher: Teacher) => {
@@ -469,6 +581,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       await batch.commit();
       await syncPublicTeacherSchedule(newTeacher);
+      await syncPublicSubstituteSchedules(
+        [...teachers.filter((t) => t.id !== oldId), newTeacher],
+        records.map((r) => {
+          let changed = false;
+          const next = { ...r };
+          if (next.originalTeacherId === oldId) {
+            next.originalTeacherId = newTeacher.id;
+            changed = true;
+          }
+          if (next.slots) {
+            const slots = next.slots.map((s) => {
+              if (s.substituteTeacherId === oldId) {
+                changed = true;
+                return { ...s, substituteTeacherId: newTeacher.id };
+              }
+              return s;
+            });
+            if (changed) next.slots = slots;
+          }
+          if (next.details) {
+            const details = next.details.map((d) => {
+              if (d.substituteTeacherId === oldId) {
+                changed = true;
+                return { ...d, substituteTeacherId: newTeacher.id };
+              }
+              return d;
+            });
+            if (changed) next.details = details;
+          }
+          return next;
+        }),
+      );
   };
 
   /** 將目前所有教師的預設課表寫入 publicTeacherSchedules，供請假表單依姓名帶入 */
@@ -482,17 +626,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addRecord = async (record: LeaveRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
     await setDoc(doc(db, 'records', record.id), sanitizeForFirestore(record));
+    await syncPublicSubstituteSchedules(teachers, [record, ...records.filter((r) => r.id !== record.id)]);
   };
   
   const updateRecord = async (updatedRecord: LeaveRecord) => { 
     if (!db) throw new Error("Firebase not initialized");
     const docRef = doc(db, 'records', updatedRecord.id);
     await setDoc(docRef, sanitizeForFirestore({ ...updatedRecord }), { merge: true });
+    await syncPublicSubstituteSchedules(teachers, [updatedRecord, ...records.filter((r) => r.id !== updatedRecord.id)]);
   };
   
   const deleteRecord = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
     await deleteDoc(doc(db, 'records', id));
+    await syncPublicSubstituteSchedules(teachers, records.filter((r) => r.id !== id));
   };
 
   const updateOvertimeRecord = async (record: OvertimeRecord) => { 

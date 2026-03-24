@@ -132,6 +132,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if canAccessSubteach();
     }
+    // 代課老師自助查詢：僅公開「手機末四碼 + 該老師自己的代課週課表」
+    match /publicSubstituteSchedules/{teacherId} {
+      allow read: if true;
+      allow write: if canAccessSubteach();
+    }
     match /subteach_allowed_users/{email} {
       allow read: if (isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin()) && (request.auth.token.email == email || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin());
       allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();

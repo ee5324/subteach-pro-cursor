@@ -102,6 +102,12 @@ const SubstituteOverview: React.FC = () => {
                     >
                         維護代課忙碌／不接時段
                     </Link>
+                    <a
+                        href="#/sub-weekly"
+                        className="inline-block mt-2 ml-3 text-sm font-semibold text-indigo-700 hover:text-indigo-800 underline-offset-2 hover:underline"
+                    >
+                        代課老師週課表查詢（手機末四碼）
+                    </a>
                 </div>
                 
                 <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">
