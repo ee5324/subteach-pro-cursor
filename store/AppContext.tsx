@@ -3,6 +3,7 @@ import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, Special
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
+import { isSubstituteBusyBlockExpiredForAutoCleanup } from '../utils/substituteBusyBlocks';
 import { db, auth } from '../src/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, updateDoc, getDoc, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -371,6 +372,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       unsubs.forEach(unsub => unsub());
     };
   }, [currentUser]);
+
+  // 單日紀錄若日期已過、每週紀錄若 validTo 已過，登入後自動自 Firestore 刪除（不影響未填 validTo 之長期每週規則）
+  useEffect(() => {
+    if (!db || !currentUser || currentUser.uid === 'dev-mock' || notAllowed) return;
+    const expired = substituteBusyBlocks.filter(isSubstituteBusyBlockExpiredForAutoCleanup);
+    if (expired.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      for (const b of expired) {
+        if (cancelled) return;
+        try {
+          await deleteDoc(doc(db, 'substituteBusyBlocks', b.id));
+        } catch (e) {
+          console.warn('substituteBusyBlocks auto-cleanup failed', b.id, e);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [db, currentUser, notAllowed, substituteBusyBlocks]);
 
   // --- Actions (Write to Firebase) ---
 

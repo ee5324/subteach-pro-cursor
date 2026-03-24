@@ -1,5 +1,32 @@
 import type { SubstituteBusyBlock, SubstituteBusyPeriodMode } from '../types';
-import { parseLocalDate } from './calculations';
+import { parseLocalDate, normalizeDateString } from './calculations';
+
+/** 本機「今天」YYYY-MM-DD（與代課單日期欄一致） */
+export function getLocalTodayYmd(): string {
+  return normalizeDateString(new Date());
+}
+
+/**
+ * 是否應自動從 Firestore 刪除：
+ * - 單日：指定日期早於今天（不含今天）
+ * - 每週固定：有填 validTo 且 validTo 早於今天；未填 validTo 視為長期重複，不刪
+ */
+export function isSubstituteBusyBlockExpiredForAutoCleanup(block: SubstituteBusyBlock): boolean {
+  const today = getLocalTodayYmd();
+  if (block.kind === 'date') {
+    const d = normalizeDateString(block.date);
+    if (!d) return false;
+    return d < today;
+  }
+  if (block.kind === 'weekly') {
+    const toRaw = block.validTo?.trim();
+    if (!toRaw) return false;
+    const end = normalizeDateString(toRaw);
+    if (!end) return false;
+    return end < today;
+  }
+  return false;
+}
 
 /** 與代課資料總表（SubstituteOverview）節次欄位一致（列順序＝範圍起迄依此順序） */
 export const SUBSTITUTE_BUSY_PERIOD_OPTIONS: { id: string; label: string }[] = [

@@ -238,6 +238,9 @@ const SubstituteBusyBlocksPage: React.FC = () => {
             <strong>節次起迄</strong>：順序與總表欄位相同（早→1→…→午→5→…→7），起迄皆含在內。
           </li>
           <li>與人力庫「不接課時段」文字欄可並存。</li>
+          <li>
+            <strong>自動清除：</strong>單日登記在「該日已過」後會自動刪除；每週固定若有填「有效迄日」且已過該日，亦會自動刪除（未填迄日者視為長期規則，不會自動刪）。
+          </li>
         </ul>
       </InstructionPanel>
 
