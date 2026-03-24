@@ -1,12 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Loader2, Download, UserPlus, FileText, CheckCircle, ExternalLink, Calendar, Archive, RefreshCcw, EyeOff, LayoutList, Trash2 } from 'lucide-react';
+import { Loader2, Download, UserPlus, FileText, CheckCircle, ExternalLink, Calendar, Archive, RefreshCcw, EyeOff, LayoutList, Trash2, AlertTriangle } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import { LeaveRecord, Teacher, TeacherType, PayType, TimetableSlot, mapTeacherRequestLeaveTypeToSystemLeaveType } from '../types';
 import type { TeacherLeaveRequestDoc } from '../types';
 import { convertSlotsToDetails } from '../utils/calculations';
 import InstructionPanel from '../components/InstructionPanel';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/lib/firebase';
 
 /** 老師填寫請假單的網址（本系統表單，資料存 Firestore） */
 const getTeacherRequestFormUrl = () => typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname || '/'}#/teacher-request` : '#/teacher-request';
@@ -17,6 +19,9 @@ const IncomingRequests: React.FC = () => {
     const { teachers, addRecord, addTeacher, salaryGrades, teacherLeaveRequests, updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest } = useAppStore();
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
     const [currentTab, setCurrentTab] = useState<TabType>('pending');
+    const [jumpHighlightId, setJumpHighlightId] = useState<string | null>(null);
+    const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const lastDuplicateAlertKeyRef = useRef<string>('');
 
     const [modal, setModal] = useState<{
         isOpen: boolean; title: string; message: string; type: ModalType; mode: ModalMode; onConfirm?: () => void;
@@ -30,6 +35,75 @@ const IncomingRequests: React.FC = () => {
     // 教師自行申請假單僅走 Firestore（本系統表單）
     const pending = useMemo(() => teacherLeaveRequests.filter(r => r.status === 'pending'), [teacherLeaveRequests]);
     const archived = useMemo(() => teacherLeaveRequests.filter(r => r.status === 'archived'), [teacherLeaveRequests]);
+
+    const duplicateInfo = useMemo(() => {
+        const duplicateIds = new Set<string>();
+        let firstConflict: { id: string; teacherName: string; date: string } | null = null;
+        const active = pending.filter(r => !r.duplicateWarningIgnored);
+        const byTeacher = new Map<string, TeacherLeaveRequestDoc[]>();
+        active.forEach((r) => {
+            const key = (r.teacherName || '').trim();
+            if (!key) return;
+            if (!byTeacher.has(key)) byTeacher.set(key, []);
+            byTeacher.get(key)?.push(r);
+        });
+
+        const rangesOverlap = (a: TeacherLeaveRequestDoc, b: TeacherLeaveRequestDoc) =>
+            !(a.endDate < b.startDate || b.endDate < a.startDate);
+
+        byTeacher.forEach((list, teacherName) => {
+            const sorted = [...list].sort((a, b) => a.startDate.localeCompare(b.startDate));
+            for (let i = 0; i < sorted.length; i++) {
+                for (let j = i + 1; j < sorted.length; j++) {
+                    const a = sorted[i];
+                    const b = sorted[j];
+                    if (rangesOverlap(a, b)) {
+                        duplicateIds.add(a.id);
+                        duplicateIds.add(b.id);
+                        if (!firstConflict) {
+                            const overlapStart = a.startDate > b.startDate ? a.startDate : b.startDate;
+                            firstConflict = { id: a.id, teacherName, date: overlapStart };
+                        }
+                    }
+                    if (sorted[j].startDate > sorted[i].endDate) break;
+                }
+            }
+        });
+
+        return { duplicateIds, firstConflict };
+    }, [pending]);
+
+    const focusProblemCard = (id: string) => {
+        setCurrentTab('pending');
+        setJumpHighlightId(id);
+        window.setTimeout(() => {
+            const el = cardRefs.current[id];
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
+        window.setTimeout(() => setJumpHighlightId((prev) => (prev === id ? null : prev)), 2600);
+    };
+
+    useEffect(() => {
+        if (currentTab !== 'pending') return;
+        if (!duplicateInfo.firstConflict) {
+            lastDuplicateAlertKeyRef.current = '';
+            return;
+        }
+        const key = `${duplicateInfo.firstConflict.id}|${duplicateInfo.firstConflict.date}`;
+        if (lastDuplicateAlertKeyRef.current === key) return;
+        lastDuplicateAlertKeyRef.current = key;
+        showModal({
+            title: '偵測到重複代課申請',
+            message: `老師「${duplicateInfo.firstConflict.teacherName}」在 ${duplicateInfo.firstConflict.date} 有重複申請代課。\n請先確認是否重複送單，或在該筆資料按「忽略警示」。`,
+            type: 'warning',
+            mode: 'confirm',
+            onConfirm: () => {
+                closeModal();
+                focusProblemCard(duplicateInfo.firstConflict!.id);
+            },
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- duplicateInfo 為計算結果，僅在偵測到新衝突時提示一次
+    }, [currentTab, duplicateInfo.firstConflict?.id, duplicateInfo.firstConflict?.date]);
 
     const handleImportFirestore = async (req: TeacherLeaveRequestDoc) => {
         try {
@@ -104,6 +178,25 @@ const IncomingRequests: React.FC = () => {
             showModal({ title: '還原成功', message: '該申請已移回待處理列表。', type: 'success' });
         } catch (e: any) {
             showModal({ title: '還原失敗', message: e?.message, type: 'error' });
+        } finally {
+            setActionLoadingId(null);
+        }
+    };
+
+    const handleIgnoreDuplicateWarning = async (req: TeacherLeaveRequestDoc) => {
+        if (!db) {
+            showModal({ title: '操作失敗', message: 'Firebase 尚未初始化', type: 'error' });
+            return;
+        }
+        setActionLoadingId(req.id);
+        try {
+            await updateDoc(doc(db, 'teacherLeaveRequests', req.id), {
+                duplicateWarningIgnored: true,
+                updatedAt: Date.now(),
+            });
+            showModal({ title: '已忽略', message: '此筆將不再觸發重複申請警示。', type: 'success' });
+        } catch (e: any) {
+            showModal({ title: '操作失敗', message: e?.message || '請稍後再試', type: 'error' });
         } finally {
             setActionLoadingId(null);
         }
@@ -193,7 +286,19 @@ const IncomingRequests: React.FC = () => {
                         const isProcessing = actionLoadingId === req.id;
                         const importPreviewLeaveType = mapTeacherRequestLeaveTypeToSystemLeaveType(req.leaveType);
                         return (
-                            <div key={req.id} className={`bg-white rounded-xl shadow-sm border p-6 flex flex-col relative overflow-hidden ${isImported ? 'border-green-200 ring-1 ring-green-100' : 'border-slate-200'}`}>
+                            <div
+                                key={req.id}
+                                ref={(el) => { cardRefs.current[req.id] = el; }}
+                                className={`bg-white rounded-xl shadow-sm border p-6 flex flex-col relative overflow-hidden ${
+                                    isImported
+                                        ? 'border-green-200 ring-1 ring-green-100'
+                                        : duplicateInfo.duplicateIds.has(req.id)
+                                          ? 'border-amber-300 ring-1 ring-amber-200'
+                                          : 'border-slate-200'
+                                } ${
+                                    jumpHighlightId === req.id ? 'ring-2 ring-rose-300' : ''
+                                }`}
+                            >
                                 {isNewTeacher && currentTab === 'pending' && !isImported && (
                                     <div className="absolute top-0 right-0 mt-7 bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-bl-xl border-l border-b border-amber-200 flex items-center"><UserPlus size={12} className="mr-1"/> 新教師</div>
                                 )}
@@ -210,6 +315,12 @@ const IncomingRequests: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 mb-4 space-y-2 border border-slate-200">
+                                    {currentTab === 'pending' && duplicateInfo.duplicateIds.has(req.id) && !req.duplicateWarningIgnored && (
+                                        <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-800 text-xs flex items-center gap-1.5">
+                                            <AlertTriangle size={14} className="shrink-0" />
+                                            偵測到與同一教師其他申請有日期重疊
+                                        </div>
+                                    )}
                                     <p className="text-xs text-slate-500 border-b border-slate-200 pb-2 mb-2">
                                         <span className="font-semibold text-slate-600">匯入後預設假別（主系統）：</span>
                                         {importPreviewLeaveType}
@@ -227,6 +338,16 @@ const IncomingRequests: React.FC = () => {
                                             <>
                                                 <button onClick={() => handleImportFirestore(req)} className="flex-1 min-w-0 px-4 py-2 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center" disabled={isImported}>{isImported ? <><CheckCircle size={18} className="mr-2"/>已匯入</> : <><Download size={18} className="mr-2"/>匯入系統</>}</button>
                                                 <button onClick={() => handleArchiveFirestore(req)} disabled={isProcessing} className="px-4 py-2 bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg font-bold flex items-center justify-center">{isProcessing ? <Loader2 size={18} className="animate-spin"/> : <><EyeOff size={18} className="mr-2"/><span className="hidden md:inline">隱藏/歸檔</span></>}</button>
+                                                {duplicateInfo.duplicateIds.has(req.id) && !req.duplicateWarningIgnored && (
+                                                    <button
+                                                        onClick={() => void handleIgnoreDuplicateWarning(req)}
+                                                        disabled={isProcessing}
+                                                        className="px-3 py-2 bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100 rounded-lg font-bold text-sm"
+                                                        title="忽略此筆重複申請警示"
+                                                    >
+                                                        忽略警示
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => showModal({
                                                         title: '確認刪除此筆申請',

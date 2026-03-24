@@ -58,6 +58,7 @@ const SubstituteWeeklyLookup: React.FC = () => {
   const [matchedSchedules, setMatchedSchedules] = useState<PublicSubstituteScheduleDoc[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [viewDate, setViewDate] = useState(new Date());
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
 
   const selectedSchedule = useMemo(
     () => matchedSchedules.find((s) => s.teacherId === selectedTeacherId) || null,
@@ -114,6 +115,7 @@ const SubstituteWeeklyLookup: React.FC = () => {
       setMatchedSchedules(rows);
       setSelectedTeacherId(rows[0].teacherId);
       setViewDate(new Date());
+      setSelectedDayIndex(0);
     } catch (e) {
       console.error(e);
       setError('查詢失敗，請稍後再試');
@@ -126,6 +128,7 @@ const SubstituteWeeklyLookup: React.FC = () => {
     const next = new Date(viewDate);
     next.setDate(next.getDate() + (direction === 'next' ? 7 : -7));
     setViewDate(next);
+    setSelectedDayIndex(0);
   };
 
   return (
@@ -140,25 +143,31 @@ const SubstituteWeeklyLookup: React.FC = () => {
             輸入手機末四碼即可查詢本人的代課週課表。驗證通過後僅顯示符合該末四碼的代課資料。
           </p>
 
-          <div className="mt-4 flex flex-col sm:flex-row gap-2">
+          <form
+            className="mt-4 flex flex-col sm:flex-row gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSearch();
+            }}
+          >
             <input
               type="text"
               inputMode="numeric"
               maxLength={4}
               value={phoneLast4}
               onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              className="w-full sm:w-56 px-3 py-2 border border-slate-300 rounded-lg"
+              className="w-full sm:w-56 px-3 py-3 text-base border border-slate-300 rounded-lg"
               placeholder="手機末四碼"
+              autoComplete="one-time-code"
             />
             <button
-              type="button"
-              onClick={() => void handleSearch()}
+              type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60"
+              className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 font-semibold"
             >
               {loading ? '查詢中...' : '查詢週課表'}
             </button>
-          </div>
+          </form>
 
           {error && <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</div>}
 
@@ -208,7 +217,56 @@ const SubstituteWeeklyLookup: React.FC = () => {
               </div>
             </div>
 
-            <div className="overflow-auto">
+            {/* 手機版：單日分頁顯示，避免整張大表橫向捲動 */}
+            <div className="md:hidden p-3 border-b border-slate-200 bg-slate-50">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {weekDays.map((day, idx) => (
+                  <button
+                    key={day.dateStr}
+                    type="button"
+                    onClick={() => setSelectedDayIndex(idx)}
+                    className={`shrink-0 px-3 py-2 rounded-lg text-sm border ${
+                      idx === selectedDayIndex
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    {day.dayName} {day.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="md:hidden p-3 space-y-2">
+              {PERIOD_ROWS.map((period) => {
+                const day = weekDays[selectedDayIndex];
+                const key = `${day.dateStr}_${period.id}`;
+                const items = slotsByCell.get(key) || [];
+                return (
+                  <div key={period.id} className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50 text-sm font-semibold text-slate-700">{period.label}</div>
+                    <div className="p-2">
+                      {items.length === 0 ? (
+                        <div className="text-xs text-slate-400 px-1 py-2">本節無代課安排</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {items.map((slot, idx) => (
+                            <div key={idx} className="rounded-md border border-indigo-100 bg-indigo-50/40 p-2 text-xs">
+                              <div className="font-semibold text-slate-700">
+                                {slot.subject || '未填科目'} | {slot.className || '未填班級'}
+                              </div>
+                              <div className="text-slate-500 mt-0.5">請假教師：{slot.originalTeacherName || '未填'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-auto">
               <table className="w-full border-collapse text-left min-w-[860px]">
                 <thead className="bg-slate-50">
                   <tr>

@@ -276,6 +276,8 @@ export interface TeacherLeaveRequestDoc {
   endDate: string;
   details: { date: string; period: string; subject: string; className: string }[];
   status: 'pending' | 'imported' | 'archived';
+  /** 管理端可將重複申請警示設為忽略（不再跳提醒） */
+  duplicateWarningIgnored?: boolean;
   createdAt: number;
   updatedAt?: number;
 }

@@ -102,7 +102,11 @@ function setupSalaryTableSheet(ss) {
   var headers = ['俸點', '本俸', '有教證學術研究費 (學士)', '有教證學術研究費 (碩士以上)', '無教證學術研究費 (學士)', '無教證學術研究費 (碩士以上)'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setBackground("#d9ead3");
   if (sheet.getLastRow() < 2) {
-      var data = [[190, 25050, 23080, 23080, 18464, 18464], [200, 25820, 23080, 23080, 18464, 18464]];
+      var data = [
+        [150, 21990, 0, 0, 18464, 18464],
+        [190, 25050, 23080, 23080, 18464, 18464],
+        [200, 25820, 23080, 23080, 18464, 18464]
+      ];
       sheet.getRange(2, 1, data.length, 6).setValues(data);
   }
 }

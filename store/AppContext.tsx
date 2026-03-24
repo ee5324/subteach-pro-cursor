@@ -348,6 +348,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           endDate: data.endDate || '',
           details: Array.isArray(data.details) ? data.details : [],
           status: data.status || 'pending',
+          duplicateWarningIgnored: data.duplicateWarningIgnored === true,
           createdAt: data.createdAt || 0,
           updatedAt: data.updatedAt,
         } as TeacherLeaveRequestDoc;

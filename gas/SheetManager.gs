@@ -1447,6 +1447,7 @@ var SheetManagerHelpers = {
 
         // 與 utils/calculations.ts DAILY_RATE_TABLE 保持一致
         var DAILY_RATE_TABLE = {
+            "150無教證": { 31: 1305, 30: 1348, 29: 1395, 28: 1445 },
             "170": { 31: 1354, 30: 1399, 29: 1448, 28: 1499 },
             "180無教證": { 31: 1379, 30: 1425, 29: 1474, 28: 1527 },
             "190": { 31: 1553, 30: 1604, 29: 1660, 28: 1719 },
@@ -1462,7 +1463,7 @@ var SheetManagerHelpers = {
         var points = Number(teacher.salaryPoints) || 0;
         if (!points) return '';
         var key = String(points);
-        if (points === 180 || points === 245 || points === 625 || points === 650) {
+        if (points === 150 || points === 180 || points === 245 || points === 625 || points === 650) {
             key += (teacher.hasCertificate ? '有教證' : '無教證');
         }
 

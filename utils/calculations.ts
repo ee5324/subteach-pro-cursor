@@ -91,6 +91,7 @@ export const calculateTeacherFinancials = (
 };
 
 export const DAILY_RATE_TABLE: Record<string, Record<number, number>> = {
+  "150無教證": { 31: 1305, 30: 1348, 29: 1395, 28: 1445 },
   "170": { 31: 1354, 30: 1399, 29: 1448, 28: 1499 },
   "180無教證": { 31: 1379, 30: 1425, 29: 1474, 28: 1527 },
   "190": { 31: 1553, 30: 1604, 29: 1660, 28: 1719 },
@@ -111,7 +112,7 @@ export const getExpectedDailyRate = (teacher: Teacher, daysInMonth: number, isHo
   if (!teacher.salaryPoints) return null;
   
   let key = `${teacher.salaryPoints}`;
-  if (teacher.salaryPoints === 180 || teacher.salaryPoints === 245 || teacher.salaryPoints === 625 || teacher.salaryPoints === 650) {
+  if (teacher.salaryPoints === 150 || teacher.salaryPoints === 180 || teacher.salaryPoints === 245 || teacher.salaryPoints === 625 || teacher.salaryPoints === 650) {
     key += teacher.hasCertificate ? '有教證' : '無教證';
   }
   
