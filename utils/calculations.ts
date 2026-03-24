@@ -87,6 +87,13 @@ export const calculateTeacherFinancials = (
           }
       }
    }
+
+   // Fallback：當 Firebase 薪級表尚未同步到最新（例如新增 150 俸點）時，仍可自動帶入。
+   if (newBaseSalary === 0 && points === 150) {
+      newBaseSalary = 21990;
+      // 目前需求僅明確指定「無教證」研究費，先按同值帶入避免編輯頁無法自動對應。
+      newResearchFee = hasCertificate ? 18464 : 18464;
+   }
    return { baseSalary: newBaseSalary, researchFee: newResearchFee };
 };
 

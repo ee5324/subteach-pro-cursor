@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { PayType, SubstituteDetail, LeaveRecord, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS } from '../types';
+import { PayType, SubstituteDetail, LeaveRecord, LeaveType, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
@@ -54,6 +54,8 @@ const Records: React.FC = () => {
 
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
+  /** 代課清冊假別篩選（與代課單 LeaveType 一致） */
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState<LeaveType | 'all'>('all');
 
   // Sync States
   const [isSyncing, setIsSyncing] = useState(false);
@@ -223,6 +225,8 @@ const Records: React.FC = () => {
         const inMonth = inMonthByRange || hasAnyDateInMonth;
         if (!inMonth) return false;
 
+        if (leaveTypeFilter !== 'all' && r.leaveType !== leaveTypeFilter) return false;
+
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             const originalTeacher = teachers.find(t => t.id === r.originalTeacherId)?.name || r.originalTeacherId;
@@ -242,7 +246,7 @@ const Records: React.FC = () => {
 
     // Sort by createdAt descending (newest first)
     return filtered.sort((a, b) => b.createdAt - a.createdAt);
-  }, [records, monthStartStr, monthEndStr, searchTerm, teachers]);
+  }, [records, monthStartStr, monthEndStr, searchTerm, teachers, leaveTypeFilter]);
 
   // Reset selection when month changes
   useEffect(() => {
@@ -1009,6 +1013,9 @@ const Records: React.FC = () => {
           <CollapsibleItem title="檢視模式切換">
             <p>可切換「依請假人」或「依代課人」檢視。依請假人適合核對假單；依代課人適合核對薪資與發放清冊。</p>
           </CollapsibleItem>
+          <CollapsibleItem title="假別篩選">
+            <p>工具列可選「假別」僅顯示該類請假之代課紀錄，與代課單編輯頁之假別選項相同；選「全部」則不篩假別。</p>
+          </CollapsibleItem>
           <CollapsibleItem title="假日與異常警示">
             <p>若請假日期包含週末或系統設定之假日，系統會以紅色文字警示。請務必確認是否為誤登，或該日是否有實際代課需求。</p>
           </CollapsibleItem>
@@ -1047,17 +1054,32 @@ const Records: React.FC = () => {
                 </button>
            </div>
 
-           <div className="relative w-full xl:w-64">
-             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={18} className="text-slate-400" />
+           <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto xl:min-w-0 xl:flex-1 xl:max-w-xl">
+             <label className="flex items-center gap-2 shrink-0">
+               <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">假別</span>
+               <select
+                 className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[10rem] max-w-full"
+                 value={leaveTypeFilter}
+                 onChange={(e) => setLeaveTypeFilter(e.target.value === 'all' ? 'all' : (e.target.value as LeaveType))}
+               >
+                 <option value="all">全部</option>
+                 {Object.values(LeaveType).map((t) => (
+                   <option key={t} value={t}>{t}</option>
+                 ))}
+               </select>
+             </label>
+             <div className="relative flex-1 min-w-0">
+               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={18} className="text-slate-400" />
+               </div>
+               <input
+                  type="text"
+                  placeholder="搜尋教師、事由、文號..."
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+               />
              </div>
-             <input
-                type="text"
-                placeholder="搜尋教師、事由、文號..."
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-             />
            </div>
 
            <div className="flex flex-wrap items-center gap-3 justify-center w-full xl:w-auto">

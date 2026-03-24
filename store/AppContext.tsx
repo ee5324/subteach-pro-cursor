@@ -39,6 +39,12 @@ const INITIAL_SETTINGS: AppSettings = {
   graduationDate: ''
 };
 
+const BUILT_IN_SALARY_GRADES: SalaryGrade[] = [
+  { id: '150', points: 150, salary: 21990, researchFeeCertBachelor: 0, researchFeeCertMaster: 0, researchFeeNoCertBachelor: 18464, researchFeeNoCertMaster: 18464 },
+  { id: '190', points: 190, salary: 25050, researchFeeCertBachelor: 23080, researchFeeCertMaster: 23080, researchFeeNoCertBachelor: 18464, researchFeeNoCertMaster: 18464 },
+  { id: '200', points: 200, salary: 25820, researchFeeCertBachelor: 23080, researchFeeCertMaster: 23080, researchFeeNoCertBachelor: 18464, researchFeeNoCertMaster: 18464 },
+];
+
 interface AppContextType {
   currentUser: User | null;
   teachers: Teacher[];
@@ -105,6 +111,8 @@ interface AppContextType {
   setSemesterActive: (id: string) => Promise<void>;
 
   updateSettings: (newSettings: AppSettings) => Promise<void>;
+  upsertSalaryGrades: (grades: SalaryGrade[]) => Promise<void>;
+  seedSalaryGradesFromBuiltIn: () => Promise<{ inserted: number; skipped: number }>;
   addHoliday: (date: string) => Promise<void>;
   removeHoliday: (date: string) => Promise<void>;
 
@@ -709,6 +717,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!db) throw new Error("Firebase not initialized");
     await setDoc(doc(db, 'system', 'settings'), sanitizeForFirestore(newSettings));
   };
+
+  const upsertSalaryGrades = async (grades: SalaryGrade[]) => {
+    if (!db) throw new Error("Firebase not initialized");
+    const normalized = (grades || [])
+      .map((g) => ({
+        ...g,
+        id: String(g.points),
+        points: Number(g.points) || 0,
+        salary: Number(g.salary) || 0,
+        researchFeeCertBachelor: Number(g.researchFeeCertBachelor || 0),
+        researchFeeCertMaster: Number(g.researchFeeCertMaster || 0),
+        researchFeeNoCertBachelor: Number(g.researchFeeNoCertBachelor || 0),
+        researchFeeNoCertMaster: Number(g.researchFeeNoCertMaster || 0),
+      }))
+      .filter((g) => g.points > 0)
+      .sort((a, b) => a.points - b.points);
+
+    const existingIds = new Set((salaryGrades || []).map((g) => String(g.id || g.points)));
+    const nextIds = new Set(normalized.map((g) => String(g.id)));
+    const batch = writeBatch(db);
+    normalized.forEach((g) => {
+      batch.set(doc(db, 'salaryGrades', String(g.id)), sanitizeForFirestore(g));
+    });
+    existingIds.forEach((id) => {
+      if (!nextIds.has(id)) batch.delete(doc(db, 'salaryGrades', id));
+    });
+    await batch.commit();
+  };
+
+  const seedSalaryGradesFromBuiltIn = async () => {
+    if (!db) throw new Error("Firebase not initialized");
+    const existingPoints = new Set((salaryGrades || []).map((g) => Number(g.points)));
+    const batch = writeBatch(db);
+    let inserted = 0;
+    let skipped = 0;
+    BUILT_IN_SALARY_GRADES.forEach((g) => {
+      if (existingPoints.has(g.points)) {
+        skipped++;
+        return;
+      }
+      inserted++;
+      batch.set(doc(db, 'salaryGrades', String(g.points)), sanitizeForFirestore(g));
+    });
+    if (inserted > 0) await batch.commit();
+    return { inserted, skipped };
+  };
   const addHoliday = async (date: string) => { 
     if (!db) throw new Error("Firebase not initialized");
     const newHolidays = [...holidays, date].sort();
@@ -999,7 +1053,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateFixedOvertimeConfig, removeFixedOvertimeConfig, 
     addGradeEvent, removeGradeEvent,
     addSemester, updateSemester, removeSemester, setSemesterActive,
-    updateSettings, addHoliday, removeHoliday, 
+    updateSettings, upsertSalaryGrades, seedSalaryGradesFromBuiltIn, addHoliday, removeHoliday, 
     addToSubPool, removeFromSubPool, updateSubPoolItem, addSubstituteBusyBlock, deleteSubstituteBusyBlock,
     deleteSubstituteApplication, deletePublicBoardApplication, approveSubstituteApplication,
     addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,

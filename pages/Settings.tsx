@@ -1,14 +1,14 @@
 
 // pages/Settings.tsx
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
-import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer } from 'lucide-react';
+import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
-import { TeacherType } from '../types';
+import { TeacherType, SalaryGrade } from '../types';
 
 /** 匯出／列印教師名單：類別排序（校內 → 校外 → 語言），同類別內依姓名 */
 const TEACHER_TYPE_SORT_ORDER: Record<string, number> = {
@@ -18,7 +18,7 @@ const TEACHER_TYPE_SORT_ORDER: Record<string, number> = {
 };
 
 const Settings: React.FC = () => {
-  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser, teachers } = useAppStore();
+  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser, teachers, salaryGrades, upsertSalaryGrades, seedSalaryGradesFromBuiltIn } = useAppStore();
   const [newHoliday, setNewHoliday] = useState('');
   const [whitelistEmail, setWhitelistEmail] = useState('');
   const [whitelistRole, setWhitelistRole] = useState<'admin' | 'user'>('user');
@@ -26,6 +26,9 @@ const Settings: React.FC = () => {
   const [tempUrl, setTempUrl] = useState(settings.gasWebAppUrl);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'loading' | 'migrating' | 'success' | 'error'>('idle');
+  const [salaryPanelOpen, setSalaryPanelOpen] = useState(false);
+  const [salarySaving, setSalarySaving] = useState(false);
+  const [salaryRows, setSalaryRows] = useState<SalaryGrade[]>([]);
 
   // PIN 測試登入（本機 localStorage，登入頁讀取）
   const [quickLoginEnabled, setQuickLoginEnabled] = useState(() => getQuickLoginConfig().enabled);
@@ -38,6 +41,22 @@ const Settings: React.FC = () => {
   });
   const [deleteHolidayDate, setDeleteHolidayDate] = useState<string | null>(null);
   const [removeWhitelistEmail, setRemoveWhitelistEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSalaryRows(
+      [...(salaryGrades || [])]
+        .sort((a, b) => (a.points || 0) - (b.points || 0))
+        .map((g) => ({
+          id: String(g.id || g.points),
+          points: Number(g.points) || 0,
+          salary: Number(g.salary) || 0,
+          researchFeeCertBachelor: Number(g.researchFeeCertBachelor || 0),
+          researchFeeCertMaster: Number(g.researchFeeCertMaster || 0),
+          researchFeeNoCertBachelor: Number(g.researchFeeNoCertBachelor || 0),
+          researchFeeNoCertMaster: Number(g.researchFeeNoCertMaster || 0),
+        })),
+    );
+  }, [salaryGrades]);
 
   const handleAddWhitelist = async () => {
     const email = whitelistEmail.trim().toLowerCase();
@@ -68,6 +87,70 @@ const Settings: React.FC = () => {
 
   const handleSaveDateSettings = (field: 'semesterStart' | 'semesterEnd' | 'graduationDate', value: string) => {
       updateSettings({ ...settings, [field]: value });
+  };
+
+  const handleSalaryCellChange = (idx: number, field: keyof SalaryGrade, value: number) => {
+    setSalaryRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: Number(value) || 0 } : r)));
+  };
+
+  const handleAddSalaryRow = () => {
+    setSalaryRows((prev) => [
+      ...prev,
+      {
+        id: `tmp_${Date.now()}`,
+        points: 0,
+        salary: 0,
+        researchFeeCertBachelor: 0,
+        researchFeeCertMaster: 0,
+        researchFeeNoCertBachelor: 0,
+        researchFeeNoCertMaster: 0,
+      },
+    ]);
+  };
+
+  const handleRemoveSalaryRow = (idx: number) => {
+    setSalaryRows((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveSalaryGrades = async () => {
+    const normalized = salaryRows
+      .map((r) => ({ ...r, id: String(r.points), points: Number(r.points) || 0 }))
+      .filter((r) => r.points > 0)
+      .sort((a, b) => a.points - b.points);
+    const duplicateCheck = new Set<number>();
+    for (const row of normalized) {
+      if (duplicateCheck.has(row.points)) {
+        setModal({ isOpen: true, title: '儲存失敗', message: `俸點 ${row.points} 重複，請先修正。`, type: 'error' });
+        return;
+      }
+      duplicateCheck.add(row.points);
+    }
+    setSalarySaving(true);
+    try {
+      await upsertSalaryGrades(normalized);
+      setModal({ isOpen: true, title: '儲存成功', message: '薪級級距表已更新。', type: 'success' });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '儲存失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setSalarySaving(false);
+    }
+  };
+
+  const handleSeedSalaryGrades = async () => {
+    setSalarySaving(true);
+    try {
+      const result = await seedSalaryGradesFromBuiltIn();
+      setModal({
+        isOpen: true,
+        title: '匯入完成',
+        message: `已新增 ${result.inserted} 筆俸點；略過既有 ${result.skipped} 筆。`,
+        type: 'success',
+      });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '匯入失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setSalarySaving(false);
+    }
   };
 
   const handleLoadFromGas = async () => {
@@ -390,6 +473,94 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
             </div>
+        </section>
+
+        {/* Salary Grades: 可收放編輯容器 */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <button
+              type="button"
+              onClick={() => setSalaryPanelOpen((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 text-left"
+            >
+              <h2 className="text-lg font-bold text-slate-800 flex items-center">
+                <Database size={20} className="mr-2 text-cyan-600" />
+                俸點級距表（可編輯）
+              </h2>
+              <span className="text-slate-500">{salaryPanelOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</span>
+            </button>
+            <p className="text-sm text-slate-500 mt-2">
+              在這裡維護薪級、本俸與學術研究費。更新後，教師編輯頁與重算功能會用此表對應。
+            </p>
+            {salaryPanelOpen && (
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSeedSalaryGrades}
+                    disabled={salarySaving}
+                    className="px-3 py-2 rounded-lg border border-cyan-300 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-sm font-bold disabled:opacity-60"
+                  >
+                    第一次匯入既有俸點資料
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddSalaryRow}
+                    disabled={salarySaving}
+                    className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-sm font-bold"
+                  >
+                    <Plus size={14} className="inline mr-1" />
+                    新增俸點
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveSalaryGrades}
+                    disabled={salarySaving}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold disabled:opacity-60 flex items-center gap-1"
+                  >
+                    {salarySaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    儲存俸點表
+                  </button>
+                </div>
+
+                <div className="border rounded-lg overflow-auto">
+                  <table className="w-full min-w-[920px] text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left">俸點</th>
+                        <th className="px-3 py-2 text-left">本俸</th>
+                        <th className="px-3 py-2 text-left">有教證(學士)</th>
+                        <th className="px-3 py-2 text-left">有教證(碩士+)</th>
+                        <th className="px-3 py-2 text-left">無教證(學士)</th>
+                        <th className="px-3 py-2 text-left">無教證(碩士+)</th>
+                        <th className="px-3 py-2 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {salaryRows.map((row, idx) => (
+                        <tr key={`${row.id}_${idx}`}>
+                          <td className="px-3 py-2"><input type="number" className="w-24 px-2 py-1 border rounded" value={row.points || ''} onChange={(e) => handleSalaryCellChange(idx, 'points', Number(e.target.value))} /></td>
+                          <td className="px-3 py-2"><input type="number" className="w-28 px-2 py-1 border rounded" value={row.salary || ''} onChange={(e) => handleSalaryCellChange(idx, 'salary', Number(e.target.value))} /></td>
+                          <td className="px-3 py-2"><input type="number" className="w-28 px-2 py-1 border rounded" value={row.researchFeeCertBachelor || ''} onChange={(e) => handleSalaryCellChange(idx, 'researchFeeCertBachelor', Number(e.target.value))} /></td>
+                          <td className="px-3 py-2"><input type="number" className="w-28 px-2 py-1 border rounded" value={row.researchFeeCertMaster || ''} onChange={(e) => handleSalaryCellChange(idx, 'researchFeeCertMaster', Number(e.target.value))} /></td>
+                          <td className="px-3 py-2"><input type="number" className="w-28 px-2 py-1 border rounded" value={row.researchFeeNoCertBachelor || ''} onChange={(e) => handleSalaryCellChange(idx, 'researchFeeNoCertBachelor', Number(e.target.value))} /></td>
+                          <td className="px-3 py-2"><input type="number" className="w-28 px-2 py-1 border rounded" value={row.researchFeeNoCertMaster || ''} onChange={(e) => handleSalaryCellChange(idx, 'researchFeeNoCertMaster', Number(e.target.value))} /></td>
+                          <td className="px-3 py-2 text-right">
+                            <button type="button" onClick={() => handleRemoveSalaryRow(idx)} className="text-slate-400 hover:text-red-600 p-1" title="刪除此俸點">
+                              <Trash2 size={15} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {salaryRows.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-slate-400">尚無俸點資料，請先點「第一次匯入既有俸點資料」。</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
         </section>
 
         {/* Holidays Management Section */}
