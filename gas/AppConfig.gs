@@ -19,6 +19,9 @@ var CONFIG = {
   // 家長會清冊範本（若存在則使用，否則用導師請假範本）
   PTA_SUMMARY_TEMPLATE_SHEET_NAME: '家長會清冊範本',
 
+  // 課務自理「一日導師費」專用清冊範本（與一般印領清冊分開；工作表名稱須與試算表內一致）
+  PERSONAL_HOMEROOM_FEE_TEMPLATE_SHEET_NAME: '課務自理導師費範本',
+
   // 黏貼憑證的範本工作表名稱
   VOUCHER_TEMPLATE_SHEET_NAME: '憑證範本',
   

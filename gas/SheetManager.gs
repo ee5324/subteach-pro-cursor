@@ -1002,7 +1002,9 @@ var SheetManager = {
                 daysStr: String(lineDaysStr),
                 periodsStr: String(linePeriodsStr),
                 homeroomDaysStr: String(lineHomeroomDaysStr),
-                homeroomFeeStr: String(lineHomeroomFeeStr)
+                homeroomFeeStr: String(lineHomeroomFeeStr),
+                leaveType: String(record.leaveType || ''),
+                reason: String(record.reason || '')
             });
         } catch(e) {}
       });
@@ -1091,6 +1093,9 @@ var SheetManager = {
     var rootFolderId = CONFIG.OUTPUT_FOLDER_ID;
     var rootFolder = rootFolderId ? DriveApp.getFolderById(rootFolderId) : DriveApp.getRootFolder();
     var ptaTemplateSheet = (CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME && ss.getSheetByName(CONFIG.PTA_SUMMARY_TEMPLATE_SHEET_NAME)) || templateSheet;
+    var personalHomeroomTemplate = CONFIG.PERSONAL_HOMEROOM_FEE_TEMPLATE_SHEET_NAME
+      ? ss.getSheetByName(CONFIG.PERSONAL_HOMEROOM_FEE_TEMPLATE_SHEET_NAME)
+      : null;
     var typeOrder = ['公假', '喪病產', '身心假', '學輔事務', '其他事務', '公付其他', '自理', '家長會'];
     exportOptions = exportOptions || {};
     // 僅當明確傳入陣列時才依勾選過濾；否則視為未指定，匯出全部
@@ -1122,7 +1127,52 @@ var SheetManager = {
         return typeRaw || '其他';
     }
 
-    function buildRowsFromGroups(groups, teacherMap) {
+    /**
+     * 課務自理：導師費逐筆列（另產「課務自理導師費」工作表）；僅日薪／半日薪有導師費者。
+     */
+    function buildPersonalHomeroomFeeRows(groups, teacherMap) {
+        var rows = [];
+        if (!groups) return rows;
+        for (var subKey in groups) {
+            var g = groups[subKey];
+            if (!g.lineItems || g.lineItems.length === 0) continue;
+            var info = g.subTeacherObj || teacherMap[subKey];
+            var subDisplay = (info && info.name) ? String(info.name) : String(subKey);
+            var items = g.lineItems.slice().sort(function(a, b) {
+                var da = String(a.date || '');
+                var db = String(b.date || '');
+                if (da < db) return -1;
+                if (da > db) return 1;
+                return String(a.leaveTeacherName || '').localeCompare(String(b.leaveTeacherName || ''));
+            });
+            for (var ii = 0; ii < items.length; ii++) {
+                var li = items[ii];
+                var fee = Number(li.homeroomFeeStr) || 0;
+                if (fee <= 0) continue;
+                var dim = SheetManagerHelpers.getSafeDaysInMonth(li.date);
+                var dailyFee = dim ? Math.round(4000 / dim) : '';
+                var typeStr = String(li.leaveType || '').replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')');
+                rows.push([
+                    String(li.dateMD || ''),
+                    subDisplay,
+                    Number(li.homeroomDaysStr) || 0,
+                    String(li.leaveTeacherName || ''),
+                    typeStr,
+                    String(li.reason || ''),
+                    String(li.note || ''),
+                    dailyFee,
+                    fee,
+                    fee,
+                    ''
+                ]);
+            }
+        }
+        return rows;
+    }
+
+    function buildRowsFromGroups(groups, teacherMap, buildOpts) {
+        buildOpts = buildOpts || {};
+        var omitHm = !!buildOpts.omitHomeroomInLedger;
         var rows = [];
         for (var subName in groups) {
             var g = groups[subName];
@@ -1166,20 +1216,22 @@ var SheetManager = {
                 amountLines = g.lineItems.map(function(x){ return String(x.amountStr || '0'); }).join('\n');
                 dayLines = g.lineItems.map(function(x){ return String(x.daysStr || '0'); }).join('\n');
                 periodLines = g.lineItems.map(function(x){ return String(x.periodsStr || '0'); }).join('\n');
-                homeroomDayLines = g.lineItems.map(function(x){ return String(x.homeroomDaysStr || '0'); }).join('\n');
-                homeroomFeeLines = g.lineItems.map(function(x){ return String(x.homeroomFeeStr || '0'); }).join('\n');
+                homeroomDayLines = omitHm ? g.lineItems.map(function() { return ''; }).join('\n') : g.lineItems.map(function(x){ return String(x.homeroomDaysStr || '0'); }).join('\n');
+                homeroomFeeLines = omitHm ? g.lineItems.map(function() { return ''; }).join('\n') : g.lineItems.map(function(x){ return String(x.homeroomFeeStr || '0'); }).join('\n');
             } else {
                 // fallback：維持舊格式
                 noteDisplay = (g.totalDays > 0 && g.totalPeriods === 0) ? (g.totalDays + "日") : (g.notes || []).join('\n');
                 dayLines = String(g.totalDays || 0);
                 periodLines = String(g.totalPeriods || 0);
                 amountLines = String(g.hourlyTotal || 0);
-                homeroomDayLines = String(g.homeroomDays || 0);
-                homeroomFeeLines = String(g.homeroomFee || 0);
+                homeroomDayLines = omitHm ? '' : String(g.homeroomDays || 0);
+                homeroomFeeLines = omitHm ? '' : String(g.homeroomFee || 0);
             }
 
-            // 欄位維持原位置：A 日期、B 代課老師、E 天數、F 節數、G 金額、H 請假人、K 備註、L 代導日數、M 導師費
-            rows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, dayLines, periodLines, amountLines, origDisplay, typeDisplay, reasonDisplay, noteDisplay, homeroomDayLines, homeroomFeeLines, g.finalAmount, '', '', '', '', '' ]);
+            // 欄位維持原位置：A 日期、B 代課老師、E 天數、F 節數、G 金額、H 請假人、K 備註、L 代導日數、M 導師費、N 應發合計
+            // 課務自理：L/M 不顯示、N 為代課費合計（不含導師費），憑證金額與一致
+            var totalCol = omitHm ? (Number(g.finalAmount) || 0) - (Number(g.homeroomFee) || 0) : (Number(g.finalAmount) || 0);
+            rows.push([ dateDisplay, subName, salaryGradeDisplay, dailyRateDisplay, dayLines, periodLines, amountLines, origDisplay, typeDisplay, reasonDisplay, noteDisplay, homeroomDayLines, homeroomFeeLines, totalCol, '', '', '', '', '' ]);
         }
         return rows;
     }
@@ -1235,6 +1287,67 @@ var SheetManager = {
         return { sumTotal: sumTotal, title: title };
     }
 
+    /**
+     * 課務自理導師費專用清冊（範本「課務自理導師費範本」）。
+     * 假設：第 1 列標題、第 2～3 列表頭、第 4 列起為資料；合計列下一列空白後為簽核區（與紙本範本一致）。
+     * 欄位：A 代課日期、B 代課老師、C 代課天數(導師費計費日數)、D 請假人、E 假別、F 事由、G 備註、H 當月每日導師費、I 應發、J 實領、K 簽名
+     */
+    function writePersonalHomeroomFeeLedger(summarySheet, rows, rocYear, month, titlePrefix, options) {
+        var DATA_START = 4;
+        var dataCount = rows.length;
+        var title = titlePrefix + '課務自理一日導師費';
+        summarySheet.getRange('A1').setValue(title);
+
+        var sumDays = 0;
+        var sumI = 0;
+        var sumJ = 0;
+        rows.forEach(function(r) {
+            sumDays += Number(r[2]) || 0;
+            sumI += Number(r[8]) || 0;
+            sumJ += Number(r[9]) || 0;
+        });
+
+        if (dataCount > 1) {
+            summarySheet.insertRowsAfter(DATA_START, dataCount - 1);
+        }
+        var padded = rows.map(function(r) {
+            var out = [];
+            for (var c = 0; c < 11; c++) out.push(r[c] != null ? r[c] : '');
+            return out;
+        });
+        summarySheet.getRange(DATA_START, 1, dataCount, 11).setValues(padded);
+        var rangeToFormat = summarySheet.getRange(DATA_START, 1, dataCount, 11);
+        rangeToFormat.setBorder(true, true, true, true, true, true);
+        summarySheet.getRange(DATA_START, 1, dataCount, 1).setNumberFormat('@');
+        rangeToFormat.setVerticalAlignment('middle').setHorizontalAlignment('center');
+        summarySheet.getRange(DATA_START, 1, dataCount, 7).setWrap(true);
+
+        var totalRowIndex = DATA_START + dataCount;
+        summarySheet.getRange(totalRowIndex, 1, 1, 11).setBorder(true, true, true, true, true, true);
+        summarySheet.getRange(totalRowIndex, 1, 1, 2).merge().setValue('合計').setHorizontalAlignment('center');
+        summarySheet.getRange(totalRowIndex, 3).setValue(sumDays);
+        summarySheet.getRange(totalRowIndex, 9).setValue(sumI);
+        summarySheet.getRange(totalRowIndex, 10).setValue(sumJ);
+
+        var footerStartRow = totalRowIndex + 2;
+        summarySheet.getRange(footerStartRow, 1).setValue('製表人：');
+        summarySheet.getRange(footerStartRow, 5).setValue('勞保承辦：');
+        summarySheet.getRange(footerStartRow, 9).setValue('校長：');
+        summarySheet.getRange(footerStartRow + 3, 1).setValue('教務主任：');
+        summarySheet.getRange(footerStartRow + 3, 5).setValue('人事主任：');
+        summarySheet.getRange(footerStartRow + 6, 5).setValue('會計主任：');
+        summarySheet.getRange(footerStartRow, 1, 10, 11).setFontWeight('bold').setFontSize(11);
+
+        for (var rowIndex = DATA_START; rowIndex <= footerStartRow + 9; rowIndex++) {
+            summarySheet.setRowHeight(rowIndex, Math.round(summarySheet.getRowHeight(rowIndex) * 1.25));
+        }
+        if (options && options.deleteExtraRows) {
+            var maxRows = summarySheet.getMaxRows();
+            if (maxRows > footerStartRow + 9) summarySheet.deleteRows(footerStartRow + 10, maxRows - footerStartRow - 9);
+        }
+        return { sumTotal: sumI, title: title };
+    }
+
     function addVoucherSheet(newSS, sumTotal, title, rocYear, month, year, sheetName) {
         if (!voucherTemplate) return;
         var voucherSheet = voucherTemplate.copyTo(newSS);
@@ -1276,7 +1389,11 @@ var SheetManager = {
             var sheetNameKey = ym + '_' + (typeRaw === '家長會' ? '家長會' : typeRaw);
             var groups = typeRaw === '家長會' ? ptaSheetsData[sheetNameKey] : sheetsData[sheetNameKey];
             if (!groups) continue;
-            var rows = buildRowsFromGroups(groups, teacherMap);
+            var rows = buildRowsFromGroups(
+              groups,
+              teacherMap,
+              typeRaw === '自理' ? { omitHomeroomInLedger: true } : null
+            );
             // 家長會清冊：只顯示應發金額 > 0 的教師（有實際支領家長會薪水者）
             if (typeRaw === '家長會') {
                 rows = rows.filter(function(r) { return (Number(r[13]) || 0) > 0; });
@@ -1319,6 +1436,17 @@ var SheetManager = {
                     ledgerInfo = writeLedgerToSheet(newSheet, item.rows, '公假家長會', rocYear, month, titlePrefix, { deleteExtraRows: true });
                 } else {
                     ledgerInfo = writeLedgerToSheet(newSheet, item.rows, item.typeStr, rocYear, month, titlePrefix, {});
+                    if (item.typeRaw === '自理' && personalHomeroomTemplate) {
+                        var groupsHm = sheetsData[ym + '_自理'];
+                        var hmRows = buildPersonalHomeroomFeeRows(groupsHm, teacherMap);
+                        if (hmRows.length > 0) {
+                            var hmSheet = personalHomeroomTemplate.copyTo(newSS);
+                            hmSheet.setName('課務自理導師費');
+                            writePersonalHomeroomFeeLedger(hmSheet, hmRows, rocYear, month, titlePrefix, { deleteExtraRows: true });
+                        }
+                    } else if (item.typeRaw === '自理' && !personalHomeroomTemplate) {
+                        Logger.log('未找到範本工作表：' + (CONFIG.PERSONAL_HOMEROOM_FEE_TEMPLATE_SHEET_NAME || '課務自理導師費範本') + '，略過導師費專冊');
+                    }
                 }
             } else {
                 // Only voucher requested — still need title and sumTotal
