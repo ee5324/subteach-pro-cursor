@@ -1283,6 +1283,14 @@ var SheetManager = {
                 var maxRows = summarySheet.getMaxRows();
                 if (maxRows > footerStartRow + 9) summarySheet.deleteRows(footerStartRow + 10, maxRows - footerStartRow - 9);
             }
+            // 課務自理：隱藏 L、M（代導日數、導師費）— 資料已空白，僅隱藏欄不刪欄，與 GAS 固定欄位相容
+            if (options && options.hideLedgerHomeroomColumns) {
+                try {
+                    summarySheet.hideColumns(12, 2);
+                } catch (hideErr) {
+                    Logger.log('hideColumns 12-13: ' + hideErr);
+                }
+            }
         }
         return { sumTotal: sumTotal, title: title };
     }
@@ -1435,7 +1443,7 @@ var SheetManager = {
                     newSheet.getRange("M2").setRichTextValue(m2Rich);
                     ledgerInfo = writeLedgerToSheet(newSheet, item.rows, '公假家長會', rocYear, month, titlePrefix, { deleteExtraRows: true });
                 } else {
-                    ledgerInfo = writeLedgerToSheet(newSheet, item.rows, item.typeStr, rocYear, month, titlePrefix, {});
+                    ledgerInfo = writeLedgerToSheet(newSheet, item.rows, item.typeStr, rocYear, month, titlePrefix, item.typeRaw === '自理' ? { hideLedgerHomeroomColumns: true } : {});
                     if (item.typeRaw === '自理' && personalHomeroomTemplate) {
                         var groupsHm = sheetsData[ym + '_自理'];
                         var hmRows = buildPersonalHomeroomFeeRows(groupsHm, teacherMap);
