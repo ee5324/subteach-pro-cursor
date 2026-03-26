@@ -1236,12 +1236,31 @@ var SheetManager = {
         return rows;
     }
 
+    /** 清冊 E/F/G/L/M 等欄可能為「同一儲存格多行」；Number("1\\n2") 為 NaN，合計會漏加。改為逐行加總。 */
+    function sumMultilineNumericCell(cellVal) {
+        if (cellVal == null || cellVal === '') return 0;
+        var parts = String(cellVal).split(/\r?\n/);
+        var sum = 0;
+        for (var i = 0; i < parts.length; i++) {
+            var n = Number(String(parts[i]).trim());
+            if (!isNaN(n)) sum += n;
+        }
+        return sum;
+    }
+
     function writeLedgerToSheet(summarySheet, rows, typeStr, rocYear, month, titlePrefix, options) {
         var startRow = 3;
         var dataCount = rows.length;
         var endRow = startRow + dataCount - 1;
         var sumDays = 0, sumPeriods = 0, sumHourly = 0, sumHDays = 0, sumHFee = 0, sumTotal = 0;
-        rows.forEach(function(r) { sumDays += Number(r[4]) || 0; sumPeriods += Number(r[5]) || 0; sumHourly += Number(r[6]) || 0; sumHDays += Number(r[11]) || 0; sumHFee += Number(r[12]) || 0; sumTotal += Number(r[13]) || 0; });
+        rows.forEach(function(r) {
+            sumDays += sumMultilineNumericCell(r[4]);
+            sumPeriods += sumMultilineNumericCell(r[5]);
+            sumHourly += sumMultilineNumericCell(r[6]);
+            sumHDays += sumMultilineNumericCell(r[11]);
+            sumHFee += sumMultilineNumericCell(r[12]);
+            sumTotal += Number(r[13]) || 0;
+        });
         var title = titlePrefix + typeStr;
         summarySheet.getRange("A1").setValue(title);
         if (dataCount > 0) {
