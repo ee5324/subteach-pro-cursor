@@ -1128,6 +1128,16 @@ var SheetManager = {
     }
 
     /**
+     * 課務自理導師費清冊「假別」欄：依請假事由推斷（與使用者約定：事由含病／就醫等為病假，否則含「事」為事假，其餘併列）。
+     */
+    function personalHomeroomLeaveKindFromReason(reason) {
+        var r = String(reason || '');
+        if (r.indexOf('病') > -1 || r.indexOf('就醫') > -1 || r.indexOf('看診') > -1 || r.indexOf('住院') > -1) return '病假';
+        if (r.indexOf('事') > -1) return '事假';
+        return '事假/病假';
+    }
+
+    /**
      * 課務自理：導師費逐筆列（另產「課務自理導師費」工作表）；僅日薪／半日薪有導師費者。
      */
     function buildPersonalHomeroomFeeRows(groups, teacherMap) {
@@ -1151,13 +1161,13 @@ var SheetManager = {
                 if (fee <= 0) continue;
                 var dim = SheetManagerHelpers.getSafeDaysInMonth(li.date);
                 var dailyFee = dim ? Math.round(4000 / dim) : '';
-                var typeStr = String(li.leaveType || '').replace(/\s*[\(（]/g, '\n(').replace(/[）\)]/g, ')');
+                var leaveKind = personalHomeroomLeaveKindFromReason(li.reason);
                 rows.push([
                     String(li.dateMD || ''),
                     subDisplay,
                     Number(li.homeroomDaysStr) || 0,
                     String(li.leaveTeacherName || ''),
-                    typeStr,
+                    leaveKind,
                     String(li.reason || ''),
                     String(li.note || ''),
                     dailyFee,
@@ -1325,6 +1335,17 @@ var SheetManager = {
         var title = titlePrefix + '課務自理一日導師費';
         summarySheet.getRange('A1').setValue(title);
 
+        // 範本常含範例資料、第二組合計、簽核列；複製後若不清除，會留在合計列下方與程式寫入疊在一起
+        var lastRowGuess = summarySheet.getLastRow();
+        var wipeEnd = Math.max(lastRowGuess, DATA_START + Math.max(dataCount, 1) + 20);
+        try {
+            var wipeRange = summarySheet.getRange(DATA_START, 1, wipeEnd, 11);
+            wipeRange.breakApart();
+            wipeRange.clearContent();
+        } catch (wipeErr) {
+            Logger.log('writePersonalHomeroomFeeLedger clear template body: ' + wipeErr);
+        }
+
         var sumDays = 0;
         var sumI = 0;
         var sumJ = 0;
@@ -1350,6 +1371,8 @@ var SheetManager = {
         summarySheet.getRange(DATA_START, 1, dataCount, 7).setWrap(true);
 
         var totalRowIndex = DATA_START + dataCount;
+        summarySheet.getRange(totalRowIndex, 1, 1, 11).breakApart();
+        summarySheet.getRange(totalRowIndex, 1, 1, 11).clearContent();
         summarySheet.getRange(totalRowIndex, 1, 1, 11).setBorder(true, true, true, true, true, true);
         summarySheet.getRange(totalRowIndex, 1, 1, 2).merge().setValue('合計').setHorizontalAlignment('center');
         summarySheet.getRange(totalRowIndex, 3).setValue(sumDays);
