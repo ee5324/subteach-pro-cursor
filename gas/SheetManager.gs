@@ -1404,6 +1404,15 @@ var SheetManager = {
         summarySheet.getRange(totalRowIndex, 10).setValue(sumJ);
 
         var footerStartRow = totalRowIndex + 2;
+        // 合計列以下不顯示框線（避免範本簽核區殘留格線）
+        try {
+            var clearBorderEnd = footerStartRow + 9;
+            summarySheet
+              .getRange(totalRowIndex + 1, 1, clearBorderEnd - totalRowIndex, 11)
+              .setBorder(false, false, false, false, false, false);
+        } catch (borderErr) {
+            Logger.log('writePersonalHomeroomFeeLedger clear borders: ' + borderErr);
+        }
         summarySheet.getRange(footerStartRow, 1).setValue('製表人：');
         summarySheet.getRange(footerStartRow, 5).setValue('勞保承辦：');
         summarySheet.getRange(footerStartRow, 9).setValue('校長：');
