@@ -1138,7 +1138,7 @@ var SheetManager = {
     }
 
     /**
-     * 課務自理：導師費逐筆列（另產「課務自理導師費」工作表）；僅日薪／半日薪有導師費者。
+     * 課務自理：導師費依「代課老師」整併（另產「課務自理導師費」工作表）；僅日薪／半日薪有導師費者。
      */
     function buildPersonalHomeroomFeeRows(groups, teacherMap) {
         var rows = [];
@@ -1155,27 +1155,51 @@ var SheetManager = {
                 if (da > db) return 1;
                 return String(a.leaveTeacherName || '').localeCompare(String(b.leaveTeacherName || ''));
             });
+            var dateLines = [];
+            var leaveTeacherLines = [];
+            var leaveKindLines = [];
+            var reasonLines = [];
+            var noteLines = [];
+            var sumDays = 0;
+            var sumFee = 0;
+            var dailyFee = '';
+
             for (var ii = 0; ii < items.length; ii++) {
                 var li = items[ii];
                 var fee = Number(li.homeroomFeeStr) || 0;
                 if (fee <= 0) continue;
-                var dim = SheetManagerHelpers.getSafeDaysInMonth(li.date);
-                var dailyFee = dim ? Math.round(4000 / dim) : '';
-                var leaveKind = personalHomeroomLeaveKindFromReason(li.reason);
-                rows.push([
-                    String(li.dateMD || ''),
-                    subDisplay,
-                    Number(li.homeroomDaysStr) || 0,
-                    String(li.leaveTeacherName || ''),
-                    leaveKind,
-                    String(li.reason || ''),
-                    String(li.note || ''),
-                    dailyFee,
-                    fee,
-                    fee,
-                    ''
-                ]);
+
+                // 當月每日導師費：同一月份固定（4000/當月天數），取首筆有效日期即可
+                if (dailyFee === '') {
+                    var dim = SheetManagerHelpers.getSafeDaysInMonth(li.date);
+                    dailyFee = dim ? Math.round(4000 / dim) : '';
+                }
+
+                dateLines.push(String(li.dateMD || ''));
+                leaveTeacherLines.push(String(li.leaveTeacherName || ''));
+                leaveKindLines.push(personalHomeroomLeaveKindFromReason(li.reason));
+                reasonLines.push(String(li.reason || ''));
+                noteLines.push(String(li.note || ''));
+                sumDays += Number(li.homeroomDaysStr) || 0;
+                sumFee += fee;
             }
+
+            // 該代課老師本月無自理導師費，略過
+            if (sumFee <= 0) continue;
+
+            rows.push([
+                dateLines.join('\n'),
+                subDisplay,
+                sumDays,
+                leaveTeacherLines.join('\n'),
+                leaveKindLines.join('\n'),
+                reasonLines.join('\n'),
+                noteLines.join('\n'),
+                dailyFee,
+                sumFee,
+                sumFee,
+                ''
+            ]);
         }
         return rows;
     }
