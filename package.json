@@ -18,6 +18,7 @@
     "firebase:login": "FIREBASE_CLI_UPDATE_CHECK=false npx firebase-tools login"
   },
   "dependencies": {
+    "@vercel/functions": "^3.4.3",
     "firebase": "^12.10.0",
     "html2canvas": "^1.4.1",
     "lucide-react": "0.363.0",
