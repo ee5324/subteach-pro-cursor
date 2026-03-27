@@ -69,6 +69,18 @@ var CONFIG = {
   
   // 指定輸出資料夾 ID
   OUTPUT_FOLDER_ID: '1mYwmXX9DZSeBbltuaWd2Pkuu_gGo6wyo',
+
+  // LINE 通知 API 共用金鑰（可選；若留空則不驗證，建議正式環境填入長字串）
+  LINE_NOTIFY_SHARED_KEY: '',
+  // LINE Messaging API Channel access token（建議填 Script Properties: LINE_CHANNEL_ACCESS_TOKEN）
+  LINE_CHANNEL_ACCESS_TOKEN: '',
+  // LINE 通知目標：一對一 userId（U…）；若改發群組請用 LINE_TARGET_GROUP_ID（C…）
+  LINE_TARGET_USER_ID: '',
+  // 群組 ID（C…）；若同時設 user 與群組，推播優先用群組（測試／發佈用）
+  LINE_TARGET_GROUP_ID: '',
+  // 測試模式：true 時所有推播／回覆前加「[測試] 」（Script Properties: LINE_NOTIFY_TEST_MODE = true）
+  LINE_NOTIFY_TEST_MODE: false,
+  // 除錯：LINE_NOTIFY_DEBUG_WEBHOOK=true、「缺額查id」reply；低調取群組 ID：LINE_NOTIFY_CAPTURE_ON_JOIN / LINE_NOTIFY_SILENT_CAPTURE_FROM_MESSAGE（見 LineNotifyManager）
   
   // 表頭定義 (符合印領清冊格式 A-S)
   SHEET_HEADERS: [

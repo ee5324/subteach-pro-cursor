@@ -2,6 +2,22 @@
 // 5. Controller.gs
 // 程式進入點 - 處理 HTTP 請求
 
+/** LINE_NOTIFY_DEBUG_WEBHOOK=true 時寫入指令碼屬性，方便對照是否打到正確部署與 payload 形狀 */
+function lineNotifyDebugWebhookMaybe_(payload, step) {
+  try {
+    var dbg = String(PropertiesService.getScriptProperties().getProperty('LINE_NOTIFY_DEBUG_WEBHOOK') || '').trim().toLowerCase();
+    if (dbg !== 'true' && dbg !== '1') return;
+    var p = PropertiesService.getScriptProperties();
+    p.setProperty('LINE_NOTIFY_DEBUG_STEP', String(step || ''));
+    p.setProperty('LINE_NOTIFY_DEBUG_DOPOST_AT', new Date().toISOString());
+    if (payload && typeof payload === 'object') {
+      p.setProperty('LINE_NOTIFY_DEBUG_PAYLOAD_KEYS', JSON.stringify(Object.keys(payload)));
+      var ev = payload.events;
+      p.setProperty('LINE_NOTIFY_DEBUG_EVENTS_LEN', ev && Array.isArray(ev) ? String(ev.length) : 'no_events_array');
+    }
+  } catch (ignore) {}
+}
+
 /**
  * 處理 POST 請求 (React 管理後台 API)
  */
@@ -11,6 +27,12 @@ function doPost(e) {
   try {
     // 1. 基礎檢查
     if (!e || !e.postData) {
+      try {
+        var dbg0 = String(PropertiesService.getScriptProperties().getProperty('LINE_NOTIFY_DEBUG_WEBHOOK') || '').trim().toLowerCase();
+        if (dbg0 === 'true' || dbg0 === '1') {
+          PropertiesService.getScriptProperties().setProperty('LINE_NOTIFY_DEBUG_STEP', 'no_postData');
+        }
+      } catch (x0) {}
        return responseJSON({ status: 'error', message: 'Invalid Request: No postData' });
     }
 
@@ -19,10 +41,27 @@ function doPost(e) {
     try {
        payload = JSON.parse(e.postData.contents);
     } catch(err) {
+      try {
+        var dbg1 = String(PropertiesService.getScriptProperties().getProperty('LINE_NOTIFY_DEBUG_WEBHOOK') || '').trim().toLowerCase();
+        if (dbg1 === 'true' || dbg1 === '1') {
+          var pd = PropertiesService.getScriptProperties();
+          pd.setProperty('LINE_NOTIFY_DEBUG_STEP', 'json_parse_error');
+          pd.setProperty('LINE_NOTIFY_DEBUG_JSON_ERR', String(err.message || err).slice(0, 500));
+        }
+      } catch (x1) {}
        return responseJSON({ status: 'error', message: 'Invalid JSON: ' + err.message });
     }
 
     if (!payload) return responseJSON({ status: 'error', message: 'Empty Payload' });
+
+    lineNotifyDebugWebhookMaybe_(payload, 'after_parse');
+
+    // LINE Messaging API webhook 分流（不走 action/data）
+    if (payload.events && Array.isArray(payload.events)) {
+      lineNotifyDebugWebhookMaybe_(payload, 'before_handleLineWebhook');
+      var hookRes = LineNotifyManager.handleLineWebhook(payload);
+      return responseJSON({ status: 'success', data: hookRes, message: 'LINE webhook handled' });
+    }
 
     var action = payload.action;
     var data = payload.data; 
@@ -235,6 +274,30 @@ function doPost(e) {
       var vacancies = data.vacancies;
       var count = SheetManager.updatePublicVacancies(vacancies);
       result = { status: 'success', message: '已發佈 ' + count + ' 筆缺額' };
+
+    } else if (action === 'LINE_NOTIFY_REGISTER_PUBLIC_VACANCY_EVENT') {
+      var state = LineNotifyManager.registerPublicVacancyEvent(data || {});
+      result = { status: 'success', data: state, message: 'LINE 通知待送狀態已更新' };
+
+    } else if (action === 'LINE_NOTIFY_GET_PENDING_STATE') {
+      var state = LineNotifyManager.getPendingState(data || {});
+      result = { status: 'success', data: state };
+
+    } else if (action === 'LINE_NOTIFY_CLEAR_PENDING_STATE') {
+      var cleared = LineNotifyManager.clearPendingState(data || {});
+      result = { status: 'success', data: cleared, message: 'LINE 通知待送狀態已清除' };
+
+    } else if (action === 'LINE_NOTIFY_NOON_PENDING_SUMMARY') {
+      var summary = LineNotifyManager.getNoonPendingSummary(data || {});
+      result = { status: 'success', data: summary };
+
+    } else if (action === 'LINE_NOTIFY_SEND_NOON_CONFIRM_PROMPT') {
+      var sendRes = LineNotifyManager.sendNoonConfirmPrompt(data || {});
+      result = { status: 'success', data: sendRes };
+
+    } else if (action === 'LINE_NOTIFY_TEST_PING') {
+      var pingRes = LineNotifyManager.sendTestPing(data || {});
+      result = { status: 'success', data: pingRes, message: 'LINE 測試訊息已送出' };
 
     } else if (action === 'SUBMIT_APPLICATION') {
       var res = SheetManager.submitApplication(data.application);

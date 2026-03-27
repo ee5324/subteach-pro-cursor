@@ -5,7 +5,18 @@ import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
 import { isSubstituteBusyBlockExpiredForAutoCleanup } from '../utils/substituteBusyBlocks';
 import { db, auth } from '../src/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, updateDoc, getDoc, getDocs } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch,
+  updateDoc,
+  getDoc,
+  getDocs,
+  type DocumentData,
+} from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 /** Firestore 不支援 undefined、NaN、Infinity，寫入前清理 */
@@ -402,7 +413,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const updateLanguagePayroll = async (updatedPayroll: LanguagePayroll) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'languagePayrolls', updatedPayroll.id), sanitizeForFirestore(updatedPayroll as Record<string, unknown>) as any);
+    await updateDoc(doc(db, 'languagePayrolls', updatedPayroll.id), sanitizeForFirestore(updatedPayroll) as DocumentData);
   };
   const deleteLanguagePayroll = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -552,7 +563,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const updateTeacher = async (updatedTeacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'teachers', updatedTeacher.id), sanitizeForFirestore(updatedTeacher as Record<string, unknown>) as any);
+    await updateDoc(doc(db, 'teachers', updatedTeacher.id), sanitizeForFirestore(updatedTeacher) as DocumentData);
     await syncPublicTeacherSchedule(updatedTeacher);
     await syncPublicSubstituteSchedules([...teachers.filter((t) => t.id !== updatedTeacher.id), updatedTeacher], records);
   };
@@ -683,7 +694,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const updateActivity = async (updatedActivity: SpecialActivity) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'specialActivities', updatedActivity.id), sanitizeForFirestore(updatedActivity as Record<string, unknown>) as any);
+    await updateDoc(doc(db, 'specialActivities', updatedActivity.id), sanitizeForFirestore(updatedActivity) as DocumentData);
   };
   const deleteActivity = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -723,7 +734,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   const updateSemester = async (sem: SemesterDefinition) => { 
     if (!db) throw new Error("Firebase not initialized");
-    await updateDoc(doc(db, 'semesters', sem.id), sanitizeForFirestore(sem as Record<string, unknown>) as any);
+    await updateDoc(doc(db, 'semesters', sem.id), sanitizeForFirestore(sem) as DocumentData);
   };
   const removeSemester = async (id: string) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -756,8 +767,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .filter((g) => g.points > 0)
       .sort((a, b) => a.points - b.points);
 
-    const existingIds = new Set((salaryGrades || []).map((g) => String(g.id || g.points)));
-    const nextIds = new Set(normalized.map((g) => String(g.id)));
+    const existingIds = new Set<string>((salaryGrades || []).map((g) => String(g.id || g.points)));
+    const nextIds = new Set<string>(normalized.map((g) => String(g.id)));
     const batch = writeBatch(db);
     normalized.forEach((g) => {
       batch.set(doc(db, 'salaryGrades', String(g.id)), sanitizeForFirestore(g));
@@ -999,6 +1010,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const snap = await getDoc(doc(db, 'publicBoard', 'vacancies'));
           const existing = snap.exists() ? snap.data() : null;
           const existingList = Array.isArray(existing?.vacancies) ? existing.vacancies : [];
+          const existingIdSet = new Set(
+            existingList
+              .map((v: any) => (v?.id != null ? String(v.id) : ''))
+              .filter(Boolean)
+          );
           const tierById: Record<string, number> = {};
           existingList.forEach((v: any) => {
               const id = v?.id != null ? String(v.id) : '';
@@ -1013,6 +1029,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               vacancies: sanitizeForFirestore(withStatus),
               updatedAt: Date.now()
           });
+
+          // 混用方案：僅「新職缺」發布時，通知 GAS 登記當日待送狀態（不阻擋主流程）
+          const newlyAdded = withStatus.filter((v: any) => {
+            const id = v?.id != null ? String(v.id) : '';
+            return id && !existingIdSet.has(id);
+          });
+          if (newlyAdded.length > 0) {
+            const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;
+            if (targetUrl) {
+              try {
+                await callGasApi(targetUrl, 'LINE_NOTIFY_REGISTER_PUBLIC_VACANCY_EVENT', {
+                  count: newlyAdded.length,
+                  vacancyIds: newlyAdded.map((v: any) => String(v.id)),
+                });
+              } catch (e) {
+                console.warn('LINE notify register failed (ignored)', e);
+              }
+            }
+          }
           return;
       }
       const targetUrl = settings.gasWebAppUrl || GAS_WEB_APP_URL;

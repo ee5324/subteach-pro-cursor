@@ -1,39 +1,7 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
+import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-
-class PageErrorBoundary extends Component<{ children: ReactNode; fallbackTitle?: string }> {
-  state = { hasError: false, error: null as Error | null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('PageErrorBoundary:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError && this.state.error) {
-      return (
-        <div className="p-8 max-w-xl mx-auto">
-          <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-rose-800 mb-2">{this.props.fallbackTitle ?? '頁面載入錯誤'}</h2>
-            <p className="text-sm text-rose-700 mb-4 font-mono">{this.state.error.message}</p>
-            <button
-              type="button"
-              onClick={() => this.setState({ hasError: false, error: null })}
-              className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700"
-            >
-              重試
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 import Layout from './Layout';
 import EntryForm from './pages/EntryForm';
 import TeacherManagement from './pages/TeacherManagement';
@@ -62,6 +30,36 @@ import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
 import { useAppStore } from './store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from './src/lib/firebase';
+
+function PageErrorFallback({ error, resetErrorBoundary, title }: FallbackProps & { title: string }) {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    <div className="p-8 max-w-xl mx-auto">
+      <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-rose-800 mb-2">{title}</h2>
+        <p className="text-sm text-rose-700 mb-4 font-mono">{msg}</p>
+        <button
+          type="button"
+          onClick={resetErrorBoundary}
+          className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700"
+        >
+          重試
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PageErrorBoundary({ children, fallbackTitle }: { children: ReactNode; fallbackTitle: string }) {
+  return (
+    <ErrorBoundary
+      fallbackRender={(props) => <PageErrorFallback {...props} title={fallbackTitle} />}
+      onError={(err, info) => console.error('PageErrorBoundary:', err, info)}
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   const { currentUser, loading, notAllowed } = useAppStore();
