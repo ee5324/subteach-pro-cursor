@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { ChevronLeft, ChevronRight, Calendar, ShieldCheck } from 'lucide-react';
 import { db } from '../src/lib/firebase';
+import { maskTaiwanMobileDigits, normalizeTaiwanMobileDigits } from '../utils/taiwanPhone';
 
 const PERIOD_ROWS = [
   { id: '早', label: '早自習' },
@@ -26,7 +27,7 @@ type PublicSubstituteSlot = {
 type PublicSubstituteScheduleDoc = {
   teacherId: string;
   teacherName: string;
-  phoneLast4: string;
+  phoneDigits: string;
   slots: PublicSubstituteSlot[];
 };
 
@@ -52,7 +53,7 @@ const getWeekDays = (baseDate: Date) => {
 };
 
 const SubstituteWeeklyLookup: React.FC = () => {
-  const [phoneLast4, setPhoneLast4] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [matchedSchedules, setMatchedSchedules] = useState<PublicSubstituteScheduleDoc[]>([]);
@@ -78,9 +79,9 @@ const SubstituteWeeklyLookup: React.FC = () => {
   }, [selectedSchedule]);
 
   const handleSearch = async () => {
-    const normalized = phoneLast4.replace(/\D/g, '').slice(-4);
-    if (normalized.length !== 4) {
-      setError('請輸入手機末四碼');
+    const normalized = normalizeTaiwanMobileDigits(phoneInput);
+    if (!normalized) {
+      setError('請輸入有效的台灣手機全碼（10 碼，09 開頭）');
       return;
     }
     if (!db) {
@@ -94,21 +95,21 @@ const SubstituteWeeklyLookup: React.FC = () => {
     try {
       const q = query(
         collection(db, 'publicSubstituteSchedules'),
-        where('phoneLast4', '==', normalized),
+        where('phoneDigits', '==', normalized),
         limit(20),
       );
       const snap = await getDocs(q);
       const rows = snap.docs.map((d) => {
-        const data = d.data() as PublicSubstituteScheduleDoc;
+        const data = d.data() as Partial<PublicSubstituteScheduleDoc>;
         return {
           teacherId: data.teacherId || d.id,
           teacherName: data.teacherName || '',
-          phoneLast4: data.phoneLast4 || normalized,
+          phoneDigits: data.phoneDigits || normalized,
           slots: Array.isArray(data.slots) ? data.slots : [],
         };
       });
       if (rows.length === 0) {
-        setError('查無資料，請確認手機末四碼是否正確，或請教學組確認是否已排入代課。');
+        setError('查無資料，請確認手機號碼是否與教師資料一致，或請教學組確認是否已排入代課。（若剛改為全碼查詢，請待教學組登入後同步一次）');
         return;
       }
       setMatchedSchedules(rows);
@@ -137,7 +138,7 @@ const SubstituteWeeklyLookup: React.FC = () => {
             代課老師週課表查詢
           </h1>
           <p className="text-slate-500 text-sm mt-2">
-            輸入手機末四碼即可查詢本人的代課週課表。驗證通過後僅顯示符合該末四碼的代課資料。
+            輸入與教師資料相同的台灣手機全碼（10 碼）即可查詢本人的代課週課表。驗證通過後僅顯示該手機對應之代課資料。
           </p>
 
           <form
@@ -148,14 +149,14 @@ const SubstituteWeeklyLookup: React.FC = () => {
             }}
           >
             <input
-              type="text"
-              inputMode="numeric"
-              maxLength={4}
-              value={phoneLast4}
-              onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              className="w-full sm:w-56 px-3 py-3 text-base border border-slate-300 rounded-lg"
-              placeholder="手機末四碼"
-              autoComplete="one-time-code"
+              type="tel"
+              inputMode="tel"
+              maxLength={16}
+              value={phoneInput}
+              onChange={(e) => setPhoneInput(e.target.value)}
+              className="w-full sm:max-w-xs px-3 py-3 text-base border border-slate-300 rounded-lg"
+              placeholder="例如 0912345678"
+              autoComplete="tel"
             />
             <button
               type="submit"
@@ -199,7 +200,7 @@ const SubstituteWeeklyLookup: React.FC = () => {
             <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-2">
               <div>
                 <div className="font-bold text-slate-800">{selectedSchedule.teacherName} 的代課週課表</div>
-                <div className="text-xs text-slate-500">手機末四碼：{selectedSchedule.phoneLast4}</div>
+                <div className="text-xs text-slate-500">手機：{maskTaiwanMobileDigits(selectedSchedule.phoneDigits)}</div>
               </div>
               <div className="flex items-center space-x-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
                 <button onClick={() => handleWeekNav('prev')} className="p-2 hover:bg-slate-100 rounded text-slate-600">

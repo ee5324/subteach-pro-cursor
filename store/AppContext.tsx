@@ -3,6 +3,7 @@ import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, Special
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
+import { normalizeTaiwanMobileDigits } from '../utils/taiwanPhone';
 import { isSubstituteBusyBlockExpiredForAutoCleanup } from '../utils/substituteBusyBlocks';
 import { db, auth } from '../src/lib/firebase';
 import {
@@ -449,7 +450,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   /**
    * 將「代課老師個人週課表」同步到公開集合（publicSubstituteSchedules）。
-   * 僅輸出代課老師自己的代課節次與手機末四碼，避免公開 teachers/records 全量資料。
+   * 僅輸出代課老師自己的代課節次與手機全碼（phoneDigits，供查詢頁比對），避免公開 teachers/records 全量資料。
    */
   const syncPublicSubstituteSchedules = async (
     teachersForBuild: Teacher[] = teachers,
@@ -463,7 +464,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       {
         teacherId: string;
         teacherName: string;
-        phoneLast4: string;
+        phoneDigits: string;
         slots: Array<{
           date: string;
           period: string;
@@ -476,11 +477,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     >();
 
-    const normalizePhoneLast4 = (raw: string | undefined): string => {
-      const digits = String(raw || '').replace(/\D/g, '');
-      return digits.length >= 4 ? digits.slice(-4) : '';
-    };
-
     recordsForBuild.forEach((record) => {
       if (!record.slots || record.slots.length === 0) return;
       const originalTeacherName = teacherById.get(record.originalTeacherId)?.name || '';
@@ -489,13 +485,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const subId = slot.substituteTeacherId;
         const subTeacher = teacherById.get(subId);
         if (!subTeacher) return;
-        const phoneLast4 = normalizePhoneLast4(subTeacher.phone);
-        if (!phoneLast4) return;
+        const phoneDigits = normalizeTaiwanMobileDigits(subTeacher.phone);
+        if (!phoneDigits) return;
         if (!scheduleBySubId.has(subId)) {
           scheduleBySubId.set(subId, {
             teacherId: subId,
             teacherName: subTeacher.name || '',
-            phoneLast4,
+            phoneDigits,
             slots: [],
           });
         }
@@ -527,7 +523,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sanitizeForFirestore({
           teacherId: item.teacherId,
           teacherName: item.teacherName,
-          phoneLast4: item.phoneLast4,
+          phoneDigits: item.phoneDigits,
           slots: item.slots,
           updatedAt: Date.now(),
         }),

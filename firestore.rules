@@ -132,7 +132,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if canAccessSubteach();
     }
-    // 代課老師自助查詢：僅公開「手機末四碼 + 該老師自己的代課週課表」
+    // 代課老師自助查詢：公開手機全碼欄位（phoneDigits）供比對 + 該老師自己的代課週課表
     match /publicSubstituteSchedules/{teacherId} {
       allow read: if true;
       allow write: if canAccessSubteach();
