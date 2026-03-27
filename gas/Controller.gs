@@ -57,7 +57,12 @@ function doPost(e) {
     lineNotifyDebugWebhookMaybe_(payload, 'after_parse');
 
     // LINE Messaging API webhook 分流（不走 action/data）
-    if (payload.events && Array.isArray(payload.events)) {
+    // 前端 callGasApi 一律帶 { action, data }；LINE 官方 Webhook 必含 destination（見 Messaging API Reference）
+    if (
+      payload.events &&
+      Array.isArray(payload.events) &&
+      typeof payload.destination === 'string'
+    ) {
       lineNotifyDebugWebhookMaybe_(payload, 'before_handleLineWebhook');
       var hookRes = LineNotifyManager.handleLineWebhook(payload);
       return responseJSON({ status: 'success', data: hookRes, message: 'LINE webhook handled' });
