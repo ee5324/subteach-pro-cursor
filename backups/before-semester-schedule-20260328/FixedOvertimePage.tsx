@@ -10,7 +10,6 @@ import { Plus, Trash2, Calendar, FileText, Loader2, Calculator, AlertCircle, X, 
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import { Link } from 'react-router-dom';
 import { getStandardBase, parseLocalDate, getEffectiveFixedOvertimeSlots, getEffectiveFixedOvertimePeriods } from '../utils/calculations';
-import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import InstructionPanel from '../components/InstructionPanel';
 
 const ScheduleSlot: React.FC<{ 
@@ -138,7 +137,7 @@ const FixedScheduleModal: React.FC<{
 };
 
 const FixedOvertimePage: React.FC = () => {
-  const { teachers, records, fixedOvertimeConfig, updateFixedOvertimeConfig, removeFixedOvertimeConfig, holidays, settings, gradeEvents, addGradeEvent, removeGradeEvent, activeSemesterId } = useAppStore();
+  const { teachers, records, fixedOvertimeConfig, updateFixedOvertimeConfig, removeFixedOvertimeConfig, holidays, settings, gradeEvents, addGradeEvent, removeGradeEvent } = useAppStore();
   
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
@@ -207,11 +206,8 @@ const FixedOvertimePage: React.FC = () => {
       };
       addFromStr(teacher.teachingClasses || '');
       // 若任課班級未填，改從預設課表之班級名稱解析（如 203、201 → 2年級）
-      if (grades.size === 0) {
-          const resolved = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
-          if (resolved && resolved.length > 0) {
-              resolved.forEach((slot) => addFromStr(slot.className || ''));
-          }
+      if (grades.size === 0 && teacher.defaultSchedule && teacher.defaultSchedule.length > 0) {
+          teacher.defaultSchedule.forEach(slot => addFromStr(slot.className || ''));
       }
       return Array.from(grades).sort((a, b) => a - b);
   };
@@ -263,7 +259,7 @@ const FixedOvertimePage: React.FC = () => {
       const affectedEvents: { id: string, title: string, date: string, deduction: number }[] = [];
       const monthPrefix = selectedMonth;
       const activeEvents = gradeEvents.filter(e => eventDateStr(e).startsWith(monthPrefix));
-      const schedule = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
+      const schedule = teacher.defaultSchedule;
 
       activeEvents.forEach(event => {
           const dateStr = eventDateStr(event);
@@ -338,10 +334,9 @@ const FixedOvertimePage: React.FC = () => {
           const teacher = teachers.find(t => t.id === config.teacherId);
           if (!teacher) return null;
 
-          const effectiveSlots = getEffectiveFixedOvertimeSlots(teacher, config, activeSemesterId);
-          const effectivePeriods = getEffectiveFixedOvertimePeriods(teacher, config, activeSemesterId);
-          const resolvedSchedule = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
-          const usesTeacherSchedule = !!(resolvedSchedule && resolvedSchedule.length > 0);
+          const effectiveSlots = getEffectiveFixedOvertimeSlots(teacher, config);
+          const effectivePeriods = getEffectiveFixedOvertimePeriods(teacher, config);
+          const usesTeacherSchedule = !!(teacher.defaultSchedule && teacher.defaultSchedule.length > 0);
 
           let expected = 0;
           effectivePeriods.forEach((p, idx) => {
@@ -441,7 +436,7 @@ const FixedOvertimePage: React.FC = () => {
               usesTeacherSchedule: usesTeacherSchedule
           };
       }).filter(item => item !== null) as any[]; 
-  }, [orderedFixedConfigs, teachers, records, weekdayCounts, gradeEvents, selectedMonth, semesterStart, semesterEnd, activeSemesterId]);
+  }, [orderedFixedConfigs, teachers, records, weekdayCounts, gradeEvents, selectedMonth, semesterStart, semesterEnd]);
 
   // 當月協助代固定兼課教師代課者：依頁面固定兼課教師順序，直接列在對應教師下方
   const periodOrderSub = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
@@ -612,7 +607,7 @@ const FixedOvertimePage: React.FC = () => {
       }
       const teacher = teachers.find(t => t.id === addTeacherId);
       const emptyConfig = { teacherId: addTeacherId, periods: [0, 0, 0, 0, 0], sortOrder: fixedOvertimeConfig.length, adjustment: 0, adjustmentReason: '', ignoredEventIds: [], scheduleSlots: [] };
-      const initialPeriods = getEffectiveFixedOvertimePeriods(teacher, emptyConfig, activeSemesterId);
+      const initialPeriods = getEffectiveFixedOvertimePeriods(teacher, emptyConfig);
       updateFixedOvertimeConfig({ ...emptyConfig, periods: initialPeriods });
       setAddTeacherId('');
   };
@@ -823,8 +818,8 @@ const FixedOvertimePage: React.FC = () => {
                 teacher={activeTeacher}
                 config={activeConfig}
                 onSave={handleSaveSchedule}
-                effectiveSlots={getEffectiveFixedOvertimeSlots(activeTeacher, activeConfig, activeSemesterId)}
-                usesTeacherSchedule={!!(resolveTeacherDefaultSchedule(activeTeacher, activeSemesterId)?.length)}
+                effectiveSlots={getEffectiveFixedOvertimeSlots(activeTeacher, activeConfig)}
+                usesTeacherSchedule={!!(activeTeacher.defaultSchedule && activeTeacher.defaultSchedule.length > 0)}
             />
         )}
 

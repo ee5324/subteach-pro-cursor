@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo } from 'react';
-import { mergeTeacherScheduleForSave, resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import { useAppStore } from '../store/useAppStore';
 import { Teacher, TeacherType, COMMON_SUBJECTS, APPLY_TEACHING_ITEMS, TeacherScheduleSlot, ReductionItem, TeacherDocument, HOMEROOM_FEE_MONTHLY } from '../types';
 import { Plus, Edit2, Trash2, Search, X, CloudUpload, Loader2, HelpCircle, GraduationCap, Award, Briefcase, Book, RefreshCw, Star, FileSpreadsheet, AlertTriangle, ArrowRight, CheckCircle, Calendar, Info, Clock, Eraser, MousePointerClick, MinusCircle, FileText, ExternalLink, Paperclip } from 'lucide-react';
@@ -13,24 +12,7 @@ import { callGasApi } from '../utils/api';
 const DEFAULT_IMPORT_HEADER = "年級,班級,導師,節次,時間,星期一,星期二,星期三,星期四,星期五";
 
 export default function TeacherManagement() {
-  const {
-    teachers,
-    addTeacher,
-    updateTeacher,
-    renameTeacher,
-    setAllTeachers,
-    deleteTeacher,
-    syncAllPublicTeacherSchedules,
-    settings,
-    salaryGrades,
-    activeSemesterId,
-    semesters,
-  } = useAppStore();
-
-  const activeSemesterLabel = useMemo(() => {
-    if (!activeSemesterId) return null;
-    return semesters.find((x) => x.id === activeSemesterId)?.name || activeSemesterId;
-  }, [activeSemesterId, semesters]);
+  const { teachers, addTeacher, updateTeacher, renameTeacher, setAllTeachers, deleteTeacher, syncAllPublicTeacherSchedules, settings, salaryGrades } = useAppStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -150,7 +132,7 @@ export default function TeacherManagement() {
         researchFee: teacher.researchFee,
         isHomeroom: teacher.isHomeroom,
         isFixedOvertimeTeacher: teacher.isFixedOvertimeTeacher ?? false,
-        defaultSchedule: resolveTeacherDefaultSchedule(teacher, activeSemesterId) || teacher.defaultSchedule || [],
+        defaultSchedule: teacher.defaultSchedule || [],
         defaultOvertimeSlots: teacher.defaultOvertimeSlots || [],
         entryDocuments: teacher.entryDocuments || []
       });
@@ -413,11 +395,12 @@ export default function TeacherManagement() {
 
       const updatedTeachers = [...teachers];
 
-      previewData.forEach((pData) => {
-          let teacher = updatedTeachers.find((t) => t.name === pData.name);
-
+      previewData.forEach(pData => {
+          let teacher = updatedTeachers.find(t => t.name === pData.name);
+          
           if (!teacher) {
-              const baseNew: Teacher = {
+              // Create new teacher
+              const newT: Teacher = {
                   id: pData.name,
                   name: pData.name,
                   type: TeacherType.INTERNAL,
@@ -430,19 +413,17 @@ export default function TeacherManagement() {
                   isHomeroom: !!pData.className,
                   teachingClasses: pData.className,
                   note: '由課表匯入自動建立',
-                  defaultSchedule: [],
+                  defaultSchedule: pData.schedule
               };
-              const newT = mergeTeacherScheduleForSave(baseNew, pData.schedule, activeSemesterId);
               updatedTeachers.push(newT);
               logs.push(`建立新教師: ${pData.name}`);
           } else {
-              const idx = updatedTeachers.findIndex((t) => t.id === teacher!.id);
-              let next = { ...teacher };
-              if (!next.teachingClasses && pData.className) {
-                  next = { ...next, teachingClasses: pData.className };
+              // Update existing
+              teacher.defaultSchedule = pData.schedule;
+              // If teacher had no class defined but CSV has it, update it
+              if (!teacher.teachingClasses && pData.className) {
+                  teacher.teachingClasses = pData.className;
               }
-              next = mergeTeacherScheduleForSave(next, pData.schedule, activeSemesterId);
-              updatedTeachers[idx] = next;
               logs.push(`更新課表: ${pData.name}`);
           }
           successCount += pData.schedule.length;
@@ -476,36 +457,21 @@ export default function TeacherManagement() {
     };
 
     if (editingId) {
-      const editingTeacher = teachers.find((t) => t.id === editingId);
-      if (!editingTeacher) return;
-      const nameChanged = editingTeacher.name !== finalData.name;
-      const merged = mergeTeacherScheduleForSave(
-        { ...editingTeacher, ...finalData, id: editingId },
-        finalData.defaultSchedule || [],
-        activeSemesterId,
-      );
+      // 重要：teacher.id 不一定等於 teacher.name（歷史資料可能不一致）。
+      // 只有「使用者真的改了姓名」才嘗試 rename（因為 rename 會改 Firestore docId）。
+      const editingTeacher = teachers.find(t => t.id === editingId);
+      const nameChanged = editingTeacher ? editingTeacher.name !== finalData.name : false;
       if (nameChanged) {
-        const exists = teachers.some((t) => t.id !== editingId && t.name === finalData.name);
-        if (exists) {
-          alert(`教師姓名 "${finalData.name}" 已存在。`);
-          return;
-        }
-        renameTeacher(editingId, { ...merged, id: finalData.name });
+        const exists = teachers.some(t => t.id !== editingId && t.name === finalData.name);
+        if (exists) { alert(`教師姓名 "${finalData.name}" 已存在。`); return; }
+        renameTeacher(editingId, { ...finalData, id: finalData.name });
       } else {
-        updateTeacher(merged);
+        updateTeacher({ ...finalData, id: editingId });
       }
     } else {
-      const exists = teachers.some((t) => t.name === finalData.name);
-      if (exists) {
-        alert(`教師姓名 "${finalData.name}" 已存在。`);
-        return;
-      }
-      const merged = mergeTeacherScheduleForSave(
-        { ...(finalData as Teacher), id: finalData.name },
-        finalData.defaultSchedule || [],
-        activeSemesterId,
-      );
-      addTeacher(merged);
+      const exists = teachers.some(t => t.name === finalData.name);
+      if (exists) { alert(`教師姓名 "${finalData.name}" 已存在。`); return; }
+      addTeacher({ ...finalData, id: finalData.name });
     }
     setIsModalOpen(false);
   };
@@ -540,7 +506,7 @@ export default function TeacherManagement() {
       }
 
       const searchLower = searchTerm.toLowerCase();
-      const scheduleClassNames = (resolveTeacherDefaultSchedule(t, activeSemesterId) || []).map((slot) => slot.className || '').join(' ');
+      const scheduleClassNames = (t.defaultSchedule || []).map(slot => slot.className || '').join(' ');
       const searchableText = [
           t.name,
           t.type,
@@ -807,7 +773,7 @@ export default function TeacherManagement() {
                 const totalReduction = (teacher.reductions || []).reduce((sum,r)=>sum+r.periods, 0) || teacher.adminReduction || 0;
                 const standard = getStandardBase(teacher);
                 const basic = Math.max(0, standard - totalReduction);
-                const schedule = resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length || 0;
+                const schedule = teacher.defaultSchedule?.length || 0;
                 
                 // Display Logic: Prioritize Configured Overtime Slots if available
                 const configuredOvertime = teacher.defaultOvertimeSlots?.length || 0;
@@ -1167,15 +1133,6 @@ export default function TeacherManagement() {
 
               {/* Interactive Schedule Grid (Manual Edit) */}
               <div>
-                  {activeSemesterLabel ? (
-                    <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
-                      正在編輯學期：<strong>{activeSemesterLabel}</strong>（存檔後寫入該學期專用課表；並同步更新預設課表欄位供相容）
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 mb-2">
-                      尚未設定<strong>作用中學期</strong>（Firestore <code className="text-[11px]">system/metadata</code> 的 <code className="text-[11px]">activeSemesterId</code>），課表僅存入傳統欄位，所有學期共用。
-                    </p>
-                  )}
                   <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center bg-slate-100 p-2 rounded justify-between">
                       <div className="flex items-center">
                           <Clock size={16} className="mr-2"/> 預設課表 (手動編輯)

@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { LeaveType, PayType, TimetableSlot, LeaveRecord, TeacherType, Teacher, COMMON_SUBJECTS } from '../types';
 import { convertSlotsToDetails, getDaysInMonth, parseLocalDate, normalizeDateString } from '../utils/calculations';
-import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import { Save, Calculator, ArrowLeft, ChevronLeft, ChevronRight, AlertCircle, UserX, BookOpen, Users, FileText, Info, Edit3, Trash2, X, Loader2, Repeat, Copy, Calendar as CalendarIcon, Ban, Download } from 'lucide-react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
@@ -57,7 +56,7 @@ const incrementClassString = (str: string) => {
 const EntryForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { teachers, records, addRecord, updateRecord, addTeacher, salaryGrades, loading, holidays, activeSemesterId } = useAppStore();
+  const { teachers, records, addRecord, updateRecord, addTeacher, salaryGrades, loading, holidays } = useAppStore(); 
   
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -363,10 +362,9 @@ const EntryForm: React.FC = () => {
           return; 
       }
       
-      const teacher = teachers.find((t) => t.id === originalTeacherId);
-      const defSched = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
-      if (!teacher || !defSched || defSched.length === 0) {
-           if (!isAuto) showModal({ title: '無資料', message: '該教師尚未設定預設課表（或作用中學期尚無課表），請先至「教師管理」針對目前學期設定。', type: 'warning' });
+      const teacher = teachers.find(t => t.id === originalTeacherId);
+      if (!teacher || !teacher.defaultSchedule || teacher.defaultSchedule.length === 0) {
+           if (!isAuto) showModal({ title: '無資料', message: '該教師尚未設定預設課表，請先至「教師管理」進行設定。', type: 'warning' });
            return;
       }
 
@@ -393,7 +391,7 @@ const EntryForm: React.FC = () => {
           const dayOfWeek = loopDate.getDay(); // 1=Mon, 5=Fri
           
           // Find slots in teacher's default schedule that match this day of week
-          const daySchedule = defSched.filter((s) => s.day === dayOfWeek);
+          const daySchedule = teacher.defaultSchedule.filter(s => s.day === dayOfWeek);
 
           daySchedule.forEach(sch => {
               // Check if slot already exists for this date/period

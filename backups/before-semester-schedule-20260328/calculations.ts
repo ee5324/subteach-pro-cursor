@@ -1,6 +1,5 @@
 
 import { Teacher, PayType, HOURLY_RATE, HOMEROOM_FEE_MONTHLY, TimetableSlot, SubstituteDetail, SalaryGrade, FixedOvertimeConfig } from '../types';
-import { resolveTeacherDefaultSchedule } from './teacherSchedule';
 
 /**
  * 安全解析日期字串 YYYY-MM-DD 為本地 Date 物件
@@ -304,27 +303,18 @@ export function deduplicateDetails(details: SubstituteDetail[]): SubstituteDetai
 }
 
 /**
- * 固定兼課時段：優先使用教師設定的課表（作用中學期版本或 legacy defaultSchedule），無則使用固定兼課設定的 scheduleSlots
+ * 固定兼課時段：優先使用教師設定的課表（教師管理之預設課表），無則使用固定兼課設定的 scheduleSlots
  */
-export function getEffectiveFixedOvertimeSlots(
-  teacher: Teacher | undefined,
-  config: FixedOvertimeConfig,
-  activeSemesterId?: string | null,
-): { day: number; period: string }[] {
-  const sched = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
-  if (sched && sched.length > 0) {
-    return sched.map((s) => ({ day: s.day, period: s.period }));
+export function getEffectiveFixedOvertimeSlots(teacher: Teacher | undefined, config: FixedOvertimeConfig): { day: number; period: string }[] {
+  if (teacher?.defaultSchedule && teacher.defaultSchedule.length > 0) {
+    return teacher.defaultSchedule.map(s => ({ day: s.day, period: s.period }));
   }
   return config.scheduleSlots || [];
 }
 
 /** 由有效時段計算週一～週五每日節數 */
-export function getEffectiveFixedOvertimePeriods(
-  teacher: Teacher | undefined,
-  config: FixedOvertimeConfig,
-  activeSemesterId?: string | null,
-): number[] {
-  const slots = getEffectiveFixedOvertimeSlots(teacher, config, activeSemesterId);
+export function getEffectiveFixedOvertimePeriods(teacher: Teacher | undefined, config: FixedOvertimeConfig): number[] {
+  const slots = getEffectiveFixedOvertimeSlots(teacher, config);
   const periods = [0, 0, 0, 0, 0];
   slots.forEach(s => { if (s.day >= 1 && s.day <= 5) periods[s.day - 1]++; });
   return periods;

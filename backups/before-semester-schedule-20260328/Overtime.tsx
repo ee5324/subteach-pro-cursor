@@ -10,7 +10,6 @@ import { TeacherType, OvertimeRecord, HOURLY_RATE, Teacher, ReductionItem, PayTy
 import { Calendar, Calculator, Coins, Save, AlertCircle, ChevronLeft, ChevronRight, GraduationCap, X, Clock, Info, RefreshCcw, RefreshCw, Flag, CloudUpload, Loader2, Search, Filter, MinusCircle, Plus, Trash2, Edit2, Settings, AlertTriangle, ArrowDownToLine, Printer, FileText, FileOutput, Users, Copy, BarChart3, RotateCcw, GripVertical } from 'lucide-react';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import { getStandardBase, parseLocalDate, normalizeDateString, getEffectiveFixedOvertimeSlots } from '../utils/calculations';
-import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import {
   getMonthlyWeeksStructureForOvertimeExport,
   computeWeeklyExportCountsForPreciseOvertime,
@@ -290,7 +289,7 @@ export interface OvertimePageProps {
 }
 
 const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
-  const { teachers, overtimeRecords, updateOvertimeRecord, updateTeacher, records: leaveRecords, holidays, settings, fixedOvertimeConfig, activeSemesterId } = useAppStore();
+  const { teachers, overtimeRecords, updateOvertimeRecord, updateTeacher, records: leaveRecords, holidays, settings, fixedOvertimeConfig } = useAppStore();
 
   // State: Month Selection
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
@@ -598,7 +597,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
                       const originalTeacherConfig = (fixedOvertimeConfig || []).find(c => c.teacherId === record.originalTeacherId);
                       const originalTeacher = (teachers || []).find(t => t.id === record.originalTeacherId);
                       if (originalTeacherConfig && originalTeacher) {
-                          const effectiveSlots = getEffectiveFixedOvertimeSlots(originalTeacher, originalTeacherConfig, activeSemesterId);
+                          const effectiveSlots = getEffectiveFixedOvertimeSlots(originalTeacher, originalTeacherConfig);
                           const dateObj = parseLocalDate(normDate);
                           const dayOfWeek = dateObj.getDay();
                           isAutoOvertime = effectiveSlots.some(s => s.day === dayOfWeek && String(s.period) === String(slot.period));
@@ -623,7 +622,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
                           const originalTeacherConfig = (fixedOvertimeConfig || []).find(c => c.teacherId === record.originalTeacherId);
                           const originalTeacher = (teachers || []).find(t => t.id === record.originalTeacherId);
                           if (originalTeacherConfig && originalTeacher && detail.selectedPeriods) {
-                              const effectiveSlots = getEffectiveFixedOvertimeSlots(originalTeacher, originalTeacherConfig, activeSemesterId);
+                              const effectiveSlots = getEffectiveFixedOvertimeSlots(originalTeacher, originalTeacherConfig);
                               const dateObj = parseLocalDate(normDate);
                               const dayOfWeek = dateObj.getDay();
                               detail.selectedPeriods.forEach(p => {
@@ -661,7 +660,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
         // 超鐘點與固定兼課為獨立事件：本頁僅用「本頁當月設定的超鐘點週課表」，不納入固定兼課名單
         const overtimeSlots: { day: number; period: string }[] = existing?.overtimeSlots ?? [];
         
-        const scheduleCount = resolveTeacherDefaultSchedule(t, activeSemesterId)?.length ?? 0;
+        const scheduleCount = t.defaultSchedule?.length || 0;
         const autoActual = scheduleCount > 0 ? scheduleCount : defaultBasic;
         const preciseData = calculatePreciseOvertime(t.id, overtimeSlots);
         const subData = calculateSubstituteAdditions(t.id);
@@ -711,7 +710,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
             isSubstituteOnly,
         };
     });
-  }, [scopeTeachers, overtimeRecords, selectedMonth, calculatedWeeks, leaveRecords, holidays, settings?.semesterStart, settings?.semesterEnd, graduationDate, fixedOvertimeConfig, activeSemesterId]);
+  }, [scopeTeachers, overtimeRecords, selectedMonth, calculatedWeeks, leaveRecords, holidays, settings?.semesterStart, settings?.semesterEnd, graduationDate, fixedOvertimeConfig]);
 
   const compareRowsBySortOrder = (a: typeof rowData[number], b: typeof rowData[number]) => {
       const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
@@ -788,13 +787,13 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
           yearMonth: selectedMonth, 
           sortOrder: existing?.sortOrder,
           weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0, 
-          weeklyActual: resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0,
-          weeksCount: calculatedWeeks,
-          adjustment: 0,
-          adjustmentReason: '',
-          note: '',
-          updatedAt: Date.now(),
-          overtimeSlots: []
+          weeklyActual: teacher?.defaultSchedule?.length || 0, 
+          weeksCount: calculatedWeeks, 
+          adjustment: 0, 
+          adjustmentReason: '', 
+          note: '', 
+          updatedAt: Date.now(), 
+          overtimeSlots: [] 
       };
       const updatedRecord = { ...baseRecord, [field]: numVal, updatedAt: Date.now() };
       updateOvertimeRecord(updatedRecord);
@@ -810,7 +809,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
               yearMonth: selectedMonth,
               sortOrder: index,
               weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0,
-              weeklyActual: resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0,
+              weeklyActual: teacher?.defaultSchedule?.length || 0,
               weeksCount: calculatedWeeks,
               adjustment: 0,
               adjustmentReason: '',
@@ -871,23 +870,8 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
   };
 
   const handleSaveSchedule = (slots: { day: number; period: string }[]) => { if (!scheduleModal.teacherId) return; handleCellChange(scheduleModal.teacherId, 'overtimeSlots', slots); };
-  const handleResetToSchedule = (teacherId: string) => {
-      const teacher = (teachers || []).find((t) => t.id === teacherId);
-      const n = teacher ? (resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0) : 0;
-      if (n > 0) handleCellChange(teacherId, 'weeklyActual', n);
-  };
-  const handleBatchResetToSchedule = () => {
-      if (!confirm(`確定要將本月 (${selectedMonth}) ${variant === 'indigenousFullTime' ? '本清冊內' : '所有'}教師的「實授節數」重設為「預設課表總節數」嗎？\n此操作將覆蓋目前的手動輸入值。`)) return;
-      let updateCount = 0;
-      (scopeTeachers || []).forEach((t) => {
-          const n = resolveTeacherDefaultSchedule(t, activeSemesterId)?.length ?? 0;
-          if (n > 0) {
-              handleCellChange(t.id, 'weeklyActual', n);
-              updateCount++;
-          }
-      });
-      showModal('完成', `已更新 ${updateCount} 位教師的實授節數。`, 'success');
-  };
+  const handleResetToSchedule = (teacherId: string) => { const teacher = (teachers || []).find(t => t.id === teacherId); if (teacher?.defaultSchedule) { handleCellChange(teacherId, 'weeklyActual', teacher.defaultSchedule.length); } };
+  const handleBatchResetToSchedule = () => { if (!confirm(`確定要將本月 (${selectedMonth}) ${variant === 'indigenousFullTime' ? '本清冊內' : '所有'}教師的「實授節數」重設為「預設課表總節數」嗎？\n此操作將覆蓋目前的手動輸入值。`)) return; let updateCount = 0; (scopeTeachers || []).forEach(t => { if (t.defaultSchedule && t.defaultSchedule.length > 0) { handleCellChange(t.id, 'weeklyActual', t.defaultSchedule.length); updateCount++; } }); showModal('完成', `已更新 ${updateCount} 位教師的實授節數。`, 'success'); };
   
   const handleLoadFromTeacherDefaults = () => {
     showModal(
@@ -907,7 +891,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
                         yearMonth: selectedMonth,
                         sortOrder: existing?.sortOrder,
                         weeklyBasic: existing?.weeklyBasic ?? calculateDefaultBasic(teacher),
-                        weeklyActual: existing?.weeklyActual ?? (resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0),
+                        weeklyActual: existing?.weeklyActual ?? (teacher.defaultSchedule?.length || 0),
                         weeksCount: existing?.weeksCount ?? calculatedWeeks,
                         adjustment: existing?.adjustment ?? 0,
                         adjustmentReason: existing?.adjustmentReason ?? '',

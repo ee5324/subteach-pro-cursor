@@ -5,10 +5,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
-import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer, ChevronDown, ChevronUp, Layers, Edit2, CheckCircle } from 'lucide-react';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
-import { TeacherType, SalaryGrade } from '../types';
+import { TeacherType, SalaryGrade, SemesterDefinition } from '../types';
 
 /** 匯出／列印教師名單：類別排序（校內 → 校外 → 語言），同類別內依姓名 */
 const TEACHER_TYPE_SORT_ORDER: Record<string, number> = {
@@ -18,7 +18,30 @@ const TEACHER_TYPE_SORT_ORDER: Record<string, number> = {
 };
 
 const Settings: React.FC = () => {
-  const { holidays, addHoliday, removeHoliday, settings, updateSettings, loadFromGas, migrateToFirebase, isSubteachAdmin, subteachAllowedUsers, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser, teachers, salaryGrades, upsertSalaryGrades, seedSalaryGradesFromBuiltIn } = useAppStore();
+  const {
+    holidays,
+    addHoliday,
+    removeHoliday,
+    settings,
+    updateSettings,
+    loadFromGas,
+    migrateToFirebase,
+    isSubteachAdmin,
+    subteachAllowedUsers,
+    addSubteachAllowedUser,
+    updateSubteachAllowedUser,
+    removeSubteachAllowedUser,
+    teachers,
+    salaryGrades,
+    upsertSalaryGrades,
+    seedSalaryGradesFromBuiltIn,
+    semesters,
+    activeSemesterId,
+    addSemester,
+    updateSemester,
+    removeSemester,
+    setSemesterActive,
+  } = useAppStore();
   const [newHoliday, setNewHoliday] = useState('');
   const [whitelistEmail, setWhitelistEmail] = useState('');
   const [whitelistRole, setWhitelistRole] = useState<'admin' | 'user'>('user');
@@ -41,6 +64,24 @@ const Settings: React.FC = () => {
   });
   const [deleteHolidayDate, setDeleteHolidayDate] = useState<string | null>(null);
   const [removeWhitelistEmail, setRemoveWhitelistEmail] = useState<string | null>(null);
+
+  const [semesterBusy, setSemesterBusy] = useState(false);
+  const [deleteSemesterId, setDeleteSemesterId] = useState<string | null>(null);
+  const [newSemName, setNewSemName] = useState('');
+  const [newSemStart, setNewSemStart] = useState('');
+  const [newSemEnd, setNewSemEnd] = useState('');
+  const [editingSemester, setEditingSemester] = useState<SemesterDefinition | null>(null);
+
+  const sortedSemesters = useMemo(
+    () => [...(semesters || [])].sort((a, b) => (b.startDate || '').localeCompare(a.startDate || '')),
+    [semesters],
+  );
+
+  const activeSemesterLabel = useMemo(() => {
+    if (!activeSemesterId) return null;
+    const s = (semesters || []).find((x) => x.id === activeSemesterId);
+    return s?.name || activeSemesterId;
+  }, [activeSemesterId, semesters]);
 
   useEffect(() => {
     setSalaryRows(
@@ -87,6 +128,98 @@ const Settings: React.FC = () => {
 
   const handleSaveDateSettings = (field: 'semesterStart' | 'semesterEnd' | 'graduationDate', value: string) => {
       updateSettings({ ...settings, [field]: value });
+  };
+
+  const handleAddSemester = async () => {
+    const name = newSemName.trim();
+    if (!name || !newSemStart || !newSemEnd) {
+      setModal({ isOpen: true, title: '欄位不完整', message: '請填寫學期名稱、開始與結束日期。', type: 'warning' });
+      return;
+    }
+    if (newSemEnd < newSemStart) {
+      setModal({ isOpen: true, title: '日期有誤', message: '結束日期不可早於開始日期。', type: 'warning' });
+      return;
+    }
+    setSemesterBusy(true);
+    try {
+      const sem: SemesterDefinition = {
+        id: crypto.randomUUID(),
+        name,
+        startDate: newSemStart,
+        endDate: newSemEnd,
+      };
+      await addSemester(sem);
+      setNewSemName('');
+      setNewSemStart('');
+      setNewSemEnd('');
+      setModal({
+        isOpen: true,
+        title: '已新增學期',
+        message: `已新增「${name}」並設為作用中學期。教師管理中的預設課表將寫入此學期。`,
+        type: 'success',
+      });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '新增失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setSemesterBusy(false);
+    }
+  };
+
+  const handleSaveEditedSemester = async () => {
+    if (!editingSemester) return;
+    const { name, startDate, endDate } = editingSemester;
+    if (!name?.trim() || !startDate || !endDate) {
+      setModal({ isOpen: true, title: '欄位不完整', message: '請填寫學期名稱與起迄日期。', type: 'warning' });
+      return;
+    }
+    if (endDate < startDate) {
+      setModal({ isOpen: true, title: '日期有誤', message: '結束日期不可早於開始日期。', type: 'warning' });
+      return;
+    }
+    setSemesterBusy(true);
+    try {
+      await updateSemester({
+        ...editingSemester,
+        name: name.trim(),
+        startDate,
+        endDate,
+      });
+      setEditingSemester(null);
+      setModal({ isOpen: true, title: '已儲存', message: '學期資料已更新。', type: 'success' });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '儲存失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setSemesterBusy(false);
+    }
+  };
+
+  const handleSetActiveSemester = async (id: string) => {
+    setSemesterBusy(true);
+    try {
+      await setSemesterActive(id);
+      setModal({ isOpen: true, title: '已切換', message: '作用中學期已更新。', type: 'success' });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '切換失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setSemesterBusy(false);
+    }
+  };
+
+  const handleClearActiveSemester = async () => {
+    setSemesterBusy(true);
+    try {
+      await setSemesterActive('');
+      setModal({
+        isOpen: true,
+        title: '已清除',
+        message: '已取消指定作用中學期。教師預設課表將僅寫入傳統欄位（所有學期共用）。',
+        type: 'success',
+      });
+    } catch (e: any) {
+      setModal({ isOpen: true, title: '操作失敗', message: e?.message || '請稍後再試', type: 'error' });
+    } finally {
+      setSemesterBusy(false);
+    }
   };
 
   const handleSalaryCellChange = (idx: number, field: keyof SalaryGrade, value: number) => {
@@ -300,6 +433,89 @@ const Settings: React.FC = () => {
         confirmText="移除"
         cancelText="取消"
       />
+      <Modal
+        isOpen={!!deleteSemesterId}
+        onClose={() => setDeleteSemesterId(null)}
+        onConfirm={async () => {
+          if (!deleteSemesterId) return;
+          setSemesterBusy(true);
+          try {
+            await removeSemester(deleteSemesterId);
+            setModal({ isOpen: true, title: '已刪除', message: '該學期已從清冊移除。', type: 'success' });
+          } catch (e: any) {
+            setModal({ isOpen: true, title: '刪除失敗', message: e?.message || '請稍後再試', type: 'error' });
+          } finally {
+            setSemesterBusy(false);
+            setDeleteSemesterId(null);
+          }
+        }}
+        title="確認刪除學期"
+        message={
+          deleteSemesterId
+            ? `確定要刪除此學期？若教師曾在該學期鍵下儲存預設課表，資料仍留在教師文件中，但清冊將不再列出此學期。`
+            : ''
+        }
+        type="warning"
+        mode="confirm"
+        confirmText="刪除"
+        cancelText="取消"
+      />
+      {editingSemester && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Edit2 size={20} className="text-indigo-600" />
+              編輯學期
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">學期名稱</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={editingSemester.name}
+                  onChange={(e) => setEditingSemester({ ...editingSemester, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">開始日期</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={editingSemester.startDate || ''}
+                  onChange={(e) => setEditingSemester({ ...editingSemester, startDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">結束日期</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={editingSemester.endDate || ''}
+                  onChange={(e) => setEditingSemester({ ...editingSemester, endDate: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6 justify-end">
+              <button
+                type="button"
+                onClick={() => setEditingSemester(null)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={semesterBusy}
+                onClick={() => void handleSaveEditedSemester()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {semesterBusy ? '儲存中…' : '儲存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-slate-800 flex items-center">
@@ -313,6 +529,13 @@ const Settings: React.FC = () => {
         <div className="space-y-1">
           <CollapsibleItem title="學期與畢業日期設定">
             <p>設定學期開始與結束日期，這會影響「固定兼課」與「超鐘點」的計算週數。畢業典禮日期則用於自動扣除六年級導師畢業後的超鐘點節數。</p>
+          </CollapsibleItem>
+          <CollapsibleItem title="學期清冊與作用中學期">
+            <p>
+              在 Firestore <code className="bg-slate-100 px-1 rounded">semesters</code> 建立多筆學期後，可指定<strong>作用中學期</strong>（寫入{' '}
+              <code className="bg-slate-100 px-1 rounded">system/metadata.activeSemesterId</code>
+              ）。教師管理的「預設週課表」會依作用中學期分開儲存；未指定時課表只存在傳統欄位，各學期共用。
+            </p>
           </CollapsibleItem>
           <CollapsibleItem title="國定假日管理">
             <p>新增或移除國定假日與補假。系統在「精確模式計算」或「自動產生代課單」時會自動跳過這些日期，避免誤算代課費。</p>
@@ -473,6 +696,157 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
             </div>
+        </section>
+
+        {/* 學期清冊與作用中學期（預設課表分學期儲存） */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center">
+            <Layers size={20} className="mr-2 text-violet-600" />
+            學期清冊與作用中學期
+          </h2>
+          <p className="text-sm text-slate-600 mb-4">
+            指定作用中學期後，教師管理編輯的「預設週課表」會寫入該學期專用版本；切換學期即可維護不同學年的課表。
+          </p>
+          <div className="rounded-lg border border-violet-100 bg-violet-50/80 p-4 mb-4 flex flex-wrap items-center gap-2 text-sm text-violet-900">
+            <CheckCircle size={18} className="text-violet-600 shrink-0" />
+            <span className="font-medium">目前作用中：</span>
+            <span>{activeSemesterLabel || '（未指定）'}</span>
+            {!activeSemesterId && (
+              <span className="text-violet-700/90 text-xs w-full mt-1 sm:mt-0 sm:w-auto">
+                未指定時，課表僅使用傳統欄位，與學期分版無關。
+              </span>
+            )}
+          </div>
+
+          {isSubteachAdmin ? (
+            <>
+              <div className="border border-slate-200 rounded-lg overflow-hidden mb-6">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold text-slate-600">學期名稱</th>
+                      <th className="px-4 py-3 font-semibold text-slate-600">起迄</th>
+                      <th className="px-4 py-3 font-semibold text-slate-600">狀態</th>
+                      <th className="px-4 py-3 font-semibold text-slate-600 text-right">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {sortedSemesters.map((sem) => (
+                      <tr key={sem.id} className="hover:bg-slate-50/80">
+                        <td className="px-4 py-3 font-medium text-slate-800">{sem.name}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                          {sem.startDate} ~ {sem.endDate}
+                        </td>
+                        <td className="px-4 py-3">
+                          {activeSemesterId === sem.id ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-800">
+                              作用中
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
+                          {activeSemesterId !== sem.id && (
+                            <button
+                              type="button"
+                              disabled={semesterBusy}
+                              onClick={() => void handleSetActiveSemester(sem.id)}
+                              className="text-xs px-2 py-1 rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                            >
+                              設為作用中
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={semesterBusy}
+                            onClick={() => setEditingSemester({ ...sem })}
+                            className="text-xs px-2 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            編輯
+                          </button>
+                          <button
+                            type="button"
+                            disabled={semesterBusy}
+                            onClick={() => setDeleteSemesterId(sem.id)}
+                            className="text-xs px-2 py-1 rounded-md text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            刪除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {sortedSemesters.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                          尚無學期資料，請於下方新增。
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-6">
+                <button
+                  type="button"
+                  disabled={semesterBusy || !activeSemesterId}
+                  onClick={() => void handleClearActiveSemester()}
+                  className="px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  清除作用中學期
+                </button>
+              </div>
+
+              <div className="border border-dashed border-violet-200 rounded-lg p-4 bg-slate-50/50">
+                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <Plus size={16} className="text-violet-600" />
+                  新增學期
+                </h3>
+                <p className="text-xs text-slate-500 mb-3">新增後會自動設為<strong>作用中學期</strong>。</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">學期名稱</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none"
+                      placeholder="例：114學年度第1學期"
+                      value={newSemName}
+                      onChange={(e) => setNewSemName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">開始日期</label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none"
+                      value={newSemStart}
+                      onChange={(e) => setNewSemStart(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">結束日期</label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none"
+                      value={newSemEnd}
+                      onChange={(e) => setNewSemEnd(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={semesterBusy}
+                  onClick={() => void handleAddSemester()}
+                  className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium disabled:opacity-50"
+                >
+                  {semesterBusy ? '處理中…' : '新增並設為作用中'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">僅管理員可新增、編輯或切換學期清冊。若需調整，請聯絡管理員。</p>
+          )}
         </section>
 
         {/* Salary Grades: 可收放編輯容器 */}

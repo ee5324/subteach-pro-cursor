@@ -4,7 +4,6 @@ import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
 import { normalizeTaiwanMobileDigits } from '../utils/taiwanPhone';
-import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import { isSubstituteBusyBlockExpiredForAutoCleanup } from '../utils/substituteBusyBlocks';
 import { db, auth } from '../src/lib/firebase';
 import {
@@ -432,16 +431,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     options?: { fixedOvertimeConfigForCheck?: FixedOvertimeConfig[] },
   ) => {
     if (!db || !teacher.name?.trim()) return;
-    const rawSched = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
-    const schedule =
-      rawSched && rawSched.length > 0
-        ? rawSched.map((s) => ({
-            day: s.day,
-            period: s.period,
-            subject: s.subject || '',
-            className: s.className || '',
-          }))
-        : [];
+    const schedule = teacher.defaultSchedule && teacher.defaultSchedule.length > 0
+      ? teacher.defaultSchedule.map(s => ({ day: s.day, period: s.period, subject: s.subject || '', className: s.className || '' }))
+      : [];
     const fo = options?.fixedOvertimeConfigForCheck ?? fixedOvertimeConfig;
     const inFixedConfig = fo.some((c) => c.teacherId === teacher.id);
     const isFixedOvertime = Boolean(teacher.isFixedOvertimeTeacher) || inFixedConfig;
