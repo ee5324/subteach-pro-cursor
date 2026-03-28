@@ -19,6 +19,11 @@
     *   支援批次匯出代課單。
 *   **超鐘點計算**：針對校內教師計算每週超鐘點費用。
 
+## 網址與部署（單一對照）
+
+對外網址、Vercel `api/*`、GAS、Firebase、LINE Webhook 等請以 **[`docs/系統網址與部署一覽.md`](docs/系統網址與部署一覽.md)** 為準，避免在多處重複維護連結。  
+本 repo 的 `firebase.json` 僅設定 **Firestore**；`npm run firebase:deploy` 亦只部署規則。
+
 ---
 
 ## 🚀 安裝與部署指南
@@ -35,7 +40,7 @@
     *   在試算表中，點選 `擴充功能` > `Apps Script`。
 
 3.  **複製程式碼**：
-    *   將專案中 `gas/` 資料夾內的所有檔案 (`AppConfig.gs`, `Controller.gs`, `DocManager.gs`, `SheetManager.gs`, `Setup.gs`, `Utilities.gs`) 內容複製到 Apps Script 編輯器中對應的檔案。
+    *   將專案中 `gas/` 資料夾內**所有** `.gs` 檔依檔名一對一複製到 Apps Script（勿漏檔；檔名需與編輯器內一致）。
 
 4.  **初始化系統**：
     *   開啟 `AppConfig.gs`，將 `SPREADSHEET_ID` 填入您的試算表 ID。
@@ -57,7 +62,7 @@
     ```
 
 2.  **設定連線**：
-    *   開啟 `src/config.ts` (或 `config.ts`)。
+    *   開啟專案根目錄的 `config.ts`。
     *   將 `GAS_WEB_APP_URL` 修改為您剛剛複製的 Web App URL。
     *   或者，您也可以在系統首次啟動時，於登入畫面輸入網址。
 
