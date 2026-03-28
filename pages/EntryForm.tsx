@@ -366,7 +366,7 @@ const EntryForm: React.FC = () => {
       const teacher = teachers.find((t) => t.id === originalTeacherId);
       const defSched = resolveTeacherDefaultSchedule(teacher, activeSemesterId);
       if (!teacher || !defSched || defSched.length === 0) {
-           if (!isAuto) showModal({ title: '無資料', message: '該教師尚未設定預設課表（或作用中學期尚無課表），請先至「教師管理」針對目前學期設定。', type: 'warning' });
+           if (!isAuto) showModal({ title: '無資料', message: '該教師在目前「綁定學期」下尚無預設課表，或尚未設定任何預設課表。請至「教師管理」編輯預設週課表（並確認系統設定中的綁定學期是否正確）。', type: 'warning' });
            return;
       }
 

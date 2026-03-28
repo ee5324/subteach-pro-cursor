@@ -1169,11 +1169,15 @@ export default function TeacherManagement() {
               <div>
                   {activeSemesterLabel ? (
                     <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
-                      正在編輯學期：<strong>{activeSemesterLabel}</strong>（存檔後寫入該學期專用課表；並同步更新預設課表欄位供相容）
+                      預設課表綁定學期：<strong>{activeSemesterLabel}</strong>
+                      <span className="block mt-1 text-amber-800/95 font-normal">
+                        存檔後會寫入「這一學期」專用版本（與系統設定一致）；並同步更新單一預設課表欄位供舊流程相容。
+                      </span>
                     </p>
                   ) : (
                     <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 mb-2">
-                      尚未設定<strong>作用中學期</strong>（Firestore <code className="text-[11px]">system/metadata</code> 的 <code className="text-[11px]">activeSemesterId</code>），課表僅存入傳統欄位，所有學期共用。
+                      尚未在<strong>系統設定</strong>指定「預設課表要依哪一學期分開存」（<code className="text-[11px]">system/metadata.activeSemesterId</code>）。
+                      <span className="block mt-1">目前課表只會存在單一欄位，<strong>不分學期、全系統共用一版</strong>。</span>
                     </p>
                   )}
                   <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center bg-slate-100 p-2 rounded justify-between">

@@ -1,7 +1,7 @@
 import type { Teacher, TeacherScheduleSlot } from '../types';
 
 /**
- * 取得「目前作用中學期」應使用的預設課表。
+ * 取得「全站綁定學期」（activeSemesterId）應使用的預設課表。
  * - 若該學期在 `defaultSchedulesBySemesterId` 已有鍵（含空陣列），優先使用。
  * - 否則退回 `defaultSchedule`（舊資料相容）。
  */
@@ -23,7 +23,7 @@ export function resolveTeacherDefaultSchedule(
 }
 
 /**
- * 儲存教師時：將表單上的預設課表寫入作用中學期（若有），並維持 `defaultSchedule` 與之一致供舊程式路徑使用。
+ * 儲存教師時：若有綁定學期，將表單課表寫入該學期鍵並同步 `defaultSchedule`（供舊路徑相容）。
  */
 export function mergeTeacherScheduleForSave(
   teacher: Teacher,

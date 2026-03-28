@@ -155,7 +155,7 @@ const Settings: React.FC = () => {
       setModal({
         isOpen: true,
         title: '已新增學期',
-        message: `已新增「${name}」並設為作用中學期。教師管理中的預設課表將寫入此學期。`,
+        message: `已新增「${name}」，並設為「全站預設課表綁定學期」。之後在教師管理編輯的預設週課表會存成這一學期的版本。`,
         type: 'success',
       });
     } catch (e: any) {
@@ -197,7 +197,13 @@ const Settings: React.FC = () => {
     setSemesterBusy(true);
     try {
       await setSemesterActive(id);
-      setModal({ isOpen: true, title: '已切換', message: '作用中學期已更新。', type: 'success' });
+      setModal({
+        isOpen: true,
+        title: '已切換綁定學期',
+        message:
+          '「全站預設課表綁定學期」已更新。接下來教師管理、代課帶入課表、超鐘點／固定兼課相關計算，都會改用新學期底下存好的預設課表。',
+        type: 'success',
+      });
     } catch (e: any) {
       setModal({ isOpen: true, title: '切換失敗', message: e?.message || '請稍後再試', type: 'error' });
     } finally {
@@ -211,8 +217,9 @@ const Settings: React.FC = () => {
       await setSemesterActive('');
       setModal({
         isOpen: true,
-        title: '已清除',
-        message: '已取消指定作用中學期。教師預設課表將僅寫入傳統欄位（所有學期共用）。',
+        title: '已取消綁定',
+        message:
+          '已取消「依學期分版」。教師預設課表只會存在單一欄位，全學年／全學期共用同一版（舊資料相容模式）。',
         type: 'success',
       });
     } catch (e: any) {
@@ -452,7 +459,7 @@ const Settings: React.FC = () => {
         title="確認刪除學期"
         message={
           deleteSemesterId
-            ? `確定要刪除此學期？若教師曾在該學期鍵下儲存預設課表，資料仍留在教師文件中，但清冊將不再列出此學期。`
+            ? `確定要刪除此學期？若教師曾在「這一學期」底下存過預設課表，那些資料仍會留在教師文件中，只是本清冊不再顯示這筆學期。`
             : ''
         }
         type="warning"
@@ -530,11 +537,15 @@ const Settings: React.FC = () => {
           <CollapsibleItem title="學期與畢業日期設定">
             <p>設定學期開始與結束日期，這會影響「固定兼課」與「超鐘點」的計算週數。畢業典禮日期則用於自動扣除六年級導師畢業後的超鐘點節數。</p>
           </CollapsibleItem>
-          <CollapsibleItem title="學期清冊與作用中學期">
+          <CollapsibleItem title="學期清冊：預設課表要依哪一學期分開存？">
             <p>
-              在 Firestore <code className="bg-slate-100 px-1 rounded">semesters</code> 建立多筆學期後，可指定<strong>作用中學期</strong>（寫入{' '}
+              這裡的<strong>「綁定學期」</strong>意思是：全站現在要以<strong>哪一個學期名義</strong>來讀寫每位教師的<strong>預設週課表</strong>（存在 Firestore{' '}
               <code className="bg-slate-100 px-1 rounded">system/metadata.activeSemesterId</code>
-              ）。教師管理的「預設週課表」會依作用中學期分開儲存；未指定時課表只存在傳統欄位，各學期共用。
+              ，對應 <code className="bg-slate-100 px-1 rounded">semesters</code> 裡的某一筆）。
+            </p>
+            <p className="mt-2">
+              有綁定時：教師管理存檔會寫入該學期專用版本，代課登錄帶入課表、超鐘點實授節數、固定兼課與課表重疊判斷等也會跟著用<strong>同一學期</strong>底下的課表。
+              未綁定時：全系統只認一份預設課表（傳統單一欄位），不區分學期。
             </p>
           </CollapsibleItem>
           <CollapsibleItem title="國定假日管理">
@@ -698,23 +709,30 @@ const Settings: React.FC = () => {
             </div>
         </section>
 
-        {/* 學期清冊與作用中學期（預設課表分學期儲存） */}
+        {/* 學期清冊：全站預設課表綁定哪一學期 */}
         <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center">
             <Layers size={20} className="mr-2 text-violet-600" />
-            學期清冊與作用中學期
+            學期清冊（預設課表綁定哪一學期）
           </h2>
-          <p className="text-sm text-slate-600 mb-4">
-            指定作用中學期後，教師管理編輯的「預設週課表」會寫入該學期專用版本；切換學期即可維護不同學年的課表。
+          <p className="text-sm text-slate-600 mb-3">
+            <strong>白話說</strong>：現在全系統要以哪一個學期的「名分」，來編輯與使用每位老師的<strong>預設週課表</strong>。換新學年時，先<strong>改綁定學期</strong>，再在教師管理裡維護新學期的課表，就不會蓋掉舊學期的資料。
           </p>
-          <div className="rounded-lg border border-violet-100 bg-violet-50/80 p-4 mb-4 flex flex-wrap items-center gap-2 text-sm text-violet-900">
-            <CheckCircle size={18} className="text-violet-600 shrink-0" />
-            <span className="font-medium">目前作用中：</span>
-            <span>{activeSemesterLabel || '（未指定）'}</span>
+          <p className="text-xs text-slate-500 mb-4 border-l-2 border-violet-200 pl-3">
+            會跟著綁定學期走的包含：教師管理預設課表、代課登錄帶入課表、超鐘點實授節數與重設、固定兼課與課表重疊判斷、公開課表同步等。
+          </p>
+          <div className="rounded-lg border border-violet-100 bg-violet-50/80 p-4 mb-4 text-sm text-violet-900 space-y-2">
+            <div className="flex flex-wrap items-start gap-2">
+              <CheckCircle size={18} className="text-violet-600 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-violet-950">目前全站預設課表綁定學期</div>
+                <div className="text-base font-medium mt-1">{activeSemesterLabel || '（未指定 — 全系統共用單一版預設課表）'}</div>
+              </div>
+            </div>
             {!activeSemesterId && (
-              <span className="text-violet-700/90 text-xs w-full mt-1 sm:mt-0 sm:w-auto">
-                未指定時，課表僅使用傳統欄位，與學期分版無關。
-              </span>
+              <p className="text-xs text-violet-800/90 pl-7 border-t border-violet-100/80 pt-2">
+                未指定時，沒有「依學期分開存」：所有人的預設課表只存在同一組欄位，適合尚未啟用多學期分版時使用。
+              </p>
             )}
           </div>
 
@@ -726,7 +744,7 @@ const Settings: React.FC = () => {
                     <tr>
                       <th className="px-4 py-3 font-semibold text-slate-600">學期名稱</th>
                       <th className="px-4 py-3 font-semibold text-slate-600">起迄</th>
-                      <th className="px-4 py-3 font-semibold text-slate-600">狀態</th>
+                      <th className="px-4 py-3 font-semibold text-slate-600">預設課表</th>
                       <th className="px-4 py-3 font-semibold text-slate-600 text-right">操作</th>
                     </tr>
                   </thead>
@@ -739,11 +757,14 @@ const Settings: React.FC = () => {
                         </td>
                         <td className="px-4 py-3">
                           {activeSemesterId === sem.id ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-800">
-                              作用中
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-800"
+                              title="全系統讀寫預設週課表時，使用這一學期底下存的版本"
+                            >
+                              全站採用
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-xs">—</span>
+                            <span className="text-slate-400 text-xs">其他學期</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
@@ -753,8 +774,9 @@ const Settings: React.FC = () => {
                               disabled={semesterBusy}
                               onClick={() => void handleSetActiveSemester(sem.id)}
                               className="text-xs px-2 py-1 rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                              title="之後編輯預設課表、代課帶課表等，都改讀寫這一學期的版本"
                             >
-                              設為作用中
+                              改為綁定此學期
                             </button>
                           )}
                           <button
@@ -793,8 +815,9 @@ const Settings: React.FC = () => {
                   disabled={semesterBusy || !activeSemesterId}
                   onClick={() => void handleClearActiveSemester()}
                   className="px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="取消依學期分版，改回全站只維護一份預設課表"
                 >
-                  清除作用中學期
+                  取消學期綁定（共用單一課表）
                 </button>
               </div>
 
@@ -803,7 +826,9 @@ const Settings: React.FC = () => {
                   <Plus size={16} className="text-violet-600" />
                   新增學期
                 </h3>
-                <p className="text-xs text-slate-500 mb-3">新增後會自動設為<strong>作用中學期</strong>。</p>
+                <p className="text-xs text-slate-500 mb-3">
+                  新增後會自動成為<strong>全站預設課表綁定學期</strong>（與按下「改為綁定此學期」效果相同）。
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                   <div className="md:col-span-3">
                     <label className="block text-xs font-bold text-slate-700 mb-1">學期名稱</label>
@@ -840,12 +865,14 @@ const Settings: React.FC = () => {
                   onClick={() => void handleAddSemester()}
                   className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm font-medium disabled:opacity-50"
                 >
-                  {semesterBusy ? '處理中…' : '新增並設為作用中'}
+                  {semesterBusy ? '處理中…' : '新增並設為綁定學期'}
                 </button>
               </div>
             </>
           ) : (
-            <p className="text-sm text-slate-500">僅管理員可新增、編輯或切換學期清冊。若需調整，請聯絡管理員。</p>
+            <p className="text-sm text-slate-500">
+              僅管理員可維護學期清冊，或切換「預設課表綁定哪一學期」。若需調整，請聯絡管理員。
+            </p>
           )}
         </section>
 

@@ -304,7 +304,7 @@ export function deduplicateDetails(details: SubstituteDetail[]): SubstituteDetai
 }
 
 /**
- * 固定兼課時段：優先使用教師設定的課表（作用中學期版本或 legacy defaultSchedule），無則使用固定兼課設定的 scheduleSlots
+ * 固定兼課時段：優先使用教師預設課表（依 activeSemesterId 解析或 legacy defaultSchedule），無則使用固定兼課 scheduleSlots
  */
 export function getEffectiveFixedOvertimeSlots(
   teacher: Teacher | undefined,

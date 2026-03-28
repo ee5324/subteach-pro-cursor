@@ -164,7 +164,7 @@ export interface Teacher {
   
   // New: Default Schedule (Imported)
   defaultSchedule?: TeacherScheduleSlot[];
-  /** 依學期 ID 分版本的預設週課表（與 Firestore `semesters` 的 doc id 對應）；鍵存在時（含空陣列）優先於 defaultSchedule */
+  /** 依學期分開存的預設週課表（key = `semesters` 文件 id，與 `system/metadata.activeSemesterId` 綁定者）；該 key 存在時（含空陣列）優先於 defaultSchedule */
   defaultSchedulesBySemesterId?: Record<string, TeacherScheduleSlot[]>;
 
   // New: Default Overtime Slots (Base configuration for monthly overtime)
