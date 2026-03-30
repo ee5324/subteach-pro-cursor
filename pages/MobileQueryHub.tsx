@@ -3,6 +3,8 @@ import { Calendar, Search, User, Wallet, ChevronLeft, ChevronRight, ExternalLink
 import { useAppStore } from '../store/useAppStore';
 import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
+import { PayType } from '../types';
+import { deduplicateDetails } from '../utils/calculations';
 
 type TabKey = 'weekly' | 'teacher' | 'salary';
 
@@ -54,6 +56,7 @@ const MobileQueryHub: React.FC = () => {
   const [viewDate, setViewDate] = useState(new Date());
   const [teacherQuery, setTeacherQuery] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [salaryTeacherQuery, setSalaryTeacherQuery] = useState('');
   const [salaryTeacherId, setSalaryTeacherId] = useState('');
   const [salaryMonth, setSalaryMonth] = useState(() => {
     const now = new Date();
@@ -107,6 +110,17 @@ const MobileQueryHub: React.FC = () => {
     [teachers, salaryTeacherId],
   );
 
+  const filteredSalaryTeachers = useMemo(() => {
+    const q = salaryTeacherQuery.trim().toLowerCase();
+    const source = [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    if (!q) return source;
+    return source.filter((t) =>
+      (t.name || '').toLowerCase().includes(q) ||
+      (t.phone || '').includes(q) ||
+      (t.subjects || '').toLowerCase().includes(q),
+    );
+  }, [teachers, salaryTeacherQuery]);
+
   const monthlyBreakdown = useMemo(() => {
     if (!selectedSalaryTeacher) return null;
     return calculateSubstituteMonthlyBreakdown({
@@ -121,6 +135,38 @@ const MobileQueryHub: React.FC = () => {
       activeSemesterId,
     });
   }, [selectedSalaryTeacher, salaryMonth, records, teachers, overtimeRecords, fixedOvertimeConfig, holidays, settings, activeSemesterId]);
+
+  const salaryDetails = useMemo(() => {
+    if (!selectedSalaryTeacher) return [];
+    const periodOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
+    const rows: { date: string; originalTeacherName: string; periodText: string; amount: number }[] = [];
+    records.forEach((record) => {
+      const originalTeacherName = teachers.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
+      deduplicateDetails(record.details || []).forEach((d) => {
+        if (d.substituteTeacherId !== selectedSalaryTeacher.id) return;
+        if (!String(d.date || '').startsWith(salaryMonth)) return;
+        if (d.isOvertime === true) return;
+        let periodText = '';
+        if (d.payType === PayType.HOURLY) {
+          const periods = [...(d.selectedPeriods || [])].map((x) => String(x));
+          periods.sort((a, b) => periodOrder.indexOf(a) - periodOrder.indexOf(b));
+          periodText = periods.length > 0 ? `第${periods.join(',')}節` : `${d.periodCount || 0}節`;
+        } else if (d.payType === PayType.HALF_DAY) {
+          periodText = '半日薪';
+        } else {
+          periodText = `${d.periodCount || 1}日薪`;
+        }
+        rows.push({
+          date: String(d.date || ''),
+          originalTeacherName,
+          periodText,
+          amount: Number(d.calculatedAmount) || 0,
+        });
+      });
+    });
+    rows.sort((a, b) => a.date.localeCompare(b.date) || a.originalTeacherName.localeCompare(b.originalTeacherName, 'zh-Hant'));
+    return rows;
+  }, [selectedSalaryTeacher, salaryMonth, records, teachers]);
 
   const openSalaryTab = () => {
     if (!selectedSalaryTeacher || !monthlyBreakdown) return;
@@ -241,12 +287,12 @@ const MobileQueryHub: React.FC = () => {
         <section className="bg-white border border-slate-200 rounded-xl p-3">
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-2"><Wallet size={16} /> 代課老師月薪資整合</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-            <select value={salaryTeacherId} onChange={(e) => setSalaryTeacherId(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm">
-              <option value="">選擇代課老師</option>
-              {[...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <input
+              value={salaryTeacherQuery}
+              onChange={(e) => setSalaryTeacherQuery(e.target.value)}
+              placeholder="輸入教師姓名查詢"
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            />
             <input type="month" value={salaryMonth} onChange={(e) => setSalaryMonth(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
             <button
               onClick={openSalaryTab}
@@ -256,14 +302,63 @@ const MobileQueryHub: React.FC = () => {
               <ExternalLink size={14} /> 另開分頁顯示
             </button>
           </div>
+          <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-lg mb-3">
+            {filteredSalaryTeachers.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setSalaryTeacherId(t.id)}
+                className={`w-full text-left px-3 py-2 border-b last:border-b-0 text-sm ${salaryTeacherId === t.id ? 'bg-indigo-50' : 'bg-white'}`}
+              >
+                <div className="font-medium">{t.name}</div>
+                <div className="text-xs text-slate-500">{t.phone || '無電話'} / {t.subjects || '無科目'}</div>
+              </button>
+            ))}
+            {filteredSalaryTeachers.length === 0 && (
+              <div className="px-3 py-6 text-center text-sm text-slate-400">找不到符合的教師</div>
+            )}
+          </div>
           {selectedSalaryTeacher && monthlyBreakdown && (
-            <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 text-sm">
-              <div className="flex justify-between p-3"><span>代課費（含導師費）</span><span className="font-semibold">${monthlyBreakdown.substituteTotal.toLocaleString()}</span></div>
-              <div className="flex justify-between p-3 text-slate-500"><span>導師費（估算，已含於代課費）</span><span>${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
-              <div className="flex justify-between p-3"><span>超鐘點</span><span className="font-semibold">${monthlyBreakdown.overtimeTotal.toLocaleString()}</span></div>
-              <div className="flex justify-between p-3"><span>固定兼課</span><span className="font-semibold">${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</span></div>
-              <div className="flex justify-between p-3 bg-emerald-50"><span className="font-bold">合計</span><span className="font-bold text-emerald-700">${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
-            </div>
+            <>
+              <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 text-sm mb-3">
+                <div className="flex justify-between p-3"><span>代課費（含導師費）</span><span className="font-semibold">${monthlyBreakdown.substituteTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3 text-slate-500"><span>導師費（估算，已含於代課費）</span><span>${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3"><span>超鐘點</span><span className="font-semibold">${monthlyBreakdown.overtimeTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3"><span>固定兼課</span><span className="font-semibold">${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3 bg-emerald-50"><span className="font-bold">合計</span><span className="font-bold text-emerald-700">${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
+              </div>
+
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-700">代課狀況明細（{salaryMonth}）</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-slate-600 border-b border-slate-200">日期</th>
+                        <th className="px-3 py-2 text-left text-slate-600 border-b border-slate-200">請假教師</th>
+                        <th className="px-3 py-2 text-left text-slate-600 border-b border-slate-200">節數（第幾節）</th>
+                        <th className="px-3 py-2 text-right text-slate-600 border-b border-slate-200">金額</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {salaryDetails.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-6 text-center text-slate-400">本月無代課明細</td>
+                        </tr>
+                      ) : (
+                        salaryDetails.map((row, idx) => (
+                          <tr key={`${row.date}_${row.originalTeacherName}_${idx}`}>
+                            <td className="px-3 py-2 text-slate-700">{row.date}</td>
+                            <td className="px-3 py-2 text-slate-700">{row.originalTeacherName}</td>
+                            <td className="px-3 py-2 text-slate-600">{row.periodText}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-slate-700">${row.amount.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
           {!selectedSalaryTeacher && <div className="text-sm text-slate-400">請先選擇代課老師。</div>}
         </section>
