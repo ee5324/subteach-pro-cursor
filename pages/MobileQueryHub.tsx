@@ -173,6 +173,17 @@ const MobileQueryHub: React.FC = () => {
     const popup = window.open('', '_blank');
     if (!popup) return;
     const title = `${selectedSalaryTeacher.name} ${salaryMonth} 薪資整合`;
+    const systemUrl = `${window.location.origin}${window.location.pathname}#/`;
+    const detailRowsHtml = salaryDetails.length === 0
+      ? `<tr><td colspan="4" style="padding:10px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;">本月無代課明細</td></tr>`
+      : salaryDetails.map((row) => `
+          <tr>
+            <td style="padding:8px;border:1px solid #e2e8f0;">${row.date}</td>
+            <td style="padding:8px;border:1px solid #e2e8f0;">${row.originalTeacherName}</td>
+            <td style="padding:8px;border:1px solid #e2e8f0;">${row.periodText}</td>
+            <td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${row.amount.toLocaleString()}</td>
+          </tr>
+        `).join('');
     popup.document.write(`
       <html><head><title>${title}</title></head>
       <body style="font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding: 20px; color: #0f172a;">
@@ -185,6 +196,22 @@ const MobileQueryHub: React.FC = () => {
           <tr><td style="padding:8px;border:1px solid #e2e8f0;">固定兼課</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</td></tr>
           <tr><td style="padding:10px;border:1px solid #94a3b8;font-weight:700;">月合計</td><td style="padding:10px;border:1px solid #94a3b8;text-align:right;font-weight:700;color:#0f766e;">$${monthlyBreakdown.grandTotal.toLocaleString()}</td></tr>
         </table>
+        <h3 style="margin: 18px 0 8px 0; font-size: 16px;">代課狀況明細（${salaryMonth}）</h3>
+        <table style="border-collapse: collapse; width: 100%;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">日期</th>
+              <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">請假教師</th>
+              <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">節數（第幾節）</th>
+              <th style="padding:8px;border:1px solid #e2e8f0;text-align:right;">金額</th>
+            </tr>
+          </thead>
+          <tbody>${detailRowsHtml}</tbody>
+        </table>
+        <div style="margin-top:16px;display:flex;gap:8px;">
+          <a href="${systemUrl}" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#4f46e5;color:white;text-decoration:none;font-size:14px;">返回系統</a>
+          <button onclick="window.close()" style="padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;background:white;color:#334155;font-size:14px;">關閉此頁</button>
+        </div>
       </body></html>
     `);
     popup.document.close();
