@@ -204,7 +204,7 @@ const MobileQueryHub: React.FC = () => {
           <div style="margin-top:12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>代課費（含導師費）</span><strong>$${monthlyBreakdown.substituteTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#64748b;"><span>導師費（估算，已含於代課費）</span><span>$${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#7c3aed;"><span>家長會導師費（其中）</span><strong>$${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#7c3aed;"><span>家長會導師費（加計）</span><strong>$${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>超鐘點</span><strong>$${monthlyBreakdown.overtimeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>固定兼課</span><strong>$${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:12px;background:#ecfdf5;font-size:15px;font-weight:800;"><span>月合計</span><span style="color:#0f766e;">$${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
@@ -357,7 +357,7 @@ const MobileQueryHub: React.FC = () => {
               <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 text-sm mb-3">
                 <div className="flex justify-between p-3"><span>代課費（含導師費）</span><span className="font-semibold">${monthlyBreakdown.substituteTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3 text-slate-500"><span>導師費（估算，已含於代課費）</span><span>${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
-                <div className="flex justify-between p-3 text-violet-700 bg-violet-50/60"><span>家長會導師費（其中）</span><span className="font-semibold">${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3 text-violet-700 bg-violet-50/60"><span>家長會導師費（加計）</span><span className="font-semibold">${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3"><span>超鐘點</span><span className="font-semibold">${monthlyBreakdown.overtimeTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3"><span>固定兼課</span><span className="font-semibold">${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3 bg-emerald-50"><span className="font-bold">合計</span><span className="font-bold text-emerald-700">${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>

@@ -151,7 +151,7 @@ export function calculateSubstituteMonthlyBreakdown(args: {
     fixedOvertimeTotal = Math.round(adjustedPeriods * HOURLY_RATE);
   }
 
-  const grandTotal = substituteTotal + overtimeTotal + fixedOvertimeTotal;
+  const grandTotal = substituteTotal + ptaHomeroomFeeTotal + overtimeTotal + fixedOvertimeTotal;
   return {
     substituteTotal,
     homeroomFeeEstimate,
