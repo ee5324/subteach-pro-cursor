@@ -17,6 +17,7 @@ type SettingsLite = {
 export interface SubstituteMonthlyBreakdown {
   substituteTotal: number;
   homeroomFeeEstimate: number;
+  ptaHomeroomFeeTotal: number;
   overtimeTotal: number;
   fixedOvertimeTotal: number;
   grandTotal: number;
@@ -88,6 +89,7 @@ export function calculateSubstituteMonthlyBreakdown(args: {
 
   let substituteTotal = 0;
   let homeroomFeeEstimate = 0;
+  let ptaHomeroomFeeTotal = 0;
   records.forEach((record) => {
     const details = deduplicateDetails(record.details || []);
     details.forEach((d) => {
@@ -95,7 +97,12 @@ export function calculateSubstituteMonthlyBreakdown(args: {
       if (toYmd(d.date).startsWith(yearMonth) !== true) return;
       if (d.isOvertime === true) return;
       substituteTotal += Number(d.calculatedAmount) || 0;
-      homeroomFeeEstimate += estimateHomeroomFeeFromDetail(d.date, d.payType, d.periodCount);
+      const hm = estimateHomeroomFeeFromDetail(d.date, d.payType, d.periodCount);
+      homeroomFeeEstimate += hm;
+      // 家長會導師費（目前規則：勾選 homeroomFeeByPta 且非「自理」假別）
+      if (record.homeroomFeeByPta === true && record.leaveType !== '自理 (事假/病假)') {
+        ptaHomeroomFeeTotal += hm;
+      }
     });
   });
 
@@ -136,6 +143,7 @@ export function calculateSubstituteMonthlyBreakdown(args: {
   return {
     substituteTotal,
     homeroomFeeEstimate,
+    ptaHomeroomFeeTotal,
     overtimeTotal,
     fixedOvertimeTotal,
     grandTotal,

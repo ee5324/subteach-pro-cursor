@@ -139,7 +139,7 @@ const MobileQueryHub: React.FC = () => {
   const salaryDetails = useMemo(() => {
     if (!selectedSalaryTeacher) return [];
     const periodOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
-    const rows: { date: string; originalTeacherName: string; periodText: string; amount: number }[] = [];
+    const rows: { date: string; originalTeacherName: string; periodText: string; amount: number; isPtaHomeroom: boolean }[] = [];
     records.forEach((record) => {
       const originalTeacherName = teachers.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
       deduplicateDetails(record.details || []).forEach((d) => {
@@ -156,11 +156,13 @@ const MobileQueryHub: React.FC = () => {
         } else {
           periodText = `${d.periodCount || 1}日薪`;
         }
+        const isPtaHomeroom = !!record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)' && d.payType === PayType.HALF_DAY;
         rows.push({
           date: String(d.date || ''),
           originalTeacherName,
           periodText,
           amount: Number(d.calculatedAmount) || 0,
+          isPtaHomeroom,
         });
       });
     });
@@ -183,7 +185,7 @@ const MobileQueryHub: React.FC = () => {
               <div style="font-weight:700;color:#334155;font-size:14px;">$${row.amount.toLocaleString()}</div>
             </div>
             <div style="margin-top:6px;font-size:13px;color:#334155;">請假教師：${row.originalTeacherName}</div>
-            <div style="margin-top:4px;font-size:13px;color:#475569;">節數：${row.periodText}</div>
+            <div style="margin-top:4px;font-size:13px;color:#475569;">節數：${row.periodText}${row.isPtaHomeroom ? '（家長會導師費）' : ''}</div>
           </div>
         `).join('');
     popup.document.write(`
@@ -202,6 +204,7 @@ const MobileQueryHub: React.FC = () => {
           <div style="margin-top:12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>代課費（含導師費）</span><strong>$${monthlyBreakdown.substituteTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#64748b;"><span>導師費（估算，已含於代課費）</span><span>$${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#7c3aed;"><span>家長會導師費（其中）</span><strong>$${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>超鐘點</span><strong>$${monthlyBreakdown.overtimeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>固定兼課</span><strong>$${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:12px;background:#ecfdf5;font-size:15px;font-weight:800;"><span>月合計</span><span style="color:#0f766e;">$${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
@@ -354,6 +357,7 @@ const MobileQueryHub: React.FC = () => {
               <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 text-sm mb-3">
                 <div className="flex justify-between p-3"><span>代課費（含導師費）</span><span className="font-semibold">${monthlyBreakdown.substituteTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3 text-slate-500"><span>導師費（估算，已含於代課費）</span><span>${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3 text-violet-700 bg-violet-50/60"><span>家長會導師費（其中）</span><span className="font-semibold">${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3"><span>超鐘點</span><span className="font-semibold">${monthlyBreakdown.overtimeTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3"><span>固定兼課</span><span className="font-semibold">${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3 bg-emerald-50"><span className="font-bold">合計</span><span className="font-bold text-emerald-700">${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
@@ -381,7 +385,10 @@ const MobileQueryHub: React.FC = () => {
                           <tr key={`${row.date}_${row.originalTeacherName}_${idx}`}>
                             <td className="px-3 py-2 text-slate-700">{row.date}</td>
                             <td className="px-3 py-2 text-slate-700">{row.originalTeacherName}</td>
-                            <td className="px-3 py-2 text-slate-600">{row.periodText}</td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {row.periodText}
+                              {row.isPtaHomeroom && <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">家長會導師費</span>}
+                            </td>
                             <td className="px-3 py-2 text-right font-semibold text-slate-700">${row.amount.toLocaleString()}</td>
                           </tr>
                         ))
