@@ -7,6 +7,7 @@ import { PayType, SubstituteDetail, LeaveRecord, LeaveType, ProcessingStatus, Ti
 import { useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
+import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 
@@ -34,7 +35,7 @@ const getMonday = (dateStr: string) => {
 
 const Records: React.FC = () => {
   const navigate = useNavigate();
-  const { records, teachers, fixedOvertimeConfig, deleteRecord, updateRecord, settings, updateSettings, holidays, salaryGrades } = useAppStore(); // Added updateRecord
+  const { records, teachers, fixedOvertimeConfig, overtimeRecords, activeSemesterId, deleteRecord, updateRecord, settings, updateSettings, holidays, salaryGrades } = useAppStore(); // Added updateRecord
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempUrl, setTempUrl] = useState('');
   
@@ -371,6 +372,27 @@ const Records: React.FC = () => {
     }));
 
   }, [filteredRecords, viewMode, selectedMonth]);
+
+  const substituteCompensationMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof calculateSubstituteMonthlyBreakdown>>();
+    substituteGroups.forEach((group) => {
+      map.set(
+        group.subTeacherId,
+        calculateSubstituteMonthlyBreakdown({
+          teacherId: group.subTeacherId,
+          yearMonth: selectedMonth,
+          records,
+          teachers,
+          overtimeRecords,
+          fixedOvertimeConfig,
+          holidays,
+          settings,
+          activeSemesterId,
+        }),
+      );
+    });
+    return map;
+  }, [substituteGroups, selectedMonth, records, teachers, overtimeRecords, fixedOvertimeConfig, holidays, settings, activeSemesterId]);
 
   // Calculate Monthly Total (僅計當月明細，每筆明細只算一次；去重避免同一邏輯明細重複加總)
   const monthlyTotal = useMemo(() => {
@@ -1012,6 +1034,7 @@ const Records: React.FC = () => {
         <div className="space-y-1">
           <CollapsibleItem title="檢視模式切換">
             <p>可切換「依請假人」或「依代課人」檢視。依請假人適合核對假單；依代課人適合核對薪資與發放清冊。</p>
+            <p>在「依代課人」模式中，摘要金額會整合顯示代課、超鐘點、固定兼課，並附導師費估算拆分；可搭配右上角圖片按鈕匯出。</p>
           </CollapsibleItem>
           <CollapsibleItem title="假別篩選">
             <p>工具列可選「假別」僅顯示該類請假之代課紀錄，與代課單編輯頁之假別選項相同；選「全部」則不篩假別。</p>
@@ -1434,7 +1457,7 @@ const Records: React.FC = () => {
                   <tr>
                     <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課教師</th>
                     <th className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">代課詳情 ({selectedMonth})</th>
-                    <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">本月收入估算</th>
+                    <th className="px-6 py-4 font-semibold text-slate-700 text-right whitespace-nowrap">本月收入整合（代課+超鐘+固定兼課）</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1450,7 +1473,9 @@ const Records: React.FC = () => {
                     ) : (
                         substituteGroups.map(group => {
                             const subTeacher = teachers.find(t => t.id === group.subTeacherId);
-                            const totalIncome = (group.rows || []).reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+                            const pay = substituteCompensationMap.get(group.subTeacherId);
+                            const substituteIncome = (group.rows || []).reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+                            const totalIncome = pay?.grandTotal ?? substituteIncome;
                             
                             return (
                                 <tr key={group.subTeacherId} className="hover:bg-slate-50">
@@ -1459,6 +1484,14 @@ const Records: React.FC = () => {
                                             <div>
                                                 <div className="font-bold text-lg text-slate-800">{subTeacher?.name || '未知/待聘'}</div>
                                                 <div className="text-xs text-slate-500 mt-1">{subTeacher?.type}</div>
+                                                {pay && (
+                                                  <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-slate-600">
+                                                    <div className="bg-slate-50 border border-slate-200 rounded px-1.5 py-1">代課 ${pay.substituteTotal.toLocaleString()}</div>
+                                                    <div className="bg-slate-50 border border-slate-200 rounded px-1.5 py-1">超鐘 ${pay.overtimeTotal.toLocaleString()}</div>
+                                                    <div className="bg-slate-50 border border-slate-200 rounded px-1.5 py-1">固定兼課 ${pay.fixedOvertimeTotal.toLocaleString()}</div>
+                                                    <div className="bg-slate-50 border border-slate-200 rounded px-1.5 py-1">導師費(估) ${pay.homeroomFeeEstimate.toLocaleString()}</div>
+                                                  </div>
+                                                )}
                                                 {subTeacher?.phone && (
                                                     <div className="text-xs text-slate-400 flex items-center mt-1">
                                                         <Phone size={12} className="mr-1" />
@@ -1485,6 +1518,11 @@ const Records: React.FC = () => {
                                                 <div>
                                                     <h2 className="text-3xl font-bold text-slate-800">{subTeacher?.name} 代課課表</h2>
                                                     <p className="text-slate-500 font-medium mt-1">{selectedMonth} 月份代課彙整</p>
+                                                    {pay && (
+                                                      <p className="text-sm text-slate-600 mt-2">
+                                                        代課 ${pay.substituteTotal.toLocaleString()} + 超鐘 ${pay.overtimeTotal.toLocaleString()} + 固定兼課 ${pay.fixedOvertimeTotal.toLocaleString()} = 合計 ${pay.grandTotal.toLocaleString()}
+                                                      </p>
+                                                    )}
                                                 </div>
                                                 <div className="text-right">
                                                     {subTeacher?.phone && <p className="text-slate-600 font-bold text-lg mb-1">📞 {subTeacher.phone}</p>}

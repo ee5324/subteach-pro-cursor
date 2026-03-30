@@ -108,6 +108,13 @@ const SubstituteOverview: React.FC = () => {
                     >
                         代課老師週課表查詢（手機末四碼）
                     </a>
+                    <a
+                        href="#/mobile-query"
+                        className="inline-flex mt-2 ml-3 items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 hover:border-emerald-400 transition-colors"
+                        title="開啟手機查詢中心（總表 / 教師課表 / 月薪資）"
+                    >
+                        手機查詢中心
+                    </a>
                 </div>
                 
                 <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">

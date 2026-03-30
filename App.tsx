@@ -27,6 +27,7 @@ import PublicBoardApplicationsPage from './pages/PublicBoardApplicationsPage';
 import TeacherLeaveRequest from './pages/TeacherLeaveRequest';
 import SubstituteContactExchange from './pages/SubstituteContactExchange';
 import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
+import MobileQueryHub from './pages/MobileQueryHub';
 import { useAppStore } from './store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from './src/lib/firebase';
@@ -124,6 +125,7 @@ const App: React.FC = () => {
           <Route path="requests" element={<IncomingRequests />} />
           <Route path="public-applications" element={<PublicBoardApplicationsPage />} />
           <Route path="contact-exchange" element={<SubstituteContactExchange />} />
+          <Route path="mobile-query" element={<MobileQueryHub />} />
           <Route path="sub-pool" element={<SubPool />} />
           <Route path="substitute-applications" element={<SubstituteApplications />} />
           <Route path="entry" element={<EntryForm />} />

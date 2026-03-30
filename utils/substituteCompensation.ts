@@ -1,0 +1,143 @@
+import {
+  FixedOvertimeConfig,
+  HOMEROOM_FEE_MONTHLY,
+  HOURLY_RATE,
+  LeaveRecord,
+  OvertimeRecord,
+  PayType,
+  Teacher,
+} from '../types';
+import { deduplicateDetails, getDaysInMonth, getEffectiveFixedOvertimePeriods, parseLocalDate } from './calculations';
+
+type SettingsLite = {
+  semesterStart?: string;
+  semesterEnd?: string;
+};
+
+export interface SubstituteMonthlyBreakdown {
+  substituteTotal: number;
+  homeroomFeeEstimate: number;
+  overtimeTotal: number;
+  fixedOvertimeTotal: number;
+  grandTotal: number;
+}
+
+const toYmd = (input?: string) => {
+  if (!input) return '';
+  const d = parseLocalDate(input);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const isWorkingDate = (dateStr: string, holidays: string[], settings?: SettingsLite) => {
+  if (!dateStr) return false;
+  if (holidays.includes(dateStr)) return false;
+  const d = parseLocalDate(dateStr);
+  const day = d.getDay();
+  if (day < 1 || day > 5) return false;
+  if (settings?.semesterStart && dateStr < settings.semesterStart) return false;
+  if (settings?.semesterEnd && dateStr > settings.semesterEnd) return false;
+  return true;
+};
+
+const getMonthWeekdayCounts = (yearMonth: string, holidays: string[], settings?: SettingsLite) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const counts = [0, 0, 0, 0, 0];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${yearMonth}-${String(d).padStart(2, '0')}`;
+    if (!isWorkingDate(dateStr, holidays, settings)) continue;
+    const dow = parseLocalDate(dateStr).getDay();
+    counts[dow - 1] += 1;
+  }
+  return counts;
+};
+
+const estimateHomeroomFeeFromDetail = (date: string, payType: PayType, periodCount?: number) => {
+  if (payType !== PayType.DAILY && payType !== PayType.HALF_DAY) return 0;
+  const daysInMonth = getDaysInMonth(date);
+  const dailyHomeroom = HOMEROOM_FEE_MONTHLY / daysInMonth;
+  if (payType === PayType.HALF_DAY) return Math.round(dailyHomeroom * 0.5 * (periodCount || 1));
+  return Math.round(dailyHomeroom * (periodCount || 1));
+};
+
+export function calculateSubstituteMonthlyBreakdown(args: {
+  teacherId: string;
+  yearMonth: string;
+  records: LeaveRecord[];
+  teachers: Teacher[];
+  overtimeRecords: OvertimeRecord[];
+  fixedOvertimeConfig: FixedOvertimeConfig[];
+  holidays: string[];
+  settings?: SettingsLite;
+  activeSemesterId?: string | null;
+}): SubstituteMonthlyBreakdown {
+  const {
+    teacherId,
+    yearMonth,
+    records,
+    teachers,
+    overtimeRecords,
+    fixedOvertimeConfig,
+    holidays,
+    settings,
+    activeSemesterId,
+  } = args;
+
+  let substituteTotal = 0;
+  let homeroomFeeEstimate = 0;
+  records.forEach((record) => {
+    const details = deduplicateDetails(record.details || []);
+    details.forEach((d) => {
+      if (d.substituteTeacherId !== teacherId) return;
+      if (toYmd(d.date).startsWith(yearMonth) !== true) return;
+      if (d.isOvertime === true) return;
+      substituteTotal += Number(d.calculatedAmount) || 0;
+      homeroomFeeEstimate += estimateHomeroomFeeFromDetail(d.date, d.payType, d.periodCount);
+    });
+  });
+
+  const overtimeRecord = overtimeRecords.find((x) => x.teacherId === teacherId && x.yearMonth === yearMonth);
+  let overtimePeriods = 0;
+  if (overtimeRecord) {
+    const slots = overtimeRecord.overtimeSlots || [];
+    if (slots.length > 0) {
+      const [year, month] = yearMonth.split('-').map(Number);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${yearMonth}-${String(d).padStart(2, '0')}`;
+        if (!isWorkingDate(dateStr, holidays, settings)) continue;
+        const dow = parseLocalDate(dateStr).getDay();
+        overtimePeriods += slots.filter((s) => s.day === dow).length;
+      }
+      overtimePeriods += Number(overtimeRecord.adjustment || 0);
+    } else {
+      const base = Math.max(0, Number(overtimeRecord.weeklyActual || 0) - Number(overtimeRecord.weeklyBasic || 0));
+      overtimePeriods = Math.ceil(base * Number(overtimeRecord.weeksCount || 0)) + Number(overtimeRecord.adjustment || 0);
+    }
+  }
+  overtimePeriods = Math.max(0, overtimePeriods);
+  const overtimeTotal = overtimePeriods * HOURLY_RATE;
+
+  const teacher = teachers.find((t) => t.id === teacherId);
+  const fixedConfig = fixedOvertimeConfig.find((c) => c.teacherId === teacherId);
+  let fixedOvertimeTotal = 0;
+  if (fixedConfig) {
+    const weekdayCounts = getMonthWeekdayCounts(yearMonth, holidays, settings);
+    const periods = getEffectiveFixedOvertimePeriods(teacher, fixedConfig, activeSemesterId);
+    const expectedPeriods = periods.reduce((sum, p, idx) => sum + Number(p || 0) * (weekdayCounts[idx] || 0), 0);
+    const adjustedPeriods = Math.max(0, expectedPeriods + Number(fixedConfig.adjustment || 0));
+    fixedOvertimeTotal = Math.round(adjustedPeriods * HOURLY_RATE);
+  }
+
+  const grandTotal = substituteTotal + overtimeTotal + fixedOvertimeTotal;
+  return {
+    substituteTotal,
+    homeroomFeeEstimate,
+    overtimeTotal,
+    fixedOvertimeTotal,
+    grandTotal,
+  };
+}
