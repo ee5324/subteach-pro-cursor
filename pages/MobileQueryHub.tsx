@@ -156,7 +156,7 @@ const MobileQueryHub: React.FC = () => {
         } else {
           periodText = `${d.periodCount || 1}日薪`;
         }
-        const isPtaHomeroom = !!record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)' && d.payType === PayType.HALF_DAY;
+        const isPtaHomeroom = !!record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)';
         rows.push({
           date: String(d.date || ''),
           originalTeacherName,

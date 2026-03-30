@@ -64,6 +64,12 @@ const estimateHomeroomFeeFromDetail = (date: string, payType: PayType, periodCou
   return Math.round(dailyHomeroom * (periodCount || 1));
 };
 
+const estimateHalfDayHomeroomFee = (date: string) => {
+  const daysInMonth = getDaysInMonth(date);
+  const dailyHomeroom = HOMEROOM_FEE_MONTHLY / daysInMonth;
+  return Math.round(dailyHomeroom * 0.5);
+};
+
 export function calculateSubstituteMonthlyBreakdown(args: {
   teacherId: string;
   yearMonth: string;
@@ -92,6 +98,8 @@ export function calculateSubstituteMonthlyBreakdown(args: {
   let ptaHomeroomFeeTotal = 0;
   records.forEach((record) => {
     const details = deduplicateDetails(record.details || []);
+    // 家長會支出導師費（半天）：依「代課老師 + 日期」計一次，避免同日多筆明細重複加總
+    const ptaDateSeen = new Set<string>();
     details.forEach((d) => {
       if (d.substituteTeacherId !== teacherId) return;
       if (toYmd(d.date).startsWith(yearMonth) !== true) return;
@@ -99,9 +107,13 @@ export function calculateSubstituteMonthlyBreakdown(args: {
       substituteTotal += Number(d.calculatedAmount) || 0;
       const hm = estimateHomeroomFeeFromDetail(d.date, d.payType, d.periodCount);
       homeroomFeeEstimate += hm;
-      // 家長會導師費（目前規則：勾選 homeroomFeeByPta 且非「自理」假別）
+      // 家長會導師費（半天）：只要勾選且非「自理」，就按「半天導師費」列入（不綁 payType）
       if (record.homeroomFeeByPta === true && record.leaveType !== '自理 (事假/病假)') {
-        ptaHomeroomFeeTotal += hm;
+        const dateKey = toYmd(d.date);
+        if (!ptaDateSeen.has(dateKey)) {
+          ptaDateSeen.add(dateKey);
+          ptaHomeroomFeeTotal += estimateHalfDayHomeroomFee(d.date);
+        }
       }
     });
   });
