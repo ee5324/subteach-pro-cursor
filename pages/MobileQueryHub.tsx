@@ -174,43 +174,48 @@ const MobileQueryHub: React.FC = () => {
     if (!popup) return;
     const title = `${selectedSalaryTeacher.name} ${salaryMonth} 薪資整合`;
     const systemUrl = `${window.location.origin}${window.location.pathname}#/`;
-    const detailRowsHtml = salaryDetails.length === 0
-      ? `<tr><td colspan="4" style="padding:10px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;">本月無代課明細</td></tr>`
+    const detailCardsHtml = salaryDetails.length === 0
+      ? `<div style="padding:14px;border:1px solid #e2e8f0;border-radius:12px;text-align:center;color:#94a3b8;background:#ffffff;">本月無代課明細</div>`
       : salaryDetails.map((row) => `
-          <tr>
-            <td style="padding:8px;border:1px solid #e2e8f0;">${row.date}</td>
-            <td style="padding:8px;border:1px solid #e2e8f0;">${row.originalTeacherName}</td>
-            <td style="padding:8px;border:1px solid #e2e8f0;">${row.periodText}</td>
-            <td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${row.amount.toLocaleString()}</td>
-          </tr>
+          <div style="border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#ffffff;box-shadow:0 1px 2px rgba(15,23,42,0.04);">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+              <div style="font-weight:700;color:#0f172a;font-size:14px;">${row.date}</div>
+              <div style="font-weight:700;color:#334155;font-size:14px;">$${row.amount.toLocaleString()}</div>
+            </div>
+            <div style="margin-top:6px;font-size:13px;color:#334155;">請假教師：${row.originalTeacherName}</div>
+            <div style="margin-top:4px;font-size:13px;color:#475569;">節數：${row.periodText}</div>
+          </div>
         `).join('');
     popup.document.write(`
-      <html><head><title>${title}</title></head>
-      <body style="font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding: 20px; color: #0f172a;">
-        <h2 style="margin: 0 0 10px 0;">${title}</h2>
-        <p style="margin: 0 0 12px 0; color: #475569;">代課、超鐘點、固定兼課、導師費（估算）整合摘要</p>
-        <table style="border-collapse: collapse; width: 100%; max-width: 520px;">
-          <tr><td style="padding:8px;border:1px solid #e2e8f0;">代課費（含導師費）</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${monthlyBreakdown.substituteTotal.toLocaleString()}</td></tr>
-          <tr><td style="padding:8px;border:1px solid #e2e8f0;">導師費（估算，已含於代課費）</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</td></tr>
-          <tr><td style="padding:8px;border:1px solid #e2e8f0;">超鐘點</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${monthlyBreakdown.overtimeTotal.toLocaleString()}</td></tr>
-          <tr><td style="padding:8px;border:1px solid #e2e8f0;">固定兼課</td><td style="padding:8px;border:1px solid #e2e8f0;text-align:right;">$${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</td></tr>
-          <tr><td style="padding:10px;border:1px solid #94a3b8;font-weight:700;">月合計</td><td style="padding:10px;border:1px solid #94a3b8;text-align:right;font-weight:700;color:#0f766e;">$${monthlyBreakdown.grandTotal.toLocaleString()}</td></tr>
-        </table>
-        <h3 style="margin: 18px 0 8px 0; font-size: 16px;">代課狀況明細（${salaryMonth}）</h3>
-        <table style="border-collapse: collapse; width: 100%;">
-          <thead>
-            <tr style="background:#f8fafc;">
-              <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">日期</th>
-              <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">請假教師</th>
-              <th style="padding:8px;border:1px solid #e2e8f0;text-align:left;">節數（第幾節）</th>
-              <th style="padding:8px;border:1px solid #e2e8f0;text-align:right;">金額</th>
-            </tr>
-          </thead>
-          <tbody>${detailRowsHtml}</tbody>
-        </table>
-        <div style="margin-top:16px;display:flex;gap:8px;">
-          <a href="${systemUrl}" style="display:inline-block;padding:8px 12px;border-radius:8px;background:#4f46e5;color:white;text-decoration:none;font-size:14px;">返回系統</a>
-          <button onclick="window.close()" style="padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;background:white;color:#334155;font-size:14px;">關閉此頁</button>
+      <html>
+        <head>
+          <title>${title}</title>
+          <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        </head>
+      <body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#0f172a;">
+        <div style="max-width:720px;margin:0 auto;padding:14px;">
+          <div style="background:linear-gradient(135deg,#4338ca,#0ea5e9);color:#fff;border-radius:16px;padding:14px 14px 12px 14px;box-shadow:0 10px 25px rgba(37,99,235,0.2);">
+            <div style="font-size:18px;font-weight:800;line-height:1.35;">${title}</div>
+            <div style="margin-top:6px;font-size:12px;opacity:0.95;">代課、超鐘點、固定兼課、導師費（估算）整合摘要</div>
+          </div>
+
+          <div style="margin-top:12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>代課費（含導師費）</span><strong>$${monthlyBreakdown.substituteTotal.toLocaleString()}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#64748b;"><span>導師費（估算，已含於代課費）</span><span>$${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>超鐘點</span><strong>$${monthlyBreakdown.overtimeTotal.toLocaleString()}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>固定兼課</span><strong>$${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:12px;background:#ecfdf5;font-size:15px;font-weight:800;"><span>月合計</span><span style="color:#0f766e;">$${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
+          </div>
+
+          <div style="margin-top:14px;">
+            <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:#1e293b;">代課狀況明細（${salaryMonth}）</div>
+            <div style="display:grid;gap:8px;">${detailCardsHtml}</div>
+          </div>
+
+          <div style="position:sticky;bottom:0;margin-top:14px;padding:10px 0;background:linear-gradient(to top, #f8fafc 70%, rgba(248,250,252,0));display:flex;gap:8px;justify-content:stretch;">
+            <a href="${systemUrl}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;padding:11px 12px;border-radius:10px;background:#4f46e5;color:white;text-decoration:none;font-size:14px;font-weight:700;">返回系統</a>
+            <button onclick="window.close()" style="flex:1;padding:11px 12px;border-radius:10px;border:1px solid #cbd5e1;background:white;color:#334155;font-size:14px;font-weight:600;">關閉此頁</button>
+          </div>
         </div>
       </body></html>
     `);
