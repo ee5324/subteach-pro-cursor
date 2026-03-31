@@ -41,38 +41,48 @@ const getWeekDays = (baseDate: Date) => {
   return days;
 };
 
-const slotClassMatchesQuery = (slot: TeacherScheduleSlot, classQueryLower: string): boolean => {
-  if (!classQueryLower) return false;
+const sortTeachersByName = (list: Teacher[]) =>
+  [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+
+/** 過濾 Firestore／匯入造成的異常節次，避免 map／篩選時拋錯 */
+const sanitizeScheduleSlots = (raw: TeacherScheduleSlot[] | undefined): TeacherScheduleSlot[] =>
+  (raw || []).filter((s) => s != null && typeof s === 'object') as TeacherScheduleSlot[];
+
+const slotClassMatchesQuery = (slot: TeacherScheduleSlot | null | undefined, classQueryLower: string): boolean => {
+  if (!classQueryLower || slot == null) return false;
   return (slot.className || '').toLowerCase().includes(classQueryLower);
 };
 
 const TeacherWeekGrid: React.FC<{
   schedule: TeacherScheduleSlot[];
   highlightClassLower?: string;
-}> = ({ schedule, highlightClassLower }) => (
-  <div className="grid grid-cols-5 gap-2">
-    {[1, 2, 3, 4, 5].map((day) => (
-      <div key={day} className="border border-slate-200 rounded-lg p-2">
-        <div className="text-xs font-bold text-slate-600 mb-1">週{['一', '二', '三', '四', '五'][day - 1]}</div>
-        {schedule
-          .filter((s) => s.day === day)
-          .map((s, idx) => {
-            const hit = !!highlightClassLower && slotClassMatchesQuery(s, highlightClassLower);
-            return (
-              <div
-                key={idx}
-                className={`text-[11px] border rounded p-1 mb-1 last:mb-0 ${
-                  hit ? 'border-amber-300 bg-amber-50 font-medium' : 'border-slate-100 bg-slate-50'
-                }`}
-              >
-                第{s.period}節 {s.subject || ''} {s.className || ''}
-              </div>
-            );
-          })}
-      </div>
-    ))}
-  </div>
-);
+}> = ({ schedule, highlightClassLower }) => {
+  const rows = sanitizeScheduleSlots(schedule);
+  return (
+    <div className="grid grid-cols-5 gap-2">
+      {[1, 2, 3, 4, 5].map((day) => (
+        <div key={day} className="border border-slate-200 rounded-lg p-2">
+          <div className="text-xs font-bold text-slate-600 mb-1">週{['一', '二', '三', '四', '五'][day - 1]}</div>
+          {rows
+            .filter((s) => s.day === day)
+            .map((s, idx) => {
+              const hit = !!highlightClassLower && slotClassMatchesQuery(s, highlightClassLower);
+              return (
+                <div
+                  key={idx}
+                  className={`text-[11px] border rounded p-1 mb-1 last:mb-0 ${
+                    hit ? 'border-amber-300 bg-amber-50 font-medium' : 'border-slate-100 bg-slate-50'
+                  }`}
+                >
+                  第{s.period}節 {s.subject || ''} {s.className || ''}
+                </div>
+              );
+            })}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const MobileQueryHub: React.FC = () => {
   const {
@@ -84,6 +94,9 @@ const MobileQueryHub: React.FC = () => {
     settings,
     activeSemesterId,
   } = useAppStore();
+
+  const teacherList = Array.isArray(teachers) ? teachers : [];
+  const recordList = Array.isArray(records) ? records : [];
 
   const [tab, setTab] = useState<TabKey>('weekly');
   const [viewDate, setViewDate] = useState(new Date());
@@ -101,12 +114,12 @@ const MobileQueryHub: React.FC = () => {
 
   const weeklyMap = useMemo(() => {
     const map = new Map<string, { original: string; substitute: string; subject?: string; className?: string }[]>();
-    records.forEach((record) => {
+    recordList.forEach((record) => {
       (record.slots || []).forEach((slot) => {
         const key = `${slot.date}_${slot.period}`;
         if (!map.has(key)) map.set(key, []);
-        const originalTeacher = teachers.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
-        const subTeacher = teachers.find((t) => t.id === slot.substituteTeacherId)?.name || slot.substituteTeacherId || '待聘';
+        const originalTeacher = teacherList.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
+        const subTeacher = teacherList.find((t) => t.id === slot.substituteTeacherId)?.name || slot.substituteTeacherId || '待聘';
         map.get(key)?.push({
           original: originalTeacher,
           substitute: subTeacher,
@@ -116,18 +129,18 @@ const MobileQueryHub: React.FC = () => {
       });
     });
     return map;
-  }, [records, teachers]);
+  }, [recordList, teacherList]);
 
   const classQueryLower = useMemo(() => classQuery.trim().toLowerCase(), [classQuery]);
 
   const teachersForClassFilter = useMemo(() => {
     if (!classQueryLower) {
-      return [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+      return sortTeachersByName(teacherList);
     }
-    return teachers
-      .filter((t) => teacherMatchesClassKeyword(t, classQueryLower, activeSemesterId))
-      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-  }, [teachers, classQueryLower, activeSemesterId]);
+    return sortTeachersByName(
+      teacherList.filter((t) => teacherMatchesClassKeyword(t, classQueryLower, activeSemesterId)),
+    );
+  }, [teacherList, classQueryLower, activeSemesterId]);
 
   const filteredTeachers = useMemo(() => {
     const q = teacherQuery.trim().toLowerCase();
@@ -148,52 +161,52 @@ const MobileQueryHub: React.FC = () => {
   }, [filteredTeachers, selectedTeacherId]);
 
   const selectedTeacher = useMemo(
-    () => teachers.find((t) => t.id === selectedTeacherId) || null,
-    [teachers, selectedTeacherId],
+    () => teacherList.find((t) => t.id === selectedTeacherId) || null,
+    [teacherList, selectedTeacherId],
   );
 
-  const selectedTeacherSchedule = useMemo(
-    () => resolveTeacherDefaultSchedule(selectedTeacher || undefined, activeSemesterId) || [],
-    [selectedTeacher, activeSemesterId],
-  );
+  const selectedTeacherSchedule = useMemo(() => {
+    const raw = resolveTeacherDefaultSchedule(selectedTeacher || undefined, activeSemesterId) || [];
+    return sanitizeScheduleSlots(raw);
+  }, [selectedTeacher, activeSemesterId]);
 
   const selectedSalaryTeacher = useMemo(
-    () => teachers.find((t) => t.id === salaryTeacherId) || null,
-    [teachers, salaryTeacherId],
+    () => teacherList.find((t) => t.id === salaryTeacherId) || null,
+    [teacherList, salaryTeacherId],
   );
 
   const filteredSalaryTeachers = useMemo(() => {
     const q = salaryTeacherQuery.trim().toLowerCase();
-    const source = [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    const source = sortTeachersByName(teacherList);
     if (!q) return source;
     return source.filter((t) =>
       (t.name || '').toLowerCase().includes(q) ||
       (t.phone || '').includes(q) ||
       (t.subjects || '').toLowerCase().includes(q),
     );
-  }, [teachers, salaryTeacherQuery]);
+  }, [teacherList, salaryTeacherQuery]);
 
   const monthlyBreakdown = useMemo(() => {
     if (!selectedSalaryTeacher) return null;
     return calculateSubstituteMonthlyBreakdown({
       teacherId: selectedSalaryTeacher.id,
       yearMonth: salaryMonth,
-      records,
-      teachers,
+      records: recordList,
+      teachers: teacherList,
       overtimeRecords,
       fixedOvertimeConfig,
       holidays,
       settings,
       activeSemesterId,
     });
-  }, [selectedSalaryTeacher, salaryMonth, records, teachers, overtimeRecords, fixedOvertimeConfig, holidays, settings, activeSemesterId]);
+  }, [selectedSalaryTeacher, salaryMonth, recordList, teacherList, overtimeRecords, fixedOvertimeConfig, holidays, settings, activeSemesterId]);
 
   const salaryDetails = useMemo(() => {
     if (!selectedSalaryTeacher) return [];
     const periodOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
     const rows: { date: string; originalTeacherName: string; periodText: string; amount: number; isPtaHomeroom: boolean }[] = [];
-    records.forEach((record) => {
-      const originalTeacherName = teachers.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
+    recordList.forEach((record) => {
+      const originalTeacherName = teacherList.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
       deduplicateDetails(record.details || []).forEach((d) => {
         if (d.substituteTeacherId !== selectedSalaryTeacher.id) return;
         if (!String(d.date || '').startsWith(salaryMonth)) return;
@@ -218,9 +231,13 @@ const MobileQueryHub: React.FC = () => {
         });
       });
     });
-    rows.sort((a, b) => a.date.localeCompare(b.date) || a.originalTeacherName.localeCompare(b.originalTeacherName, 'zh-Hant'));
+    rows.sort(
+      (a, b) =>
+        (a.date || '').localeCompare(b.date || '') ||
+        (a.originalTeacherName || '').localeCompare(b.originalTeacherName || '', 'zh-Hant'),
+    );
     return rows;
-  }, [selectedSalaryTeacher, salaryMonth, records, teachers]);
+  }, [selectedSalaryTeacher, salaryMonth, recordList, teacherList]);
 
   const openSalaryTab = () => {
     if (!selectedSalaryTeacher || !monthlyBreakdown) return;
@@ -340,9 +357,13 @@ const MobileQueryHub: React.FC = () => {
             與教師管理搜尋一致：含「任課班級」資料欄與課表各節班級；可與下方教師關鍵字一併篩選。
           </p>
           <input
+            type="text"
             value={classQuery}
             onChange={(e) => setClassQuery(e.target.value)}
             placeholder="班級關鍵字（例：301、三年甲、任課班級）"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-2"
           />
           <input
@@ -364,9 +385,11 @@ const MobileQueryHub: React.FC = () => {
                   </div>
                 ) : (
                   teachersForClassFilter.map((t) => {
-                    const sch = resolveTeacherDefaultSchedule(t, activeSemesterId) || [];
-                    const teachingHit =
-                      classQueryLower !== '' && (t.teachingClasses || '').toLowerCase().includes(classQueryLower);
+                    const sch = sanitizeScheduleSlots(
+                      resolveTeacherDefaultSchedule(t, activeSemesterId) || [],
+                    );
+                    const tc = String(t.teachingClasses ?? '').toLowerCase();
+                    const teachingHit = classQueryLower !== '' && tc.includes(classQueryLower);
                     const scheduleHit = sch.some((s) => slotClassMatchesQuery(s, classQueryLower));
                     return (
                       <div key={t.id} className="border border-slate-200 rounded-lg p-3 bg-white">
@@ -382,7 +405,10 @@ const MobileQueryHub: React.FC = () => {
                         </div>
                         {teachingHit && (
                           <div className="text-xs text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 mb-2">
-                            任課班級：{t.teachingClasses || '（未填）'}
+                            任課班級：
+                            {t.teachingClasses != null && String(t.teachingClasses).trim() !== ''
+                              ? String(t.teachingClasses)
+                              : '（未填）'}
                             {!scheduleHit && sch.length > 0 && (
                               <span className="text-amber-800"> — 課表各節「班級」未含此關鍵字；命中來自任課班級欄位。</span>
                             )}
@@ -417,10 +443,14 @@ const MobileQueryHub: React.FC = () => {
             <div>
               <div className="font-semibold text-slate-800 mb-2">{selectedTeacher.name}（綁定學期課表）</div>
               {classQueryLower !== '' &&
-                (selectedTeacher.teachingClasses || '').toLowerCase().includes(classQueryLower) &&
+                String(selectedTeacher.teachingClasses ?? '').toLowerCase().includes(classQueryLower) &&
                 !selectedTeacherSchedule.some((s) => slotClassMatchesQuery(s, classQueryLower)) && (
                   <div className="text-xs text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 mb-2">
-                    任課班級：{selectedTeacher.teachingClasses || '（未填）'}
+                    任課班級：
+                    {selectedTeacher.teachingClasses != null &&
+                    String(selectedTeacher.teachingClasses).trim() !== ''
+                      ? String(selectedTeacher.teachingClasses)
+                      : '（未填）'}
                     {selectedTeacherSchedule.length > 0
                       ? ' — 課表各節「班級」未含此關鍵字；節次列表仍顯示供對照。'
                       : ''}

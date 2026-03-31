@@ -125,7 +125,14 @@ const App: React.FC = () => {
           <Route path="requests" element={<IncomingRequests />} />
           <Route path="public-applications" element={<PublicBoardApplicationsPage />} />
           <Route path="contact-exchange" element={<SubstituteContactExchange />} />
-          <Route path="mobile-query" element={<MobileQueryHub />} />
+          <Route
+            path="mobile-query"
+            element={
+              <PageErrorBoundary fallbackTitle="手機查詢中心載入錯誤">
+                <MobileQueryHub />
+              </PageErrorBoundary>
+            }
+          />
           <Route path="sub-pool" element={<SubPool />} />
           <Route path="substitute-applications" element={<SubstituteApplications />} />
           <Route path="entry" element={<EntryForm />} />

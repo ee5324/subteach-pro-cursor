@@ -34,9 +34,9 @@ export function teacherMatchesClassKeyword(
 ): boolean {
   const q = keywordLowerTrimmed.trim().toLowerCase();
   if (!q) return true;
-  if ((teacher.teachingClasses || '').toLowerCase().includes(q)) return true;
+  if (String(teacher.teachingClasses ?? '').toLowerCase().includes(q)) return true;
   const sch = resolveTeacherDefaultSchedule(teacher, activeSemesterId) || [];
-  return sch.some((s) => (s.className || '').toLowerCase().includes(q));
+  return sch.some((s) => s != null && String(s.className ?? '').toLowerCase().includes(q));
 }
 
 /**
