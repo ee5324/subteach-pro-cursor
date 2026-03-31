@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Calendar, Search, Wallet, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
+import { resolveTeacherDefaultSchedule, teacherMatchesClassKeyword } from '../utils/teacherSchedule';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
 import { PayType, type Teacher, type TeacherScheduleSlot } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
@@ -125,11 +125,7 @@ const MobileQueryHub: React.FC = () => {
       return [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
     }
     return teachers
-      .filter((t) => {
-        const sch = resolveTeacherDefaultSchedule(t, activeSemesterId);
-        if (!sch?.length) return false;
-        return sch.some((s) => slotClassMatchesQuery(s, classQueryLower));
-      })
+      .filter((t) => teacherMatchesClassKeyword(t, classQueryLower, activeSemesterId))
       .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
   }, [teachers, classQueryLower, activeSemesterId]);
 
@@ -340,11 +336,13 @@ const MobileQueryHub: React.FC = () => {
       {tab === 'teacher' && (
         <section className="bg-white border border-slate-200 rounded-xl p-3">
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-2"><Search size={16} /> 教師課表快速搜尋</div>
-          <p className="text-xs text-slate-500 mb-2">依目前綁定學期之預設週課表比對班級；可與下方姓名搜尋一併篩選。</p>
+          <p className="text-xs text-slate-500 mb-2">
+            與教師管理搜尋一致：含「任課班級」資料欄與課表各節班級；可與下方教師關鍵字一併篩選。
+          </p>
           <input
             value={classQuery}
             onChange={(e) => setClassQuery(e.target.value)}
-            placeholder="班級關鍵字（例：301、三年甲）"
+            placeholder="班級關鍵字（例：301、三年甲、任課班級）"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-2"
           />
           <input
@@ -361,10 +359,15 @@ const MobileQueryHub: React.FC = () => {
               </div>
               <div className="max-h-[480px] overflow-y-auto p-3 space-y-4">
                 {teachersForClassFilter.length === 0 ? (
-                  <div className="text-sm text-slate-500 text-center py-6">目前學期課表中沒有符合此班級關鍵字的教師。</div>
+                  <div className="text-sm text-slate-500 text-center py-6 px-2">
+                    沒有教師的「任課班級」或本學期課表各班級欄位包含此關鍵字。請確認系統綁定學期與教師管理資料是否一致。
+                  </div>
                 ) : (
                   teachersForClassFilter.map((t) => {
                     const sch = resolveTeacherDefaultSchedule(t, activeSemesterId) || [];
+                    const teachingHit =
+                      classQueryLower !== '' && (t.teachingClasses || '').toLowerCase().includes(classQueryLower);
+                    const scheduleHit = sch.some((s) => slotClassMatchesQuery(s, classQueryLower));
                     return (
                       <div key={t.id} className="border border-slate-200 rounded-lg p-3 bg-white">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -377,7 +380,19 @@ const MobileQueryHub: React.FC = () => {
                             在下方清單聚焦
                           </button>
                         </div>
-                        <TeacherWeekGrid schedule={sch} highlightClassLower={classQueryLower} />
+                        {teachingHit && (
+                          <div className="text-xs text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 mb-2">
+                            任課班級：{t.teachingClasses || '（未填）'}
+                            {!scheduleHit && sch.length > 0 && (
+                              <span className="text-amber-800"> — 課表各節「班級」未含此關鍵字；命中來自任課班級欄位。</span>
+                            )}
+                          </div>
+                        )}
+                        {sch.length === 0 ? (
+                          <div className="text-sm text-slate-500 py-2">尚未設定本學期預設週課表。</div>
+                        ) : (
+                          <TeacherWeekGrid schedule={sch} highlightClassLower={classQueryLower} />
+                        )}
                       </div>
                     );
                   })
@@ -401,10 +416,24 @@ const MobileQueryHub: React.FC = () => {
           {selectedTeacher && (
             <div>
               <div className="font-semibold text-slate-800 mb-2">{selectedTeacher.name}（綁定學期課表）</div>
-              <TeacherWeekGrid
-                schedule={selectedTeacherSchedule}
-                highlightClassLower={classQueryLower || undefined}
-              />
+              {classQueryLower !== '' &&
+                (selectedTeacher.teachingClasses || '').toLowerCase().includes(classQueryLower) &&
+                !selectedTeacherSchedule.some((s) => slotClassMatchesQuery(s, classQueryLower)) && (
+                  <div className="text-xs text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5 mb-2">
+                    任課班級：{selectedTeacher.teachingClasses || '（未填）'}
+                    {selectedTeacherSchedule.length > 0
+                      ? ' — 課表各節「班級」未含此關鍵字；節次列表仍顯示供對照。'
+                      : ''}
+                  </div>
+                )}
+              {selectedTeacherSchedule.length === 0 ? (
+                <div className="text-sm text-slate-500">尚未設定本學期預設週課表。</div>
+              ) : (
+                <TeacherWeekGrid
+                  schedule={selectedTeacherSchedule}
+                  highlightClassLower={classQueryLower || undefined}
+                />
+              )}
             </div>
           )}
         </section>

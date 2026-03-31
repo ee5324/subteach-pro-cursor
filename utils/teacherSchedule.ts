@@ -23,6 +23,23 @@ export function resolveTeacherDefaultSchedule(
 }
 
 /**
+ * 班級關鍵字是否命中該教師（與教師管理搜尋之班級相關欄位一致）：
+ * - `teachingClasses`（任課／導師班級）
+ * - 目前綁定學期預設課表各節 `className`
+ */
+export function teacherMatchesClassKeyword(
+  teacher: Teacher,
+  keywordLowerTrimmed: string,
+  activeSemesterId: string | null | undefined,
+): boolean {
+  const q = keywordLowerTrimmed.trim().toLowerCase();
+  if (!q) return true;
+  if ((teacher.teachingClasses || '').toLowerCase().includes(q)) return true;
+  const sch = resolveTeacherDefaultSchedule(teacher, activeSemesterId) || [];
+  return sch.some((s) => (s.className || '').toLowerCase().includes(q));
+}
+
+/**
  * 儲存教師時：若有綁定學期，將表單課表寫入該學期鍵並同步 `defaultSchedule`（供舊路徑相容）。
  */
 export function mergeTeacherScheduleForSave(
