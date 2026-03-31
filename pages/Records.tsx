@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
@@ -53,8 +53,10 @@ const Records: React.FC = () => {
   /** 多選批次變更憑證狀態時的目標值 */
   const [batchVoucherStatus, setBatchVoucherStatus] = useState<ProcessingStatus>('已印代課單');
 
-  // Search State
+  // Search State（searchInput：輸入框顯示；searchTerm：篩選用。組字期間只更新前者，避免 Mac 中文輸入法選字被重繪打斷）
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const searchComposingRef = useRef(false);
   /** 代課清冊假別篩選（與代課單 LeaveType 一致） */
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<LeaveType | 'all'>('all');
 
@@ -1099,8 +1101,24 @@ const Records: React.FC = () => {
                   type="text"
                   placeholder="搜尋教師、事由、文號..."
                   className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSearchInput(v);
+                    if (!searchComposingRef.current) {
+                      setSearchTerm(v);
+                    }
+                  }}
+                  onCompositionStart={() => {
+                    searchComposingRef.current = true;
+                  }}
+                  onCompositionEnd={(e) => {
+                    searchComposingRef.current = false;
+                    const v = e.currentTarget.value;
+                    setSearchInput(v);
+                    setSearchTerm(v);
+                  }}
+                  autoComplete="off"
                />
              </div>
            </div>

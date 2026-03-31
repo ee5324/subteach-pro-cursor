@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { Calendar, Search, User, Wallet, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Calendar, Search, Wallet, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
-import { PayType } from '../types';
+import { PayType, type Teacher, type TeacherScheduleSlot } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
 
 type TabKey = 'weekly' | 'teacher' | 'salary';
@@ -41,6 +41,39 @@ const getWeekDays = (baseDate: Date) => {
   return days;
 };
 
+const slotClassMatchesQuery = (slot: TeacherScheduleSlot, classQueryLower: string): boolean => {
+  if (!classQueryLower) return false;
+  return (slot.className || '').toLowerCase().includes(classQueryLower);
+};
+
+const TeacherWeekGrid: React.FC<{
+  schedule: TeacherScheduleSlot[];
+  highlightClassLower?: string;
+}> = ({ schedule, highlightClassLower }) => (
+  <div className="grid grid-cols-5 gap-2">
+    {[1, 2, 3, 4, 5].map((day) => (
+      <div key={day} className="border border-slate-200 rounded-lg p-2">
+        <div className="text-xs font-bold text-slate-600 mb-1">週{['一', '二', '三', '四', '五'][day - 1]}</div>
+        {schedule
+          .filter((s) => s.day === day)
+          .map((s, idx) => {
+            const hit = !!highlightClassLower && slotClassMatchesQuery(s, highlightClassLower);
+            return (
+              <div
+                key={idx}
+                className={`text-[11px] border rounded p-1 mb-1 last:mb-0 ${
+                  hit ? 'border-amber-300 bg-amber-50 font-medium' : 'border-slate-100 bg-slate-50'
+                }`}
+              >
+                第{s.period}節 {s.subject || ''} {s.className || ''}
+              </div>
+            );
+          })}
+      </div>
+    ))}
+  </div>
+);
+
 const MobileQueryHub: React.FC = () => {
   const {
     records,
@@ -55,6 +88,7 @@ const MobileQueryHub: React.FC = () => {
   const [tab, setTab] = useState<TabKey>('weekly');
   const [viewDate, setViewDate] = useState(new Date());
   const [teacherQuery, setTeacherQuery] = useState('');
+  const [classQuery, setClassQuery] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [salaryTeacherQuery, setSalaryTeacherQuery] = useState('');
   const [salaryTeacherId, setSalaryTeacherId] = useState('');
@@ -84,16 +118,38 @@ const MobileQueryHub: React.FC = () => {
     return map;
   }, [records, teachers]);
 
+  const classQueryLower = useMemo(() => classQuery.trim().toLowerCase(), [classQuery]);
+
+  const teachersForClassFilter = useMemo(() => {
+    if (!classQueryLower) {
+      return [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    }
+    return teachers
+      .filter((t) => {
+        const sch = resolveTeacherDefaultSchedule(t, activeSemesterId);
+        if (!sch?.length) return false;
+        return sch.some((s) => slotClassMatchesQuery(s, classQueryLower));
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  }, [teachers, classQueryLower, activeSemesterId]);
+
   const filteredTeachers = useMemo(() => {
     const q = teacherQuery.trim().toLowerCase();
-    const source = [...teachers].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-    if (!q) return source;
-    return source.filter((t) =>
-      (t.name || '').toLowerCase().includes(q) ||
-      (t.phone || '').includes(q) ||
-      (t.subjects || '').toLowerCase().includes(q),
+    if (!q) return teachersForClassFilter;
+    return teachersForClassFilter.filter(
+      (t) =>
+        (t.name || '').toLowerCase().includes(q) ||
+        (t.phone || '').includes(q) ||
+        (t.subjects || '').toLowerCase().includes(q),
     );
-  }, [teachers, teacherQuery]);
+  }, [teachersForClassFilter, teacherQuery]);
+
+  useEffect(() => {
+    if (!selectedTeacherId) return;
+    if (!filteredTeachers.some((t) => t.id === selectedTeacherId)) {
+      setSelectedTeacherId('');
+    }
+  }, [filteredTeachers, selectedTeacherId]);
 
   const selectedTeacher = useMemo(
     () => teachers.find((t) => t.id === selectedTeacherId) || null,
@@ -284,12 +340,53 @@ const MobileQueryHub: React.FC = () => {
       {tab === 'teacher' && (
         <section className="bg-white border border-slate-200 rounded-xl p-3">
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-2"><Search size={16} /> 教師課表快速搜尋</div>
+          <p className="text-xs text-slate-500 mb-2">依目前綁定學期之預設週課表比對班級；可與下方姓名搜尋一併篩選。</p>
+          <input
+            value={classQuery}
+            onChange={(e) => setClassQuery(e.target.value)}
+            placeholder="班級關鍵字（例：301、三年甲）"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-2"
+          />
           <input
             value={teacherQuery}
             onChange={(e) => setTeacherQuery(e.target.value)}
-            placeholder="輸入姓名 / 電話 / 科目"
+            placeholder="教師：姓名 / 電話 / 科目"
             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-3"
           />
+
+          {classQueryLower !== '' && (
+            <div className="mb-4 border border-amber-100 bg-amber-50/40 rounded-xl overflow-hidden">
+              <div className="px-3 py-2 border-b border-amber-100 bg-amber-50/80 text-sm font-semibold text-amber-950">
+                班級「{classQuery.trim()}」相關教師課表（{teachersForClassFilter.length} 人）
+              </div>
+              <div className="max-h-[480px] overflow-y-auto p-3 space-y-4">
+                {teachersForClassFilter.length === 0 ? (
+                  <div className="text-sm text-slate-500 text-center py-6">目前學期課表中沒有符合此班級關鍵字的教師。</div>
+                ) : (
+                  teachersForClassFilter.map((t) => {
+                    const sch = resolveTeacherDefaultSchedule(t, activeSemesterId) || [];
+                    return (
+                      <div key={t.id} className="border border-slate-200 rounded-lg p-3 bg-white">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <div className="font-semibold text-slate-800">{t.name}</div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTeacherId(t.id)}
+                            className="text-xs px-2 py-1 rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50"
+                          >
+                            在下方清單聚焦
+                          </button>
+                        </div>
+                        <TeacherWeekGrid schedule={sch} highlightClassLower={classQueryLower} />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="text-xs font-medium text-slate-600 mb-1">教師清單{classQueryLower ? '（已依班級篩選）' : ''}</div>
           <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg mb-3">
             {filteredTeachers.map((t) => (
               <button key={t.id} onClick={() => setSelectedTeacherId(t.id)} className={`w-full text-left px-3 py-2 border-b last:border-b-0 text-sm ${selectedTeacherId === t.id ? 'bg-indigo-50' : 'bg-white'}`}>
@@ -297,22 +394,17 @@ const MobileQueryHub: React.FC = () => {
                 <div className="text-xs text-slate-500">{t.phone || '無電話'} / {t.subjects || '無科目'}</div>
               </button>
             ))}
+            {filteredTeachers.length === 0 && (
+              <div className="px-3 py-6 text-center text-sm text-slate-400">沒有符合條件的教師</div>
+            )}
           </div>
           {selectedTeacher && (
             <div>
               <div className="font-semibold text-slate-800 mb-2">{selectedTeacher.name}（綁定學期課表）</div>
-              <div className="grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((day) => (
-                  <div key={day} className="border border-slate-200 rounded-lg p-2">
-                    <div className="text-xs font-bold text-slate-600 mb-1">週{['一', '二', '三', '四', '五'][day - 1]}</div>
-                    {(selectedTeacherSchedule.filter((s) => s.day === day)).map((s, idx) => (
-                      <div key={idx} className="text-[11px] border border-slate-100 rounded p-1 mb-1 bg-slate-50">
-                        第{s.period}節 {s.subject || ''} {s.className || ''}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <TeacherWeekGrid
+                schedule={selectedTeacherSchedule}
+                highlightClassLower={classQueryLower || undefined}
+              />
             </div>
           )}
         </section>
