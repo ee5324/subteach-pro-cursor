@@ -485,8 +485,9 @@ var LanguagePayroll = (function() {
     var totalAmount = data.totalAmount;
     var weekdayCounts = data.weekdayCounts; // [Mon, Tue, Wed, Thu, Fri]
     
-    var templateSpreadsheetId = '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE';
-    var targetGid = 2030591178;
+    var templateSpreadsheetId = data.templateSpreadsheetId || CONFIG.INDIGENOUS_RECEIPT_TEMPLATE_SPREADSHEET_ID || '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE';
+    var targetGid = Number(data.templateGid || CONFIG.INDIGENOUS_RECEIPT_TEMPLATE_GID || 2030591178);
+    var fallbackSheetName = data.templateName || CONFIG.INDIGENOUS_RECEIPT_TEMPLATE_SHEET_NAME || "族語專職教師超鐘點費印領清冊";
 
     // 1. 取得範本
     var templateSheet;
@@ -495,15 +496,15 @@ var LanguagePayroll = (function() {
       var sheets = ss.getSheets();
       templateSheet = sheets.find(function(s) { return s.getSheetId() === targetGid; });
       
-      if (!templateSheet) {
-          // Fallback by name if GID fails
-          templateSheet = ss.getSheetByName("族語專職教師超鐘點費印領清冊");
+      if (!templateSheet && fallbackSheetName) {
+        // Fallback by name if GID fails
+        templateSheet = ss.getSheetByName(fallbackSheetName);
       }
     } catch (e) {
       throw new Error("無法開啟範本試算表: " + e.message);
     }
 
-    if (!templateSheet) throw new Error("找不到族語專職教師範本 (GID: " + targetGid + ")");
+    if (!templateSheet) throw new Error("找不到族語專職教師範本 (Spreadsheet: " + templateSpreadsheetId + ", GID: " + targetGid + ")");
 
     // 2. 建立新檔案
     var folderId = CONFIG.OUTPUT_FOLDER_ID;
