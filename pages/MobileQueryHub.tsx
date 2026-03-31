@@ -391,10 +391,23 @@ const MobileQueryHub: React.FC = () => {
                     const tc = String(t.teachingClasses ?? '').toLowerCase();
                     const teachingHit = classQueryLower !== '' && tc.includes(classQueryLower);
                     const scheduleHit = sch.some((s) => slotClassMatchesQuery(s, classQueryLower));
+                    const isHomeroom = t.isHomeroom === true;
                     return (
-                      <div key={t.id} className="border border-slate-200 rounded-lg p-3 bg-white">
+                      <div
+                        key={t.id}
+                        className={`border rounded-lg p-3 bg-white ${
+                          isHomeroom ? 'border-violet-200 bg-violet-50/40' : 'border-slate-200'
+                        }`}
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                          <div className="font-semibold text-slate-800">{t.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-slate-800">{t.name}</div>
+                            {isHomeroom && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full border border-violet-200 bg-violet-100 text-violet-800 font-semibold">
+                                導師
+                              </span>
+                            )}
+                          </div>
                           <button
                             type="button"
                             onClick={() => setSelectedTeacherId(t.id)}
@@ -430,8 +443,25 @@ const MobileQueryHub: React.FC = () => {
           <div className="text-xs font-medium text-slate-600 mb-1">教師清單{classQueryLower ? '（已依班級篩選）' : ''}</div>
           <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg mb-3">
             {filteredTeachers.map((t) => (
-              <button key={t.id} onClick={() => setSelectedTeacherId(t.id)} className={`w-full text-left px-3 py-2 border-b last:border-b-0 text-sm ${selectedTeacherId === t.id ? 'bg-indigo-50' : 'bg-white'}`}>
-                <div className="font-medium">{t.name}</div>
+              <button
+                key={t.id}
+                onClick={() => setSelectedTeacherId(t.id)}
+                className={`w-full text-left px-3 py-2 border-b last:border-b-0 text-sm ${
+                  selectedTeacherId === t.id
+                    ? 'bg-indigo-50'
+                    : classQueryLower !== '' && t.isHomeroom === true
+                      ? 'bg-violet-50/60'
+                      : 'bg-white'
+                }`}
+              >
+                <div className="font-medium flex items-center gap-2">
+                  <span>{t.name}</span>
+                  {classQueryLower !== '' && t.isHomeroom === true && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-violet-200 bg-violet-100 text-violet-800 font-semibold">
+                      導師
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-slate-500">{t.phone || '無電話'} / {t.subjects || '無科目'}</div>
               </button>
             ))}
