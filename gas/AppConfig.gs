@@ -67,10 +67,11 @@ var CONFIG = {
   // 語言教師設定 (New)
   LANGUAGE_SETTINGS_SHEET_NAME: '語言教師設定',
 
-  // 族語專職教師印領清冊範本（以 Spreadsheet ID + 工作表 GID 鎖定，避免抓錯格式）
+  // 族語專職教師印領清冊範本（以 Spreadsheet ID + 工作表 GID 鎖定；GID 不符時依工作表名稱 fallback）
   INDIGENOUS_RECEIPT_TEMPLATE_SPREADSHEET_ID: '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE',
   INDIGENOUS_RECEIPT_TEMPLATE_GID: 2030591178,
-  INDIGENOUS_RECEIPT_TEMPLATE_SHEET_NAME: '族語專職教師超鐘點費印領清冊',
+  /** 試算表內範本工作表名稱（須與雲端試算表一致） */
+  INDIGENOUS_RECEIPT_TEMPLATE_SHEET_NAME: '族語清冊範本',
   
   // 指定輸出資料夾 ID
   OUTPUT_FOLDER_ID: '1mYwmXX9DZSeBbltuaWd2Pkuu_gGo6wyo',
