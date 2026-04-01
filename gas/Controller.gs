@@ -321,7 +321,9 @@ function doPost(e) {
       result = { status: 'success', message: '紀錄已還原' };
 
     } else if (action === 'GENERATE_FIXED_OVERTIME_REPORT') {
-      var res = FixedOvertimeManager.generateReport(data.year, data.month, data.reportData, data.semesterStart, data.semesterEnd, data.docNumber, null, data.holidays, data.substituteTeachers, data.fixedOvertimeReportOptions || null);
+      var fo = data.fixedOvertimeReportOptions || {};
+      var fixedTemplateName = fo.templateSheetName ? String(fo.templateSheetName) : null;
+      var res = FixedOvertimeManager.generateReport(data.year, data.month, data.reportData, data.semesterStart, data.semesterEnd, data.docNumber, fixedTemplateName, data.holidays, data.substituteTeachers, data.fixedOvertimeReportOptions || null);
       result = { status: 'success', data: { url: res.url }, message: '固定兼課報表產生成功' };
 
     } else if (action === 'GENERATE_OVERTIME_REPORT') {

@@ -997,7 +997,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
           let result: Awaited<ReturnType<typeof callGasApi>>;
 
           if (variant === 'indigenousFullTime') {
-              /** 族語專職：與「固定兼課」同一清冊範本與列結構；淨節數以 payablePeriods 對齊畫面 displayCount */
+              /** 族語專職：範本「族語清冊範本」+ useIndigenousTemplateLayout；淨節數以 payablePeriods 對齊畫面 displayCount */
               const fixedReportData = exportableData.map(row => {
                   const periods = [0, 0, 0, 0, 0];
                   if (row.hasPreciseConfig) {
@@ -1048,6 +1048,9 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
                   docNumber,
                   holidays,
                   fixedOvertimeReportOptions: {
+                      /** 與主試算表分頁名稱、gas/AppConfig INDIGENOUS_FIXED_OVERTIME_TEMPLATE_NAME 一致 */
+                      templateSheetName: '族語清冊範本',
+                      useIndigenousTemplateLayout: true,
                       fileNameSuffix: '_族語專職超鐘點印領清冊',
                       identityLabel: '族語專職教師',
                       replaceTitlePhraseFrom: '固定兼課印領清冊',

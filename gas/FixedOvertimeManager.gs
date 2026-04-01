@@ -68,14 +68,17 @@ var FixedOvertimeManager = {
   },
 
   // 3. 產生固定兼課報表 (Daily Based)，含固定兼課教師與當月協助代課教師
-  // formatOptions（可選）：fileNameSuffix、identityLabel、sheetTitleText、voucherTitle、replaceTitlePhraseFrom/To
+  // formatOptions（可選）：templateSheetName、useIndigenousTemplateLayout、fileNameSuffix、identityLabel、sheetTitleText、voucherTitle、replaceTitlePhraseFrom/To
   generateReport: function(year, month, reportData, semesterStart, semesterEnd, docNumber, targetTemplateName, holidays, substituteTeachers, formatOptions) {
     formatOptions = formatOptions || {};
     var rocYear = year - 1911;
     var rocDateStr = rocYear + "年" + month + "月";
     var fileName = rocDateStr + (formatOptions.fileNameSuffix || "_固定兼課印領清冊");
     
-    var templateName = targetTemplateName || CONFIG.FIXED_OVERTIME_TEMPLATE_NAME || '固定兼課清冊範本';
+    var templateName = targetTemplateName
+      || (formatOptions.templateSheetName ? String(formatOptions.templateSheetName) : '')
+      || CONFIG.FIXED_OVERTIME_TEMPLATE_NAME
+      || '固定兼課清冊範本';
     
     try {
         var ss = getSpreadsheet();
@@ -132,7 +135,12 @@ var FixedOvertimeManager = {
                 rangeText += " (學期開始: " + (sDate.getMonth()+1) + "/" + sDate.getDate() + ")";
             }
         }
-        sheet.getRange("A3").setValue(rangeText);
+        // 族語清冊範本：計算區間多在 B2；固定兼課範本：A3
+        if (formatOptions.useIndigenousTemplateLayout) {
+          sheet.getRange("B2").setValue(rangeText);
+        } else {
+          sheet.getRange("A3").setValue(rangeText);
+        }
         
         // 新增：公文文號 (I3)
         if (docNumber) {
@@ -172,16 +180,18 @@ var FixedOvertimeManager = {
   _fillFixedOvertimeReport: function(sheet, reportData, dayCounts, substituteTeachers, formatOptions) {
       formatOptions = formatOptions || {};
       var identityLabel = formatOptions.identityLabel || '固定兼課教師';
+      var indigenousLayout = formatOptions.useIndigenousTemplateLayout === true;
       substituteTeachers = substituteTeachers || [];
       var weekDays = ['一', '二', '三', '四', '五'];
       var substituteMap = {};
       
+      var weekdayRow = indigenousLayout ? 7 : 5;
       for (var i = 0; i < 5; i++) {
-          sheet.getRange(5, 3 + i).setValue(weekDays[i] + "\n(" + dayCounts[i] + "次)");
+          sheet.getRange(weekdayRow, 3 + i).setValue(weekDays[i] + "\n(" + dayCounts[i] + "次)");
       }
-      sheet.getRange(5, 8).setValue("小計");
+      sheet.getRange(weekdayRow, 8).setValue("小計");
 
-      var startRow = 6;
+      var startRow = indigenousLayout ? 8 : 6;
       var rowsData = [];
 
       substituteTeachers.forEach(function(item) {
@@ -223,7 +233,21 @@ var FixedOvertimeManager = {
             jCell = netAdjustment;
           }
 
-          var row = [
+          var jobTitleForExport = (item.jobTitle != null && String(item.jobTitle).trim() !== '') ? String(item.jobTitle) : identityLabel;
+          var row = indigenousLayout ? [
+              jobTitleForExport,
+              item.teacherName,
+              periods[0], periods[1], periods[2], periods[3], periods[4],
+              "=SUM(C"+r+":G"+r+")",
+              iCell,
+              jCell,
+              netFormula,
+              405,
+              amountFormula,
+              '', '', '', '',
+              item.adjustmentReason,
+              ''
+          ] : [
               item.teacherName,
               identityLabel,
               periods[0], periods[1], periods[2], periods[3], periods[4],
@@ -245,7 +269,20 @@ var FixedOvertimeManager = {
               var subSessions = Number(subItem.substituteSessions) || 0;
               var subPay = Number(subItem.pay) || 0;
               var subDetailStr = (subItem.substituteDetails && subItem.substituteDetails.length) ? subItem.substituteDetails.join('；') : '';
-              rowsData.push([
+              rowsData.push(indigenousLayout ? [
+                  "代課",
+                  subItem.teacherName,
+                  0, 0, 0, 0, 0,
+                  subSessions,
+                  0,
+                  0,
+                  subSessions,
+                  405,
+                  subPay,
+                  '', '', '', '',
+                  subDetailStr,
+                  ''
+              ] : [
                   subItem.teacherName,
                   "代課",
                   0, 0, 0, 0, 0,
@@ -297,7 +334,7 @@ var FixedOvertimeManager = {
       sheet.getRange(signRow + 2, 16).setValue("校長：");
 
       // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
-      this._scaleRowHeights(sheet, 5, signRow + 2, 1.25);
+      this._scaleRowHeights(sheet, weekdayRow, signRow + 2, 1.25);
   },
 
   // 計算該月份 週一~週五 各有幾天 (扣除假日 & 學期外)

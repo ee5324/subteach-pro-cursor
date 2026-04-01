@@ -28,6 +28,9 @@ var CONFIG = {
   // 固定兼課清冊範本
   FIXED_OVERTIME_TEMPLATE_NAME: '固定兼課清冊範本',
 
+  // 族語專職超鐘點匯出用（與主試算表內分頁名稱一致）
+  INDIGENOUS_FIXED_OVERTIME_TEMPLATE_NAME: '族語清冊範本',
+
   // 超鐘點清冊範本 (New)
   OVERTIME_TEMPLATE_NAME: '超鐘點清冊範例',
   
