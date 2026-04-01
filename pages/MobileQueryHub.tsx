@@ -103,7 +103,6 @@ const MobileQueryHub: React.FC = () => {
   const [teacherQuery, setTeacherQuery] = useState('');
   const [classQuery, setClassQuery] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
-  const [weeklyClassQuery, setWeeklyClassQuery] = useState('');
   const [salaryTeacherQuery, setSalaryTeacherQuery] = useState('');
   const [salaryTeacherId, setSalaryTeacherId] = useState('');
   const [salaryMonth, setSalaryMonth] = useState(() => {
@@ -316,15 +315,6 @@ const MobileQueryHub: React.FC = () => {
               <button onClick={() => setViewDate((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7))} className="p-1.5 border rounded"><ChevronRight size={16} /></button>
             </div>
           </div>
-          <div className="px-3 pb-3 pt-2 border-b border-slate-100 bg-slate-50/80">
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1">依班級篩選（代課單「班級」欄位，可填部分關鍵字）</label>
-            <input
-              value={weeklyClassQuery}
-              onChange={(e) => setWeeklyClassQuery(e.target.value)}
-              placeholder="例：601、三年甲、導師"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-            />
-          </div>
           <div className="overflow-x-auto">
             <table className="min-w-[820px] w-full text-xs">
               <thead className="bg-slate-50">
@@ -338,11 +328,7 @@ const MobileQueryHub: React.FC = () => {
                   <tr key={p.id}>
                     <td className="p-2 border text-center font-semibold">{p.label}</td>
                     {weekDays.map((d) => {
-                      const itemsRaw = weeklyMap.get(`${d.dateStr}_${p.id}`) || [];
-                      const cq = weeklyClassQuery.trim().toLowerCase();
-                      const items = cq
-                        ? itemsRaw.filter((x) => (x.className || '').toLowerCase().includes(cq))
-                        : itemsRaw;
+                      const items = weeklyMap.get(`${d.dateStr}_${p.id}`) || [];
                       return (
                         <td key={`${d.dateStr}_${p.id}`} className="p-1.5 border align-top">
                           <div className="space-y-1">

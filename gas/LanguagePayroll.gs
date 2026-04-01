@@ -485,42 +485,25 @@ var LanguagePayroll = (function() {
     var totalAmount = data.totalAmount;
     var weekdayCounts = data.weekdayCounts; // [Mon, Tue, Wed, Thu, Fri]
     
-    var templateSpreadsheetId = data.templateSpreadsheetId || CONFIG.INDIGENOUS_RECEIPT_TEMPLATE_SPREADSHEET_ID || '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE';
-    // 僅依工作表名稱（不依 GID）：CONFIG 優先，再試前端與舊名
-    var nameCandidates = [];
-    function pushIndigenousTemplateName(n) {
-      if (n && typeof n === 'string' && n.trim() && nameCandidates.indexOf(n.trim()) === -1) {
-        nameCandidates.push(n.trim());
-      }
-    }
-    pushIndigenousTemplateName(CONFIG.INDIGENOUS_RECEIPT_TEMPLATE_SHEET_NAME);
-    pushIndigenousTemplateName(data.templateName);
-    pushIndigenousTemplateName('族語清冊範本');
-    pushIndigenousTemplateName('族語專職教師超鐘點費印領清冊');
+    var templateSpreadsheetId = '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE';
+    var targetGid = 2030591178;
 
-    // 1. 取得範本（getSheetByName 須與分頁名稱完全一致，含全形／空白）
+    // 1. 取得範本
     var templateSheet;
-    var ss;
     try {
-      ss = SpreadsheetApp.openById(templateSpreadsheetId);
-      for (var ni = 0; ni < nameCandidates.length; ni++) {
-        templateSheet = ss.getSheetByName(nameCandidates[ni]);
-        if (templateSheet) break;
+      var ss = SpreadsheetApp.openById(templateSpreadsheetId);
+      var sheets = ss.getSheets();
+      templateSheet = sheets.find(function(s) { return s.getSheetId() === targetGid; });
+      
+      if (!templateSheet) {
+          // Fallback by name if GID fails
+          templateSheet = ss.getSheetByName("族語專職教師超鐘點費印領清冊");
       }
     } catch (e) {
       throw new Error("無法開啟範本試算表: " + e.message);
     }
 
-    if (!templateSheet && ss) {
-      var existing = ss.getSheets().map(function (s) {
-        return "'" + s.getName().replace(/'/g, "''") + "'";
-      });
-      throw new Error(
-        "找不到族語範本工作表。試算表 ID: " + templateSpreadsheetId +
-          "。已依序嘗試名稱: " + nameCandidates.join('、') +
-          "。此檔案目前分頁: " + existing.join('、')
-      );
-    }
+    if (!templateSheet) throw new Error("找不到族語專職教師範本 (GID: " + targetGid + ")");
 
     // 2. 建立新檔案
     var folderId = CONFIG.OUTPUT_FOLDER_ID;
@@ -553,13 +536,13 @@ var LanguagePayroll = (function() {
     var dateRangeStr = "計算區間：" + parts[0] + "/" + parts[1] + "/01-" + parts[0] + "/" + parts[1] + "/" + lastDay;
     sheet.getRange("B2").setValue(dateRangeStr);
 
-    // 當月週一至週五各出現幾次（學期內、非假日、不含週末；與範本「一(〇次)」對齊）
-    if (weekdayCounts && weekdayCounts.length >= 5) {
-        sheet.getRange("C7").setValue(weekdayCounts[0] || 0); // 週一
-        sheet.getRange("D7").setValue(weekdayCounts[1] || 0); // 週二
-        sheet.getRange("E7").setValue(weekdayCounts[2] || 0); // 週三
-        sheet.getRange("F7").setValue(weekdayCounts[3] || 0); // 週四
-        sheet.getRange("G7").setValue(weekdayCounts[4] || 0); // 週五
+    // Row 7: Weekday Counts (C7-G7)
+    if (weekdayCounts) {
+        sheet.getRange("C7").setValue(weekdayCounts[0] || 0); // Mon Count
+        sheet.getRange("D7").setValue(weekdayCounts[1] || 0); // Tue Count
+        sheet.getRange("E7").setValue(weekdayCounts[2] || 0); // Wed Count
+        sheet.getRange("F7").setValue(weekdayCounts[3] || 0); // Thu Count
+        sheet.getRange("G7").setValue(weekdayCounts[4] || 0); // Fri Count
     }
 
     // Row 8: Data Row

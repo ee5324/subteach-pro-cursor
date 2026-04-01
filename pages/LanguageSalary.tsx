@@ -31,8 +31,7 @@ const LanguageSalary: React.FC = () => {
     actual: number;
     hourlyRate: number;
     totalAmount: number;
-    /** 當月週一至週五各出現幾次（學期內、非假日、不含週末；供清冊 C7–G7） */
-    weekdayCounts: number[];
+    weekdayCounts: number[]; // Mon-Fri counts
   } | null>(null);
 
   const [startMonth, setStartMonth] = useState<string>(() => {
@@ -215,7 +214,7 @@ const LanguageSalary: React.FC = () => {
       const graduationDate = settings.graduationDate ? new Date(settings.graduationDate) : null;
 
       let monthlyRequired = 0;
-      const weekdayCounts = [0, 0, 0, 0, 0]; // Mon..Fri：當月該週幾有幾天（學期內、非假日）
+      const weekdayCounts = [0, 0, 0, 0, 0]; // Mon, Tue, Wed, Thu, Fri
 
       days.forEach(date => {
           const dayOfWeek = date.getDay();
@@ -230,26 +229,34 @@ const LanguageSalary: React.FC = () => {
           // Check semester range
           if (semesterStart && currentDate < semesterStart) return;
           if (semesterEnd && currentDate > semesterEnd) return;
-
+          
           // Check holidays
           const isHoliday = holidays.includes(dateStr);
           if (isHoliday) return;
 
-          // 清冊 C7–G7：本週幾在當月（符合上列條件）出現天數，與該師當日是否有課無關
-          weekdayCounts[dayOfWeek - 1]++;
-
+          // Add periods for this day
+          // We need to iterate through the schedule for this day and check isSixthGrade for each slot
           const daySchedules = teacher.languageSchedule?.filter(s => s.dayOfWeek === dayOfWeek);
-
+          
           if (daySchedules) {
               let dailyPeriods = 0;
               daySchedules.forEach(slot => {
+                  // If it's a 6th grade slot and we are past graduation, skip it
                   if (slot.isSixthGrade && graduationDate && currentDate > graduationDate) {
                       return;
                   }
                   dailyPeriods += slot.periods.length;
               });
-
+              
               monthlyRequired += dailyPeriods;
+              // Only increment weekday count if there are periods today (or should we count it anyway?)
+              // The original logic counted the day if there was ANY schedule. 
+              // Now that we might skip some periods, if dailyPeriods becomes 0 due to graduation, should we count the day?
+              // Usually weekday count is for "how many Mondays in this month were workable".
+              // If a teacher only teaches 6th grade on Monday and they graduated, effectively they don't work that Monday.
+              if (dailyPeriods > 0) {
+                  weekdayCounts[dayOfWeek - 1]++;
+              }
           }
       });
 
@@ -309,7 +316,7 @@ const LanguageSalary: React.FC = () => {
               hourlyRate: indigenousPreviewData.hourlyRate,
               totalAmount: indigenousPreviewData.totalAmount,
               weekdayCounts: indigenousPreviewData.weekdayCounts,
-              templateName: '族語清冊範本', // GID 不符時與 GAS CONFIG 一致
+              templateName: '族語專職教師超鐘點費印領清冊' // This name is for reference, backend uses ID
           });
 
           if (result.status === 'success') {

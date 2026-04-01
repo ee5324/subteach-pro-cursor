@@ -66,10 +66,6 @@ var CONFIG = {
 
   // 語言教師設定 (New)
   LANGUAGE_SETTINGS_SHEET_NAME: '語言教師設定',
-
-  // 族語專職教師印領清冊範本（僅依試算表 ID + 工作表「名稱」；名稱須與雲端分頁完全一致）
-  INDIGENOUS_RECEIPT_TEMPLATE_SPREADSHEET_ID: '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE',
-  INDIGENOUS_RECEIPT_TEMPLATE_SHEET_NAME: '族語清冊範本',
   
   // 指定輸出資料夾 ID
   OUTPUT_FOLDER_ID: '1mYwmXX9DZSeBbltuaWd2Pkuu_gGo6wyo',
