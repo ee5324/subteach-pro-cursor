@@ -58,8 +58,8 @@ var FixedOvertimeManager = {
 
       return {
         teacherId: String(row[0]),
-        periods: [Number(row[1]), Number(row[2]), Number(row[3]), Number(row[4]), Number(row[5])],
-        adjustment: Number(row[6]) || 0,
+        periods: [parseNumberish(row[1], 0), parseNumberish(row[2], 0), parseNumberish(row[3], 0), parseNumberish(row[4], 0), parseNumberish(row[5], 0)],
+        adjustment: parseNumberish(row[6], 0),
         adjustmentReason: String(row[7]) || '',
         ignoredEventIds: ignored,
         scheduleSlots: slots
@@ -157,10 +157,10 @@ var FixedOvertimeManager = {
         // --- 黏貼憑證（總額含固定兼課與協助代課）---
         var sumTotal = 0;
         if (reportData && reportData.length > 0) {
-            reportData.forEach(function(item) { sumTotal += Number(item.pay) || 0; });
+            reportData.forEach(function(item) { sumTotal += parseNumberish(item.pay, 0); });
         }
         if (substituteTeachers && substituteTeachers.length > 0) {
-            substituteTeachers.forEach(function(item) { sumTotal += Number(item.pay) || 0; });
+            substituteTeachers.forEach(function(item) { sumTotal += parseNumberish(item.pay, 0); });
         }
         if (typeof SheetManager === 'undefined') {
             throw new Error('SheetManager 未定義。請在 GAS 專案中確認已加入「SheetManager.gs」檔案並重新部署。');
@@ -216,19 +216,19 @@ var FixedOvertimeManager = {
 
           var grossI = 0;
           for (var gi = 0; gi < 5; gi++) {
-            grossI += (Number(periods[gi]) || 0) * dayCounts[gi];
+            grossI += parseNumberish(periods[gi], 0) * dayCounts[gi];
           }
           var usePayableOverride = (item.payablePeriods != null && item.payablePeriods !== '');
 
           var iCell;
           var jCell;
           if (usePayableOverride) {
-            var targetPayable = Number(item.payablePeriods) || 0;
+            var targetPayable = parseNumberish(item.payablePeriods, 0);
             iCell = grossI;
             jCell = targetPayable - grossI;
           } else {
             // J 欄「本次增減」須含活動扣除、請假扣除（與憑證一致），前端傳入 item.adjustment = 手動 - 活動扣除 - 請假扣除
-            var netAdjustment = (item.adjustment != null && item.adjustment !== '') ? Number(item.adjustment) : (item.manualAdjustment || 0);
+            var netAdjustment = (item.adjustment != null && item.adjustment !== '') ? parseNumberish(item.adjustment, 0) : parseNumberish(item.manualAdjustment, 0);
             iCell = grossFormula;
             jCell = netAdjustment;
           }
@@ -266,8 +266,8 @@ var FixedOvertimeManager = {
           // 代課教師依前端頁面順序，直接接在對應固定兼課教師下方
           var relatedSubs = substituteMap[item.teacherId] || [];
           relatedSubs.forEach(function(subItem) {
-              var subSessions = Number(subItem.substituteSessions) || 0;
-              var subPay = Number(subItem.pay) || 0;
+              var subSessions = parseNumberish(subItem.substituteSessions, 0);
+              var subPay = parseNumberish(subItem.pay, 0);
               var subDetailStr = (subItem.substituteDetails && subItem.substituteDetails.length) ? subItem.substituteDetails.join('；') : '';
               rowsData.push(indigenousLayout ? [
                   "代課",

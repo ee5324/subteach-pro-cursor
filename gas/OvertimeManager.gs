@@ -96,7 +96,7 @@ var OvertimeManager = {
                   } else {
                       // 精確模式：優先用前端傳入「逐日淨超鐘點」加總之週欄（已扣請假），與備註一致
                       if (item.weeklyExportCounts && item.weeklyExportCounts.length > w) {
-                          val = Number(item.weeklyExportCounts[w]) || 0;
+                          val = parseNumberish(item.weeklyExportCounts[w], 0);
                       } else {
                           for (var d = 0; d < 5; d++) {
                               if (week.days[d] === 1) val += (item.overtimePattern[d] || 0);
@@ -112,12 +112,12 @@ var OvertimeManager = {
           substituteSessionsByDate.forEach(function(entry) {
               if (!entry || !entry.date) return;
               var dayStr = String(entry.date).split('-')[2];
-              var dayNum = Number(dayStr);
+              var dayNum = parseNumberish(dayStr, 0);
               if (!dayNum) return;
               for (var weekIndex = 0; weekIndex < weeklyStructure.length; weekIndex++) {
                   var targetWeek = weeklyStructure[weekIndex];
                   if (dayNum >= targetWeek.startDay && dayNum <= targetWeek.endDay) {
-                      weeklyCounts[weekIndex] = (weeklyCounts[weekIndex] || 0) + (Number(entry.count) || 0);
+                      weeklyCounts[weekIndex] = (weeklyCounts[weekIndex] || 0) + parseNumberish(entry.count, 0);
                       break;
                   }
               }
@@ -135,7 +135,7 @@ var OvertimeManager = {
           }
 
           var currentRowNum = startRow + rowsData.length; 
-          var payablePeriods = Number(item.payablePeriods || 0);
+          var payablePeriods = parseNumberish(item.payablePeriods, 0);
           var totalColValue = payablePeriods > 0 ? payablePeriods : "=SUM(H" + currentRowNum + ":L" + currentRowNum + ")";
           var amountFormula = "=ROUND(M" + currentRowNum + "*405, 0)";
 

@@ -1270,14 +1270,13 @@ var SheetManager = {
         return rows;
     }
 
-    /** 清冊 E/F/G/L/M 等欄可能為「同一儲存格多行」；Number("1\\n2") 為 NaN，合計會漏加。改為逐行加總。 */
+    /** 清冊 E/F/G/L/M 等欄可能為「同一儲存格多行」且含單位文字（如 1節、0.5日）；需耐髒解析。 */
     function sumMultilineNumericCell(cellVal) {
         if (cellVal == null || cellVal === '') return 0;
         var parts = String(cellVal).split(/\r?\n/);
         var sum = 0;
         for (var i = 0; i < parts.length; i++) {
-            var n = Number(String(parts[i]).trim());
-            if (!isNaN(n)) sum += n;
+            sum += parseNumberish(parts[i], 0);
         }
         return sum;
     }
@@ -1293,7 +1292,7 @@ var SheetManager = {
             sumHourly += sumMultilineNumericCell(r[6]);
             sumHDays += sumMultilineNumericCell(r[11]);
             sumHFee += sumMultilineNumericCell(r[12]);
-            sumTotal += Number(r[13]) || 0;
+            sumTotal += parseNumberish(r[13], 0);
         });
         var title = titlePrefix + typeStr;
         summarySheet.getRange("A1").setValue(title);

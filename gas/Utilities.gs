@@ -123,6 +123,30 @@ function getOrCreateSubFolder(parentFolder, name) {
 }
 
 /**
+ * 將可能含單位/逗號/文字的值轉成數字。
+ * 範例： "1,234元" -> 1234、"0.5日" -> 0.5、"第3節" -> 3
+ * @param {*} value
+ * @param {number=} defaultValue 轉換失敗時回傳值（預設 0）
+ * @returns {number}
+ */
+function parseNumberish(value, defaultValue) {
+  var fallback = (defaultValue == null) ? 0 : Number(defaultValue);
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'number') return isNaN(value) ? fallback : value;
+
+  var raw = String(value).trim();
+  if (!raw) return fallback;
+
+  var direct = Number(raw);
+  if (!isNaN(direct)) return direct;
+
+  var m = raw.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+  if (!m) return fallback;
+  var parsed = Number(m[0]);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
+/**
  * 將數字轉換為大寫中文金額 (新台幣格式)
  * @param {number} num 
  * @returns {string}
