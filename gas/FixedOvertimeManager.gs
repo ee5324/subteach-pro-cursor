@@ -123,23 +123,25 @@ var FixedOvertimeManager = {
             title = title.split(fromP).join(toP);
           }
         }
+        // 族語專職超鐘點清冊：標題固定為民國年月 + 指定用語（與範本西元或占位無關）
+        if (formatOptions.useIndigenousTemplateLayout && !formatOptions.sheetTitleText) {
+          title = rocDateStr + '民族語專職老師「國中」超鐘點費印領清冊';
+        }
         titleCell.setValue(title);
         var voucherTitle = formatOptions.voucherTitle ? String(formatOptions.voucherTitle) : title;
 
-        // A3: 計算區間
-        var rangeText = "計算區間： " + month + "/1 - " + month + "/" + lastDay;
-        // 如果有設定學期開始日且在當月，提示使用者
+        // 計算區間本體（族語清冊範本 B2 已含「計算區間：」字樣，僅寫入日期區段）
+        var rangeCore = month + "/1 - " + month + "/" + lastDay;
         if (semesterStart) {
             var sDate = parseDateString(semesterStart);
             if (sDate.getFullYear() == year && (sDate.getMonth() + 1) == month) {
-                rangeText += " (學期開始: " + (sDate.getMonth()+1) + "/" + sDate.getDate() + ")";
+                rangeCore += " (學期開始: " + (sDate.getMonth()+1) + "/" + sDate.getDate() + ")";
             }
         }
-        // 族語清冊範本：計算區間多在 B2；固定兼課範本：A3
         if (formatOptions.useIndigenousTemplateLayout) {
-          sheet.getRange("B2").setValue(rangeText);
+          sheet.getRange("B2").setValue(rangeCore);
         } else {
-          sheet.getRange("A3").setValue(rangeText);
+          sheet.getRange("A3").setValue("計算區間： " + rangeCore);
         }
         
         // 新增：公文文號 (I3)
@@ -185,13 +187,18 @@ var FixedOvertimeManager = {
       var weekDays = ['一', '二', '三', '四', '五'];
       var substituteMap = {};
       
-      var weekdayRow = indigenousLayout ? 7 : 5;
+      // 族語清冊：週次標題於第 6 列 C–G，H6「總計」；固定兼課範本維持原列位
+      var weekdayRow = indigenousLayout ? 6 : 5;
       for (var i = 0; i < 5; i++) {
           sheet.getRange(weekdayRow, 3 + i).setValue(weekDays[i] + "\n(" + dayCounts[i] + "次)");
       }
-      sheet.getRange(weekdayRow, 8).setValue("小計");
+      if (indigenousLayout) {
+          sheet.getRange(weekdayRow, 8).setValue("總計");
+      } else {
+          sheet.getRange(weekdayRow, 8).setValue("小計");
+      }
 
-      var startRow = indigenousLayout ? 8 : 6;
+      var startRow = indigenousLayout ? 7 : 6;
       var rowsData = [];
 
       substituteTeachers.forEach(function(item) {
@@ -324,17 +331,31 @@ var FixedOvertimeManager = {
       
       sheet.getRange(totalRow, 1, 1, 19).setFontWeight("bold").setBorder(true, true, true, true, true, true);
       
-      // 簽核區 (根據截圖位置約略調整)
+      // 簽核區
       var signRow = totalRow + 2;
       sheet.getRange(signRow, 1).setValue("製表：");
       sheet.getRange(signRow, 5).setValue("教務主任：");
       sheet.getRange(signRow, 9).setValue("稅款代扣：");
-      sheet.getRange(signRow, 13).setValue("人事主任：");
-      sheet.getRange(signRow, 16).setValue("會計主任：");
-      sheet.getRange(signRow + 2, 16).setValue("校長：");
+      var signRowPersonnel = signRow + 2;
+      if (indigenousLayout) {
+          // 教務主任下兩列：人事主任（與教務同欄）；稅款代扣下兩列：會計主任（14 號字）
+          sheet.getRange(signRowPersonnel, 5).setValue("人事主任：");
+          sheet.getRange(signRowPersonnel, 9).setValue("會計主任：").setFontSize(14);
+          sheet.getRange(signRowPersonnel + 2, 16).setValue("校長：");
+      } else {
+          sheet.getRange(signRow, 13).setValue("人事主任：");
+          sheet.getRange(signRow, 16).setValue("會計主任：");
+          sheet.getRange(signRow + 2, 16).setValue("校長：");
+      }
 
       // 清冊列高放大為原本約 1.25 倍，讓行距更舒適
-      this._scaleRowHeights(sheet, weekdayRow, signRow + 2, 1.25);
+      var signEndRow = indigenousLayout ? signRow + 4 : signRow + 2;
+      this._scaleRowHeights(sheet, weekdayRow, signEndRow, 1.25);
+
+      if (indigenousLayout) {
+          sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).setFontFamily('標楷體');
+          sheet.getRange(signRowPersonnel, 9).setFontSize(14);
+      }
   },
 
   // 計算該月份 週一~週五 各有幾天 (扣除假日 & 學期外)
