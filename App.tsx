@@ -29,6 +29,7 @@ import SubstituteContactExchange from './pages/SubstituteContactExchange';
 import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
 import MobileQueryHub from './pages/MobileQueryHub';
 import EduTrackPage from './pages/EduTrackPage';
+import SystemDashboard from './pages/SystemDashboard';
 import ExamSubmitPublicPage from './edutrack/components/ExamSubmitPublicPage';
 import { useAppStore } from './store/useAppStore';
 import { signOut } from 'firebase/auth';
@@ -122,6 +123,7 @@ const App: React.FC = () => {
           </ProtectedRoute>
         }>
           <Route index element={<SubstituteOverview />} />
+          <Route path="dashboard" element={<SystemDashboard />} />
           <Route path="overview" element={<SubstituteOverview />} />
           <Route path="substitute-busy" element={<SubstituteBusyBlocksPage />} />
           <Route path="pending" element={<PendingItems />} />

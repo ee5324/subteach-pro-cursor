@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2, Smartphone, ClipboardList } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2, Smartphone, ClipboardList, LayoutDashboard } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -86,6 +86,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       </div>
 
       <nav className="flex-1 px-3 py-2 space-y-1 mt-4">
+        <NavLink to="/dashboard" className={linkClass} onClick={onClose}>
+          <LayoutDashboard size={18} />
+          <span>系統儀表板</span>
+        </NavLink>
+
         {/* 代課總表（巢狀：資料總表 + 忙碌時段） */}
         <div
           className={`rounded-xl border overflow-hidden ${
