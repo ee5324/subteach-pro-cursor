@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Plus, User, Trash2, CheckCircle, Clock, Loader2, FileText, MessageSquare, PhoneIncoming, ShieldCheck, Sun, Moon, FileCheck, List, Layers, X, Repeat } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, ChevronLeft, ChevronRight, Plus, User, Trash2, CheckCircle, Clock, Loader2, FileText, MessageSquare, PhoneIncoming, ShieldCheck, Sun, Moon, FileCheck, List, Layers, X, Repeat, LayoutGrid } from 'lucide-react';
 import { TodoItem, Attachment, MonthlyRecurringTodoRule } from '../types';
 import Modal from './Modal';
 import DutyListModal from './modals/DutyListModal';
@@ -11,9 +11,16 @@ import MonthlyRecurringModal from './modals/MonthlyRecurringModal';
 import { getTodos, saveTodo, saveBatchTodos, deleteTodo, cancelSeries as apiCancelSeries, toggleTodoStatus, uploadAttachment, getMonthlyRecurringTodoRules, updateMonthlyRecurringMonthStatus } from '../services/api';
 import { ruleMatchesCalendarDate, statusForRuleOnDate, yearMonthKeyFromDate } from '../utils/monthlyRecurringTodos';
 
+type MobileSegment = 'calendar' | 'day' | 'memos';
+
 const TodoCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isLgUp, setIsLgUp] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true,
+  );
+  const [mobileSegment, setMobileSegment] = useState<MobileSegment>('calendar');
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
   
   // Data States
   const [todos, setTodos] = useState<TodoItem[]>([]); 
@@ -42,6 +49,31 @@ const TodoCalendar: React.FC = () => {
     fetchTodos();
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => setIsLgUp(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const onCalendarTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const onCalendarTouchEnd = (e: React.TouchEvent) => {
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    if (!start || e.changedTouches.length !== 1) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 64) return;
+    if (Math.abs(dx) < Math.abs(dy) * 1.15) return;
+    if (dx > 0) handlePrevMonth();
+    else handleNextMonth();
+  };
+
   const fetchTodos = async () => {
     setLoading(true);
     try {
@@ -67,6 +99,7 @@ const TodoCalendar: React.FC = () => {
   const handleDateClick = (day: number) => {
     const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     setSelectedDate(newDate);
+    if (!isLgUp) setMobileSegment('day');
   };
 
   const formatDateYMD = (date: Date) => {
@@ -415,7 +448,12 @@ const TodoCalendar: React.FC = () => {
     const voucherReminderDate = getVoucherReminderDate(year, month);
 
     for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="min-h-[6rem] bg-gray-50/50 border border-gray-100"></div>);
+      days.push(
+        <div
+          key={`empty-${i}`}
+          className="min-h-[4.25rem] lg:min-h-[6rem] bg-gray-50/50 border border-gray-100"
+        />,
+      );
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -428,6 +466,7 @@ const TodoCalendar: React.FC = () => {
       const isSelected = selectedDate.getDate() === day && selectedDate.getMonth() === month && selectedDate.getFullYear() === year;
       const hasDuty = dayDuties.length > 0;
       const isVoucherDay = dateStr === voucherReminderDate;
+      const eventCount = dayTodos.length + dayRecurring.length;
       
       let dailyUrgency = 'none';
       const urgencyCandidates = [
@@ -441,17 +480,36 @@ const TodoCalendar: React.FC = () => {
         <div 
             key={day} 
             onClick={() => handleDateClick(day)}
-            className={`min-h-[6rem] h-auto border p-2 relative cursor-pointer transition-colors hover:bg-blue-50 flex flex-col
+            className={`min-h-[4.25rem] lg:min-h-[6rem] h-auto border p-1.5 lg:p-2 relative cursor-pointer transition-colors hover:bg-blue-50 active:bg-blue-100 flex flex-col touch-manipulation rounded-sm
                 ${hasDuty ? 'border-2 border-red-500 bg-red-50/30' : 'border-gray-100 bg-white'} 
                 ${isSelected ? '!ring-2 !ring-blue-500 !bg-blue-50' : ''}
                 ${dailyUrgency === 'critical' ? 'bg-red-50' : ''}
             `}
         >
-          <div className="flex justify-between items-start mb-1">
-              <span className={`text-sm font-medium ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>{day}</span>
-              {dailyUrgency === 'critical' && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500"></span>}
+          <div className="flex justify-between items-start mb-0.5 lg:mb-1 gap-0.5">
+              <span className={`text-xs lg:text-sm font-semibold tabular-nums ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>{day}</span>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {isVoucherDay && (
+                  <span className="lg:hidden w-1.5 h-1.5 rounded-full bg-orange-500" title="憑證製作日" aria-hidden />
+                )}
+                {hasDuty && <span className="lg:hidden w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" aria-hidden />}
+                {dailyUrgency === 'critical' && <span className="animate-pulse w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+                {dailyUrgency === 'warning' && (
+                  <span className="lg:hidden w-2 h-2 rounded-full bg-orange-400 shrink-0" aria-hidden />
+                )}
+              </div>
           </div>
 
+          {/* 手機：僅顯示摘要；桌機：完整標題列表 */}
+          <div className="mt-auto lg:hidden flex flex-wrap items-center gap-0.5">
+            {eventCount > 0 && (
+              <span className="text-[9px] font-bold px-1 py-px rounded bg-blue-100 text-blue-800 tabular-nums">
+                {eventCount}
+              </span>
+            )}
+          </div>
+
+          <div className="hidden lg:block">
           {isVoucherDay && (
               <div className="mb-1">
                   <div className="text-[10px] font-bold text-orange-700 bg-orange-100 px-1 rounded flex items-center gap-0.5 truncate">
@@ -494,6 +552,7 @@ const TodoCalendar: React.FC = () => {
                      {todo.title}
                  </div>
              ))}
+          </div>
           </div>
         </div>
       );
@@ -539,8 +598,25 @@ const TodoCalendar: React.FC = () => {
       </div>
   );
 
+  const mobileTabBtn = (seg: MobileSegment, label: string, icon: React.ReactNode) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={mobileSegment === seg}
+      onClick={() => setMobileSegment(seg)}
+      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-lg text-xs font-semibold touch-manipulation transition-colors ${
+        mobileSegment === seg
+          ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
+          : 'text-slate-600 border border-transparent'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-6">
+    <div className="h-full flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0">
       <Modal {...modalState} onCancel={() => setModalState(prev => ({ ...prev, isOpen: false }))} />
 
       {/* Extracted Modals */}
@@ -590,24 +666,63 @@ const TodoCalendar: React.FC = () => {
         onRemoveAttachment={handleRemoveAttachment}
       />
 
+      {!isLgUp && (
+        <div
+          className="flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 shrink-0"
+          role="tablist"
+          aria-label="行政行事曆檢視"
+        >
+          {mobileTabBtn('calendar', '月曆', <LayoutGrid size={16} className="shrink-0 text-indigo-600" />)}
+          {mobileTabBtn('day', '本日', <Calendar size={16} className="shrink-0 text-indigo-600" />)}
+          {mobileTabBtn('memos', '留言', <MessageSquare size={16} className="shrink-0 text-indigo-600" />)}
+        </div>
+      )}
+
       {/* Left Column: Calendar */}
-      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
+      <div
+        className={`flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[280px] lg:min-h-[500px] ${
+          !isLgUp && mobileSegment !== 'calendar' ? 'hidden' : ''
+        } lg:flex`}
+      >
         {/* Calendar Header */}
-        <div className="p-4 flex items-center justify-between border-b border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-4">
-             <h2 className="text-xl font-bold text-gray-800">
-                {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
-             </h2>
-             <div className="flex gap-1 items-center">
-               <button onClick={handlePrevMonth} className="p-1 hover:bg-gray-200 rounded"><ChevronLeft size={20} /></button>
-               <button onClick={handleNextMonth} className="p-1 hover:bg-gray-200 rounded"><ChevronRight size={20} /></button>
-               <button type="button" onClick={() => setCurrentDate(new Date())} className="ml-2 inline-flex items-center justify-center h-[32px] min-h-[32px] py-0 px-2.5 text-xs leading-none whitespace-nowrap bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-700 shrink-0">今天</button>
-               
-               <div className="h-4 w-px bg-gray-300 mx-2 shrink-0" aria-hidden />
+        <div className="p-3 sm:p-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100 bg-gray-50">
+          <div className="flex flex-col gap-3 min-w-0">
+             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+               <h2 className="text-lg sm:text-xl font-bold text-gray-800 tabular-nums">
+                  {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
+               </h2>
+               <div className="flex items-center gap-0.5 shrink-0">
+                 <button
+                   type="button"
+                   onClick={handlePrevMonth}
+                   className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center hover:bg-gray-200 rounded-lg touch-manipulation"
+                   aria-label="上個月"
+                 >
+                   <ChevronLeft size={22} />
+                 </button>
+                 <button
+                   type="button"
+                   onClick={handleNextMonth}
+                   className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center hover:bg-gray-200 rounded-lg touch-manipulation"
+                   aria-label="下個月"
+                 >
+                   <ChevronRight size={22} />
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => setCurrentDate(new Date())}
+                   className="ml-1 inline-flex items-center justify-center min-h-[40px] py-0 px-3 text-xs font-medium bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 touch-manipulation"
+                 >
+                   今天
+                 </button>
+               </div>
+             </div>
+             <div className="flex gap-1.5 items-stretch overflow-x-auto pb-0.5 -mx-0.5 px-0.5 touch-pan-x">
+               <div className="h-8 w-px bg-gray-300 shrink-0 self-center hidden sm:block" aria-hidden />
                <button
                  type="button"
                  onClick={() => setIsDutyListOpen(true)}
-                 className="inline-flex items-center justify-center gap-1 h-[32px] min-h-[32px] py-0 px-2.5 text-xs leading-none whitespace-nowrap rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shrink-0"
+                 className="inline-flex items-center justify-center gap-1 min-h-[40px] py-2 px-3 text-xs font-medium whitespace-nowrap rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors shrink-0 touch-manipulation"
                  title="輪值列表管理"
                >
                  <List size={14} className="shrink-0" aria-hidden /> 輪值列表
@@ -615,7 +730,7 @@ const TodoCalendar: React.FC = () => {
                <button
                  type="button"
                  onClick={handleOpenBatchDuty}
-                 className="inline-flex items-center justify-center gap-1 h-[32px] min-h-[32px] py-0 px-2.5 text-xs leading-none whitespace-nowrap rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors shrink-0"
+                 className="inline-flex items-center justify-center gap-1 min-h-[40px] py-2 px-3 text-xs font-medium whitespace-nowrap rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors shrink-0 touch-manipulation"
                  title="設定處室輪值"
                >
                  <ShieldCheck size={14} className="shrink-0" aria-hidden /> 輪值設定
@@ -623,48 +738,75 @@ const TodoCalendar: React.FC = () => {
                <button
                  type="button"
                  onClick={() => setIsMonthlyRecurringOpen(true)}
-                 className="inline-flex items-center justify-center gap-1 h-[32px] min-h-[32px] py-0 px-2.5 text-xs leading-none whitespace-nowrap rounded border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 transition-colors shrink-0"
+                 className="inline-flex items-center justify-center gap-1 min-h-[40px] py-2 px-3 text-xs font-medium whitespace-nowrap rounded-lg border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 transition-colors shrink-0 touch-manipulation"
                  title="每月固定出現的事項，可指定西曆月份"
                >
                  <Repeat size={14} className="shrink-0" aria-hidden /> 每月固定事項
                </button>
              </div>
           </div>
-          <div className="flex gap-2 text-xs">
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>緊急 (3天內)</div>
-              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400"></span>注意 (7天內)</div>
+          <div className="hidden sm:flex flex-wrap gap-3 text-[11px] text-gray-600 shrink-0">
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />緊急 (3天內)</div>
+              <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />注意 (7天內)</div>
           </div>
         </div>
 
         {/* Calendar Body */}
-        <div className="flex-1 overflow-auto p-4">
-             <div className="grid grid-cols-7 text-center mb-2">
-                 {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-xs font-bold text-gray-500 py-1">{d}</div>)}
+        <div
+          className="flex-1 overflow-auto p-2 sm:p-4 min-h-0"
+          onTouchStart={onCalendarTouchStart}
+          onTouchEnd={onCalendarTouchEnd}
+        >
+             <div className="grid grid-cols-7 text-center mb-1 lg:mb-2">
+                 {['日','一','二','三','四','五','六'].map(d => (
+                   <div key={d} className="text-[10px] lg:text-xs font-bold text-gray-500 py-0.5 lg:py-1">
+                     {d}
+                   </div>
+                 ))}
              </div>
-             <div className="grid grid-cols-7 gap-1">
+             {!isLgUp && (
+               <p className="text-[10px] text-gray-400 text-center mb-2">左右滑動可切換月份；點選日期可開啟「本日」事項</p>
+             )}
+             <div className="grid grid-cols-7 gap-0.5 lg:gap-1">
                  {renderCalendarGrid()}
              </div>
         </div>
       </div>
 
       {/* Right Column: Daily Tasks / Office Memos */}
-      <div className="w-full lg:w-96 rounded-xl shadow-sm border border-gray-200 flex flex-col h-[600px] lg:h-auto overflow-hidden bg-white">
+      <div
+        className={`w-full lg:w-96 rounded-xl shadow-sm border border-gray-200 flex flex-col min-h-0 overflow-hidden bg-white max-lg:min-h-[min(62dvh,560px)] max-lg:flex-1 ${
+          !isLgUp && mobileSegment === 'calendar' ? 'hidden' : ''
+        } lg:flex h-[600px] lg:h-auto`}
+      >
           
           {/* Section 1: Daily Tasks (Top Half) */}
-          <div className="flex-1 flex flex-col min-h-0 border-b border-gray-200">
-             <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-blue-50/50">
-                <div>
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                        <Calendar size={18} className="text-blue-600"/>
-                        {selectedDate.getMonth() + 1}/{selectedDate.getDate()} 待辦
+          <div
+            className={`flex-1 flex flex-col min-h-0 border-b border-gray-200 ${
+              !isLgUp && mobileSegment !== 'day' ? 'hidden' : ''
+            } lg:flex`}
+          >
+             <div className="p-3 border-b border-gray-100 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center bg-blue-50/50">
+                <div className="min-w-0">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                        <Calendar size={18} className="text-blue-600 shrink-0"/>
+                        <span className="tabular-nums">{selectedDate.getMonth() + 1}/{selectedDate.getDate()} 待辦</span>
                     </h3>
                 </div>
-                <div className="flex gap-1">
-                    <button onClick={handleAddTodo} className="flex items-center px-2 py-1 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 transition-colors">
-                        <Plus size={12} className="mr-1"/> 新增待辦
+                <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleAddTodo}
+                      className="flex items-center justify-center min-h-[40px] px-3 py-2 bg-slate-800 text-white text-xs font-medium rounded-lg hover:bg-slate-900 transition-colors touch-manipulation"
+                    >
+                        <Plus size={14} className="mr-1 shrink-0"/> 新增待辦
                     </button>
-                    <button onClick={handleAddDuty} className="flex items-center px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors">
-                        <ShieldCheck size={12} className="mr-1"/> 新增輪值
+                    <button
+                      type="button"
+                      onClick={handleAddDuty}
+                      className="flex items-center justify-center min-h-[40px] px-3 py-2 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors touch-manipulation"
+                    >
+                        <ShieldCheck size={14} className="mr-1 shrink-0"/> 新增輪值
                     </button>
                 </div>
              </div>
@@ -730,11 +872,11 @@ const TodoCalendar: React.FC = () => {
                                   {rule.memo ? <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{rule.memo}</p> : null}
                                 </div>
                               </div>
-                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="absolute top-2 right-2 max-lg:opacity-100 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   type="button"
                                   onClick={() => setIsMonthlyRecurringOpen(true)}
-                                  className="p-0.5 text-gray-400 hover:text-teal-600 text-[10px]"
+                                  className="p-1 min-w-[44px] min-h-[32px] text-gray-500 hover:text-teal-600 text-[10px] touch-manipulation"
                                   title="至「每月固定事項」編輯"
                                 >
                                   編輯規則
@@ -757,9 +899,9 @@ const TodoCalendar: React.FC = () => {
                                                 處室輪值 {todo.period === 'am' ? '(上午)' : todo.period === 'pm' ? '(下午)' : '(全日)'}
                                             </p>
                                         </div>
-                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleEditTodo(todo)} className="p-1 text-gray-400 hover:text-blue-600"><Clock size={14}/></button>
-                                            <button onClick={() => handleDeleteClick(todo)} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                        <div className="max-lg:opacity-100 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                                            <button type="button" onClick={() => handleEditTodo(todo)} className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-blue-600 touch-manipulation" aria-label="編輯"><Clock size={16}/></button>
+                                            <button type="button" onClick={() => handleDeleteClick(todo)} className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-red-600 touch-manipulation" aria-label="刪除"><Trash2 size={16}/></button>
                                         </div>
                                     </div>
                                 </div>
@@ -792,9 +934,9 @@ const TodoCalendar: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                    <button onClick={() => handleEditTodo(todo)} className="p-0.5 text-gray-400 hover:text-blue-600"><Clock size={12}/></button>
-                                    <button onClick={() => handleDeleteClick(todo)} className="p-0.5 text-gray-400 hover:text-red-600"><Trash2 size={12}/></button>
+                                <div className="absolute top-2 right-2 max-lg:opacity-100 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                                    <button type="button" onClick={() => handleEditTodo(todo)} className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-blue-600 touch-manipulation" aria-label="編輯"><Clock size={14}/></button>
+                                    <button type="button" onClick={() => handleDeleteClick(todo)} className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-red-600 touch-manipulation" aria-label="刪除"><Trash2 size={14}/></button>
                                 </div>
                             </div>
                         );
@@ -804,21 +946,29 @@ const TodoCalendar: React.FC = () => {
           </div>
 
           {/* Section 2: Office Memos (Bottom Half) */}
-          <div className="flex-1 flex flex-col min-h-0 bg-indigo-50/30">
-              <div className="p-3 border-b border-indigo-100 flex justify-between items-center bg-indigo-50">
-                  <div>
-                      <h3 className="font-bold text-indigo-900 flex items-center gap-2">
-                          <MessageSquare size={18} className="text-indigo-600"/> 
+          <div
+            className={`flex-1 flex flex-col min-h-0 bg-indigo-50/30 ${
+              !isLgUp && mobileSegment !== 'memos' ? 'hidden' : ''
+            } lg:flex`}
+          >
+              <div className="p-3 border-b border-indigo-100 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center bg-indigo-50">
+                  <div className="min-w-0">
+                      <h3 className="font-bold text-indigo-900 flex items-center gap-2 flex-wrap text-sm sm:text-base">
+                          <MessageSquare size={18} className="text-indigo-600 shrink-0"/> 
                           傳達留言
                           {memos.filter(m => m.status === 'pending').length > 0 && (
-                              <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full ml-1">
+                              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
                                   {memos.filter(m => m.status === 'pending').length}
                               </span>
                           )}
                       </h3>
                   </div>
-                  <button onClick={handleAddMemo} className="flex items-center px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors">
-                      <Plus size={12} className="mr-1"/> 新增
+                  <button
+                    type="button"
+                    onClick={handleAddMemo}
+                    className="flex items-center justify-center min-h-[40px] px-3 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors touch-manipulation shrink-0"
+                  >
+                      <Plus size={14} className="mr-1 shrink-0"/> 新增
                   </button>
               </div>
 
@@ -858,9 +1008,9 @@ const TodoCalendar: React.FC = () => {
                                           )}
                                       </div>
                                   </div>
-                                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                      <button onClick={() => handleEditTodo(memo)} className="p-0.5 text-gray-400 hover:text-indigo-600"><Clock size={12}/></button>
-                                      <button onClick={() => handleDeleteClick(memo)} className="p-0.5 text-gray-400 hover:text-red-600"><Trash2 size={12}/></button>
+                                  <div className="absolute top-2 right-2 max-lg:opacity-100 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                                      <button type="button" onClick={() => handleEditTodo(memo)} className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-indigo-600 touch-manipulation" aria-label="編輯"><Clock size={14}/></button>
+                                      <button type="button" onClick={() => handleDeleteClick(memo)} className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 hover:text-red-600 touch-manipulation" aria-label="刪除"><Trash2 size={14}/></button>
                                   </div>
                               </div>
                           );
