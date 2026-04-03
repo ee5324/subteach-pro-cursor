@@ -28,6 +28,8 @@ import TeacherLeaveRequest from './pages/TeacherLeaveRequest';
 import SubstituteContactExchange from './pages/SubstituteContactExchange';
 import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
 import MobileQueryHub from './pages/MobileQueryHub';
+import EduTrackPage from './pages/EduTrackPage';
+import ExamSubmitPublicPage from './edutrack/components/ExamSubmitPublicPage';
 import { useAppStore } from './store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from './src/lib/firebase';
@@ -112,6 +114,7 @@ const App: React.FC = () => {
         <Route path="/public" element={<PublicBoard />} />
         <Route path="/teacher-request" element={<TeacherLeaveRequest />} />
         <Route path="/sub-weekly" element={<SubstituteWeeklyLookup />} />
+        <Route path="/exam-submit" element={<ExamSubmitPublicPage />} />
 
         <Route path="/" element={
           <ProtectedRoute>
@@ -130,6 +133,14 @@ const App: React.FC = () => {
             element={
               <PageErrorBoundary fallbackTitle="手機查詢中心載入錯誤">
                 <MobileQueryHub />
+              </PageErrorBoundary>
+            }
+          />
+          <Route
+            path="edutrack"
+            element={
+              <PageErrorBoundary fallbackTitle="教學組事務載入錯誤">
+                <EduTrackPage />
               </PageErrorBoundary>
             }
           />

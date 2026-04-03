@@ -1,0 +1,32 @@
+{
+  "name": "教學組事務管理系統",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:open": "vite --open",
+    "dev:test": "vite --host 0.0.0.0 --port 5174",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit",
+    "gs:push": "cd backend && npx clasp push",
+    "gs:deploy": "cd backend && npx clasp push && npx clasp deploy",
+    "gs:release": "node scripts/deploy-gs.js"
+  },
+  "dependencies": {
+    "firebase": "^12.10.0",
+    "lucide-react": "^0.563.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.4",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "firebase-tools": "^15.10.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

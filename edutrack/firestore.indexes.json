@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "edutrack_exam_submissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campaignId", "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

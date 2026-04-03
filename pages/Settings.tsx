@@ -201,7 +201,7 @@ const Settings: React.FC = () => {
         isOpen: true,
         title: '已切換綁定學期',
         message:
-          '「全站預設課表綁定學期」已更新。接下來教師管理、代課帶入課表、超鐘點／固定兼課相關計算，都會改用新學期底下存好的預設課表。',
+          '「全站預設課表綁定學期」已更新。接下來教師管理、代課帶入課表、超鐘點清冊、固定兼課與相關計算，都會改用新學期底下已儲存的版本（與該學期預設課表一致）。',
         type: 'success',
       });
     } catch (e: any) {
@@ -716,10 +716,10 @@ const Settings: React.FC = () => {
             學期清冊（預設課表綁定哪一學期）
           </h2>
           <p className="text-sm text-slate-600 mb-3">
-            <strong>白話說</strong>：現在全系統要以哪一個學期的「名分」，來編輯與使用每位老師的<strong>預設週課表</strong>。換新學年時，先<strong>改綁定學期</strong>，再在教師管理裡維護新學期的課表，就不會蓋掉舊學期的資料。
+            <strong>白話說</strong>：現在全系統要以哪一個學期的「名分」，來編輯與使用每位老師的<strong>預設週課表</strong>，以及<strong>同一學期內</strong>的超鐘點與固定兼課設定。換學年／上下學期時，先<strong>改綁定學期</strong>，再在教師管理與超鐘點／固定兼課頁維護新學期版本，就不會蓋掉上一學期的資料。
           </p>
           <p className="text-xs text-slate-500 mb-4 border-l-2 border-violet-200 pl-3">
-            會跟著綁定學期走的包含：教師管理預設課表、代課登錄帶入課表、超鐘點實授節數與重設、固定兼課與課表重疊判斷、公開課表同步等。
+            會跟著綁定學期走的包含：教師管理預設課表、代課登錄帶入課表、超鐘點清冊（每月紀錄）、固定兼課名單與時段、超鐘點實授節數與重設、固定兼課與課表重疊判斷、公開課表同步等。
           </p>
           <div className="rounded-lg border border-violet-100 bg-violet-50/80 p-4 mb-4 text-sm text-violet-900 space-y-2">
             <div className="flex flex-wrap items-start gap-2">

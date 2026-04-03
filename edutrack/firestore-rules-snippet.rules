@@ -1,0 +1,34 @@
+// ============================================================
+// 教學組事務管理系統 — Firestore 規則「片段」
+// 與其他系統共用同一 Firebase 專案時，只外掛本系統的集合，不影響其他功能
+// ============================================================
+// 使用方式：把下面 match 區塊「複製到」你現有的 firestore.rules 的
+// match /databases/{database}/documents { ... } 大括號內即可。
+// 集合名稱預設為 edutrack_ 前綴；若你在 .env 設了 VITE_FIREBASE_COLLECTION_PREFIX，
+// 請把下面 edutrack_ 改成相同前綴（例如 teaching_）。
+// ============================================================
+
+    // --- 教學組事務管理系統（僅以下六個集合）---
+    match /edutrack_courses/{id} {
+      allow read, write: if true;
+    }
+    match /edutrack_students/{id} {
+      allow read, write: if true;
+    }
+    match /edutrack_awards/{id} {
+      allow read, write: if true;
+    }
+    match /edutrack_vendors/{id} {
+      allow read, write: if true;
+    }
+    match /edutrack_archive/{id} {
+      allow read, write: if true;
+    }
+    match /edutrack_todos/{id} {
+      allow read, write: if true;
+    }
+
+// ============================================================
+// 若你要改為「僅登入者可存取」，可改成：
+//   allow read, write: if request.auth != null;
+// ============================================================

@@ -304,6 +304,8 @@ export interface SpecialActivity {
 
 // 新增：固定兼課設定
 export interface FixedOvertimeConfig {
+  /** 與 `semesters`／綁定學期對齊；未填視為舊資料（單一 teacherId 文件） */
+  semesterId?: string;
   teacherId: string;
   periods: number[]; // [Mon, Tue, Wed, Thu, Fri] (0-4) - 自動由 scheduleSlots 計算
   sortOrder?: number; // 手動排序用
@@ -383,7 +385,9 @@ export interface LeaveRecord {
 
 // 新增：超鐘點紀錄
 export interface OvertimeRecord {
-  id: string; // Format: YYYY-MM_TeacherID
+  /** 與綁定學期對齊；未填視為舊資料（id 為 `YYYY-MM_teacherId`） */
+  semesterId?: string;
+  id: string; // 有綁定學期：`${semesterId}__${YYYY-MM}__${teacherId}`；舊：`YYYY-MM_TeacherID`
   teacherId: string;
   yearMonth: string; // YYYY-MM
   sortOrder?: number; // 手動排序用

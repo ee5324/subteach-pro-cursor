@@ -32,4 +32,7 @@ export const auth = app ? getAuth(app) : null as any;
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+/** 供 edutrack 子模組共用同一 FirebaseApp，避免重複 initializeApp */
+export const firebaseApp = app;
+
 export default app;

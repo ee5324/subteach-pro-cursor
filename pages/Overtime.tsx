@@ -11,6 +11,7 @@ import { Calendar, Calculator, Coins, Save, AlertCircle, ChevronLeft, ChevronRig
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import { getStandardBase, parseLocalDate, normalizeDateString, getEffectiveFixedOvertimeSlots } from '../utils/calculations';
 import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
+import { findOvertimeRecord, overtimeRecordFirestoreId } from '../utils/semesterScope';
 import {
   getMonthlyWeeksStructureForOvertimeExport,
   computeWeeklyExportCountsForPreciseOvertime,
@@ -474,7 +475,12 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
           if (normEnd < `${monthPrefix}-01`) return;
           if (normStart > `${monthPrefix}-31`) return;
 
-          const originalRecord = (overtimeRecords || []).find(r => r.id === `${selectedMonth}_${record.originalTeacherId}`);
+          const originalRecord = findOvertimeRecord(
+            overtimeRecords || [],
+            selectedMonth,
+            record.originalTeacherId,
+            activeSemesterId,
+          );
           const originalOvertimeSlots = originalRecord?.overtimeSlots ?? [];
           if (originalOvertimeSlots.length === 0) return;
           const originalName = (teachers || []).find(t => t.id === record.originalTeacherId)?.name || '老師';
@@ -653,8 +659,8 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
 
   const rowData = useMemo(() => {
     return (scopeTeachers || []).map(t => {
-        const recordId = `${selectedMonth}_${t.id}`;
-        const existing = (overtimeRecords || []).find(r => r.id === recordId);
+        const recordId = overtimeRecordFirestoreId(activeSemesterId, selectedMonth, t.id);
+        const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, t.id, activeSemesterId);
         const standardBase = getStandardBase(t);
         const defaultBasic = calculateDefaultBasic(t);
         
@@ -777,8 +783,8 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
   }, [rowData, searchTerm, showConfiguredOnly]);
 
   const handleCellChange = (teacherId: string, field: keyof OvertimeRecord, value: any) => {
-      const recordId = `${selectedMonth}_${teacherId}`;
-      const existing = (overtimeRecords || []).find(r => r.id === recordId);
+      const recordId = overtimeRecordFirestoreId(activeSemesterId, selectedMonth, teacherId);
+      const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, teacherId, activeSemesterId);
       const teacher = (teachers || []).find(t => t.id === teacherId);
       const numVal = (['weeklyBasic','weeklyActual','weeksCount','adjustment'].includes(field)) ? Number(value) : value;
       
@@ -786,6 +792,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
           id: recordId, 
           teacherId, 
           yearMonth: selectedMonth, 
+          semesterId: activeSemesterId || undefined,
           sortOrder: existing?.sortOrder,
           weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0, 
           weeklyActual: resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0,
@@ -802,12 +809,13 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
 
   const persistRowOrder = async (orderedRows: typeof rowData) => {
       await Promise.all(orderedRows.map((row, index) => {
-          const existing = (overtimeRecords || []).find(r => r.id === row.recordId);
+          const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, row.teacher.id, activeSemesterId);
           const teacher = (teachers || []).find(t => t.id === row.teacher.id);
           const record: OvertimeRecord = existing || {
               id: row.recordId,
               teacherId: row.teacher.id,
               yearMonth: selectedMonth,
+              semesterId: activeSemesterId || undefined,
               sortOrder: index,
               weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0,
               weeklyActual: resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0,
@@ -898,13 +906,14 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
             let count = 0;
             (scopeTeachers || []).forEach(teacher => {
                 if (teacher.defaultOvertimeSlots && teacher.defaultOvertimeSlots.length > 0) {
-                    const newRecordId = `${selectedMonth}_${teacher.id}`;
-                    const existing = (overtimeRecords || []).find(r => r.id === newRecordId);
+                    const newRecordId = overtimeRecordFirestoreId(activeSemesterId, selectedMonth, teacher.id);
+                    const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, teacher.id, activeSemesterId);
                     
                     const newRecord: OvertimeRecord = {
                         id: newRecordId,
                         teacherId: teacher.id,
                         yearMonth: selectedMonth,
+                        semesterId: activeSemesterId || undefined,
                         sortOrder: existing?.sortOrder,
                         weeklyBasic: existing?.weeklyBasic ?? calculateDefaultBasic(teacher),
                         weeklyActual: existing?.weeklyActual ?? (resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0),
@@ -948,12 +957,13 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
     
     let count = 0;
     prevRecords.forEach(prev => {
-        const newRecordId = `${selectedMonth}_${prev.teacherId}`;
-        const existing = (overtimeRecords || []).find(r => r.id === newRecordId);
+        const newRecordId = overtimeRecordFirestoreId(activeSemesterId, selectedMonth, prev.teacherId);
+        const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, prev.teacherId, activeSemesterId);
         
         const newRecord: OvertimeRecord = {
             ...prev,
             id: newRecordId,
+            semesterId: activeSemesterId || undefined,
             yearMonth: selectedMonth,
             sortOrder: existing?.sortOrder ?? prev.sortOrder,
             updatedAt: Date.now(),
@@ -1198,7 +1208,27 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
   }, 0);
 
   const activeTeacher = useMemo(() => (teachers || []).find(t => t.id === scheduleModal.teacherId), [teachers, scheduleModal.teacherId]);
-  const activeRecord = useMemo(() => (overtimeRecords || []).find(r => r.id === `${selectedMonth}_${scheduleModal.teacherId}`) || { id: '', teacherId: '', yearMonth: selectedMonth, sortOrder: undefined, weeklyBasic: 0, weeklyActual: 0, weeksCount: 0, adjustment: 0, adjustmentReason: '', note: '', updatedAt: 0, overtimeSlots: [] }, [overtimeRecords, selectedMonth, scheduleModal.teacherId]);
+  const activeRecord = useMemo(() => {
+    if (!scheduleModal.teacherId) {
+      return { id: '', teacherId: '', yearMonth: selectedMonth, sortOrder: undefined, weeklyBasic: 0, weeklyActual: 0, weeksCount: 0, adjustment: 0, adjustmentReason: '', note: '', updatedAt: 0, overtimeSlots: [] } as OvertimeRecord;
+    }
+    return (
+      findOvertimeRecord(overtimeRecords || [], selectedMonth, scheduleModal.teacherId, activeSemesterId) || {
+        id: '',
+        teacherId: '',
+        yearMonth: selectedMonth,
+        sortOrder: undefined,
+        weeklyBasic: 0,
+        weeklyActual: 0,
+        weeksCount: 0,
+        adjustment: 0,
+        adjustmentReason: '',
+        note: '',
+        updatedAt: 0,
+        overtimeSlots: [],
+      }
+    );
+  }, [overtimeRecords, selectedMonth, scheduleModal.teacherId, activeSemesterId]);
 
   return (
     <div className="p-8 pb-20">

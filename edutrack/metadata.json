@@ -1,0 +1,5 @@
+{
+  "name": "教學組事務管理系統",
+  "description": "專為學校教學組設計的現代化Web應用程式。目前專注於點名單生成，支援Google Sheets後端擴充，具備列印優化與響應式介面。",
+  "requestFramePermissions": []
+}

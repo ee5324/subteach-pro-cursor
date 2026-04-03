@@ -1,10 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc, SubteachAllowedUser, SubstituteBusyBlock } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails } from '../utils/calculations';
 import { normalizeTaiwanMobileDigits } from '../utils/taiwanPhone';
 import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
+import {
+  deriveFixedOvertimeForScope,
+  deriveOvertimeRecordsForScope,
+  fixedOvertimeFirestoreId,
+  overtimeRecordFirestoreId,
+  parseFixedOvertimeDocId,
+  parseOvertimeRecordDocId,
+} from '../utils/semesterScope';
 import { isSubstituteBusyBlockExpiredForAutoCleanup } from '../utils/substituteBusyBlocks';
 import { db, auth } from '../src/lib/firebase';
 import {
@@ -154,12 +162,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [records, setRecords] = useState<LeaveRecord[]>([]);
-  const [overtimeRecords, setOvertimeRecords] = useState<OvertimeRecord[]>([]); 
+  const [overtimeRecordsRaw, setOvertimeRecordsRaw] = useState<OvertimeRecord[]>([]); 
   const [specialActivities, setSpecialActivities] = useState<SpecialActivity[]>([]); 
   const [salaryGrades, setSalaryGrades] = useState<SalaryGrade[]>([]);
   const [settings, setSettings] = useState<AppSettings>(INITIAL_SETTINGS);
   const [holidays, setHolidays] = useState<string[]>([]); 
-  const [fixedOvertimeConfig, setFixedOvertimeConfig] = useState<FixedOvertimeConfig[]>([]); 
+  const [fixedOvertimeConfigRaw, setFixedOvertimeConfigRaw] = useState<
+    Array<FixedOvertimeConfig & { _firestoreId?: string }>
+  >([]); 
   const [gradeEvents, setGradeEvents] = useState<GradeEvent[]>([]); 
   
   const [semesters, setSemesters] = useState<SemesterDefinition[]>([]);
@@ -175,6 +185,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [subteachAllowedUsers, setSubteachAllowedUsers] = useState<SubteachAllowedUser[]>([]);
 
   const [loading, setLoading] = useState(true);
+
+  const overtimeRecords = useMemo(
+    () => deriveOvertimeRecordsForScope(overtimeRecordsRaw, activeSemesterId, semesters),
+    [overtimeRecordsRaw, activeSemesterId, semesters],
+  );
+
+  const fixedOvertimeConfig = useMemo(
+    () => deriveFixedOvertimeForScope(fixedOvertimeConfigRaw, activeSemesterId),
+    [fixedOvertimeConfigRaw, activeSemesterId],
+  );
 
   const isSubteachAdmin = Boolean(
     currentUser?.email && (
@@ -276,9 +296,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setRecords(fetchedRecords);
     }));
 
-    // Overtime Records
+    // Overtime Records（文件 id 含學期者與舊 YYYY-MM_teacherId 並存）
     unsubs.push(onSnapshot(collection(db, 'overtimeRecords'), (snap) => {
-      setOvertimeRecords(snap.docs.map(d => d.data() as OvertimeRecord));
+      setOvertimeRecordsRaw(
+        snap.docs.map((d) => {
+          const data = d.data() as OvertimeRecord;
+          const parsed = parseOvertimeRecordDocId(d.id);
+          if (!parsed) return { ...data, id: d.id } as OvertimeRecord;
+          return {
+            ...data,
+            id: d.id,
+            yearMonth: data.yearMonth || parsed.yearMonth,
+            teacherId: data.teacherId || parsed.teacherId,
+            semesterId: data.semesterId ?? (parsed.semesterId ?? undefined),
+          };
+        }),
+      );
     }));
 
     // Special Activities
@@ -291,9 +324,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSalaryGrades(snap.docs.map(d => d.data() as SalaryGrade));
     }));
 
-    // Fixed Overtime Config
+    // Fixed Overtime Config（有學期時 id 為 `${semesterId}__${teacherId}`，舊資料 id = teacherId）
     unsubs.push(onSnapshot(collection(db, 'fixedOvertimeConfig'), (snap) => {
-      setFixedOvertimeConfig(snap.docs.map(d => d.data() as FixedOvertimeConfig));
+      setFixedOvertimeConfigRaw(
+        snap.docs.map((d) => {
+          const data = d.data() as FixedOvertimeConfig;
+          const parsed = parseFixedOvertimeDocId(d.id);
+          return {
+            ...data,
+            teacherId: data.teacherId || parsed.teacherId,
+            semesterId: data.semesterId ?? (parsed.semesterId ?? undefined),
+            _firestoreId: d.id,
+          };
+        }),
+      );
     }));
 
     // Grade Events
@@ -688,9 +732,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await syncPublicSubstituteSchedules(teachers, records.filter((r) => r.id !== id));
   };
 
-  const updateOvertimeRecord = async (record: OvertimeRecord) => { 
+  const updateOvertimeRecord = async (record: OvertimeRecord) => {
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'overtimeRecords', record.id), sanitizeForFirestore(record));
+    const docId = overtimeRecordFirestoreId(activeSemesterId, record.yearMonth, record.teacherId);
+    const toSave: OvertimeRecord = {
+      ...record,
+      id: docId,
+      semesterId: activeSemesterId || undefined,
+    };
+    await setDoc(doc(db, 'overtimeRecords', docId), sanitizeForFirestore(toSave));
+    const legacyId = `${record.yearMonth}_${record.teacherId}`;
+    if (docId !== legacyId) {
+      await deleteDoc(doc(db, 'overtimeRecords', legacyId)).catch(() => {});
+    }
+    if (record.id && record.id !== docId && record.id !== legacyId) {
+      await deleteDoc(doc(db, 'overtimeRecords', record.id)).catch(() => {});
+    }
   };
   const addActivity = async (activity: SpecialActivity) => { 
     if (!db) throw new Error("Firebase not initialized");
@@ -704,22 +761,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!db) throw new Error("Firebase not initialized");
     await deleteDoc(doc(db, 'specialActivities', id));
   };
-  const updateFixedOvertimeConfig = async (config: FixedOvertimeConfig) => { 
+  const updateFixedOvertimeConfig = async (config: FixedOvertimeConfig) => {
     if (!db) throw new Error("Firebase not initialized");
-    await setDoc(doc(db, 'fixedOvertimeConfig', config.teacherId), sanitizeForFirestore(config));
+    const docId = fixedOvertimeFirestoreId(activeSemesterId, config.teacherId);
+    const toSave: FixedOvertimeConfig = {
+      ...config,
+      semesterId: activeSemesterId || undefined,
+    };
+    await setDoc(doc(db, 'fixedOvertimeConfig', docId), sanitizeForFirestore(toSave));
+    if (activeSemesterId) {
+      const legacyRef = doc(db, 'fixedOvertimeConfig', config.teacherId);
+      const legacySnap = await getDoc(legacyRef);
+      if (legacySnap.exists() && parseFixedOvertimeDocId(legacySnap.id).semesterId === null) {
+        await deleteDoc(legacyRef);
+      }
+    }
     const t = teachers.find((x) => x.id === config.teacherId);
     if (t) {
-      const merged = [...fixedOvertimeConfig.filter((c) => c.teacherId !== config.teacherId), config];
-      await syncPublicTeacherSchedule(t, { fixedOvertimeConfigForCheck: merged });
+      const tempRaw = fixedOvertimeConfigRaw.filter((c) => {
+        if (c.teacherId !== config.teacherId) return true;
+        if (activeSemesterId) {
+          if (c.semesterId === activeSemesterId) return false;
+          if (!c.semesterId && parseFixedOvertimeDocId(c._firestoreId || c.teacherId).semesterId === null) return false;
+        }
+        return true;
+      });
+      const merged: Array<FixedOvertimeConfig & { _firestoreId?: string }> = [
+        ...tempRaw,
+        { ...toSave, _firestoreId: docId },
+      ];
+      await syncPublicTeacherSchedule(t, {
+        fixedOvertimeConfigForCheck: deriveFixedOvertimeForScope(merged, activeSemesterId),
+      });
     }
   };
-  const removeFixedOvertimeConfig = async (teacherId: string) => { 
+  const removeFixedOvertimeConfig = async (teacherId: string) => {
     if (!db) throw new Error("Firebase not initialized");
-    await deleteDoc(doc(db, 'fixedOvertimeConfig', teacherId));
+    if (activeSemesterId) {
+      await deleteDoc(doc(db, 'fixedOvertimeConfig', fixedOvertimeFirestoreId(activeSemesterId, teacherId))).catch(() => {});
+      await deleteDoc(doc(db, 'fixedOvertimeConfig', teacherId)).catch(() => {});
+    } else {
+      await deleteDoc(doc(db, 'fixedOvertimeConfig', teacherId));
+    }
     const t = teachers.find((x) => x.id === teacherId);
     if (t) {
-      const merged = fixedOvertimeConfig.filter((c) => c.teacherId !== teacherId);
-      await syncPublicTeacherSchedule(t, { fixedOvertimeConfigForCheck: merged });
+      const tempRaw = fixedOvertimeConfigRaw.filter((c) => {
+        if (c.teacherId !== teacherId) return true;
+        if (activeSemesterId) {
+          if (c.semesterId === activeSemesterId) return false;
+          if (!c.semesterId) return false;
+          return true;
+        }
+        return c.semesterId !== undefined;
+      });
+      await syncPublicTeacherSchedule(t, {
+        fixedOvertimeConfigForCheck: deriveFixedOvertimeForScope(tempRaw, activeSemesterId),
+      });
     }
   };
   const addGradeEvent = async (event: GradeEvent) => { 
@@ -943,11 +1040,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setRecords(rehydratedRecords);
         setSalaryGrades((result.data.salaryGrades || []).map((g: any) => ({ ...g, id: String(g.points) })));
         setSpecialActivities(result.data.specialActivities || []);
-        setFixedOvertimeConfig(result.data.fixedOvertimeConfig || []);
+        setFixedOvertimeConfigRaw(
+          (result.data.fixedOvertimeConfig || []).map((f: FixedOvertimeConfig & { _firestoreId?: string }) => ({
+            ...f,
+            _firestoreId: f._firestoreId || fixedOvertimeFirestoreId(f.semesterId ?? activeSemesterId, f.teacherId),
+          })),
+        );
         setGradeEvents(result.data.gradeEvents || []);
         setHolidays(result.data.holidays || []);
         setSubPool(result.data.subPool || []);
-        setOvertimeRecords(result.data.overtimeRecords || []); 
+        setOvertimeRecordsRaw(result.data.overtimeRecords || []); 
         setLanguagePayrolls(result.data.languagePayrolls || []); 
         
         setSettings(prev => ({
@@ -984,13 +1086,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Records
       for (const r of records) await addToBatch(doc(db, 'records', r.id), r);
       // Overtime
-      for (const o of overtimeRecords) await addToBatch(doc(db, 'overtimeRecords', o.id), o);
+      for (const o of overtimeRecordsRaw) await addToBatch(doc(db, 'overtimeRecords', o.id), o);
       // Activities
       for (const a of specialActivities) await addToBatch(doc(db, 'specialActivities', a.id), a);
       // Salary Grades
       for (const s of salaryGrades) await addToBatch(doc(db, 'salaryGrades', s.id), s);
       // Fixed Overtime
-      for (const f of fixedOvertimeConfig) await addToBatch(doc(db, 'fixedOvertimeConfig', f.teacherId), f);
+      for (const f of fixedOvertimeConfigRaw) {
+        const fid = f._firestoreId || fixedOvertimeFirestoreId(f.semesterId ?? activeSemesterId, f.teacherId);
+        const { _firestoreId: _fid, ...rest } = f;
+        await addToBatch(doc(db, 'fixedOvertimeConfig', fid), sanitizeForFirestore(rest));
+      }
       // Grade Events
       for (const g of gradeEvents) await addToBatch(doc(db, 'gradeEvents', g.id), g);
       // Semesters
