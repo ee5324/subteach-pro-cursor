@@ -14,6 +14,8 @@ interface LayoutProps {
   budgetPlansAlertOverdue?: boolean;
   user?: User | null;
   onSignOut?: () => void;
+  /** 嵌入「手機查詢中心」時：以父層高度為準，避免 h-screen 撐破版面 */
+  embeddedMobileHub?: boolean;
 }
 
 /** 單一選單項目 */
@@ -40,6 +42,7 @@ const Layout: React.FC<LayoutProps> = ({
   budgetPlansAlertOverdue = false,
   user,
   onSignOut,
+  embeddedMobileHub = false,
 }) => {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [nativeLangOpen, setNativeLangOpen] = useState(true);
@@ -98,7 +101,11 @@ const Layout: React.FC<LayoutProps> = ({
   );
 
   const navContent = (
-    <nav className="flex flex-col gap-0.5 w-full py-3">
+    <nav
+      className={`flex flex-col gap-0.5 w-full py-3 ${
+        embeddedMobileHub ? '[&_button]:min-h-[44px] [&_button]:items-center touch-manipulation' : ''
+      }`}
+    >
       {/* 行政行事曆、學生名單、計畫專案、計畫代墊 */}
       {menuItemsFirst.map((item) => {
         const Icon = item.icon;
@@ -225,7 +232,13 @@ const Layout: React.FC<LayoutProps> = ({
   );
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
+    <div
+      className={
+        embeddedMobileHub
+          ? 'flex h-full min-h-0 max-h-full bg-gray-100 overflow-hidden'
+          : 'flex h-screen bg-gray-100 overflow-hidden'
+      }
+    >
       {/* 左側導覽列（縱向） */}
       <aside
         className={`no-print bg-slate-800 text-white border-r border-slate-700 flex-shrink-0 ${
@@ -259,15 +272,24 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* 右側：Header + 內容區 */}
       <div className="flex flex-col flex-1 min-w-0">
-        <header className="flex-shrink-0 h-14 lg:h-16 bg-white shadow-sm flex items-center justify-between px-4 lg:px-6 no-print">
-          <div className="flex items-center gap-3">
+        <header
+          className={`flex-shrink-0 bg-white shadow-sm flex items-center justify-between px-3 sm:px-4 lg:px-6 no-print ${
+            embeddedMobileHub ? 'h-12 min-h-12 sm:h-14 sm:min-h-14' : 'h-14 lg:h-16'
+          }`}
+        >
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setIsNavOpen(!isNavOpen)}
-              className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              className="lg:hidden p-2.5 -ml-1 rounded-md text-gray-600 hover:bg-gray-100 touch-manipulation"
+              aria-label={isNavOpen ? '關閉選單' : '開啟選單'}
             >
               {isNavOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            <span className="text-lg font-semibold text-gray-800">
+            <span
+              className={`font-semibold text-gray-800 truncate ${
+                embeddedMobileHub ? 'text-base sm:text-lg' : 'text-lg'
+              }`}
+            >
               {getActiveLabel() || menuItemsFlat.find(i => i.id === activeTab)?.label}
             </span>
           </div>
@@ -295,7 +317,11 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         )}
 
-        <main className="flex-1 overflow-auto p-4 lg:p-8 min-h-0">
+        <main
+          className={`flex-1 overflow-auto min-h-0 ${
+            embeddedMobileHub ? 'p-3 sm:p-4 lg:p-6' : 'p-4 lg:p-8'
+          }`}
+        >
           {children}
         </main>
       </div>

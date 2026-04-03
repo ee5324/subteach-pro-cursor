@@ -1,12 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Calendar, Search, Wallet, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Calendar, Search, Wallet, ChevronLeft, ChevronRight, ExternalLink, ClipboardList } from 'lucide-react';
+import EduTrackApp from '../edutrack/App';
 import { useAppStore } from '../store/useAppStore';
 import { resolveTeacherDefaultSchedule, teacherMatchesClassKeyword } from '../utils/teacherSchedule';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
 import { PayType, type Teacher, type TeacherScheduleSlot } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
 
-type TabKey = 'weekly' | 'teacher' | 'salary';
+type TabKey = 'weekly' | 'teacher' | 'salary' | 'edutrack';
 
 const PERIOD_ROWS = [
   { id: '早', label: '早' },
@@ -297,12 +298,40 @@ const MobileQueryHub: React.FC = () => {
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-3">手機查詢中心</h1>
-      <p className="text-sm text-slate-500 mb-4">單一網址提供總表週課、教師課表搜尋、代課老師月薪資整合。</p>
+      <p className="text-sm text-slate-500 mb-4">
+        單一網址提供總表週課、教師課表搜尋、代課老師月薪資整合，以及教學組事務（與主站登入／白名單一致）。
+      </p>
 
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <button onClick={() => setTab('weekly')} className={`px-2 py-2 rounded-lg text-xs sm:text-sm ${tab === 'weekly' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}>總表週課</button>
-        <button onClick={() => setTab('teacher')} className={`px-2 py-2 rounded-lg text-xs sm:text-sm ${tab === 'teacher' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}>教師課表</button>
-        <button onClick={() => setTab('salary')} className={`px-2 py-2 rounded-lg text-xs sm:text-sm ${tab === 'salary' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}>代課薪資</button>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => setTab('weekly')}
+          className={`px-2 py-2.5 rounded-lg text-xs sm:text-sm touch-manipulation ${tab === 'weekly' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+        >
+          總表週課
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('teacher')}
+          className={`px-2 py-2.5 rounded-lg text-xs sm:text-sm touch-manipulation ${tab === 'teacher' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+        >
+          教師課表
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('salary')}
+          className={`px-2 py-2.5 rounded-lg text-xs sm:text-sm touch-manipulation ${tab === 'salary' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+        >
+          代課薪資
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('edutrack')}
+          className={`px-2 py-2.5 rounded-lg text-xs sm:text-sm touch-manipulation flex items-center justify-center gap-1 ${tab === 'edutrack' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+        >
+          <ClipboardList size={14} className="shrink-0" />
+          教學組
+        </button>
       </div>
 
       {tab === 'weekly' && (
@@ -581,6 +610,25 @@ const MobileQueryHub: React.FC = () => {
             </>
           )}
           {!selectedSalaryTeacher && <div className="text-sm text-slate-400">請先選擇代課老師。</div>}
+        </section>
+      )}
+
+      {tab === 'edutrack' && (
+        <section className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col">
+          <div className="p-3 flex items-start gap-2 border-b border-slate-200 bg-slate-50/80">
+            <ClipboardList size={18} className="text-indigo-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="font-semibold text-slate-800">教學組事務</div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                行政行事曆、語言選修、計畫專案、考卷存檔等；需具教學組白名單權限。左側選單改為手機選單圖示開啟。
+              </p>
+            </div>
+          </div>
+          <div className="h-[min(70vh,calc(100dvh-13rem))] min-h-[320px] flex flex-col">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-b-xl bg-slate-50">
+              <EduTrackApp embedded mobileHub />
+            </div>
+          </div>
         </section>
       )}
     </div>

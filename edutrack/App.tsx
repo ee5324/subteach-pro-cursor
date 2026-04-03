@@ -534,7 +534,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ currentUser, currentAccess })
     );
 };
 
-const App: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
+const App: React.FC<{ embedded?: boolean; mobileHub?: boolean }> = ({ embedded, mobileHub }) => {
   // 對外填報頁（獨立開啟時；主站 Hash 路由由 App.tsx 的 /exam-submit 處理）
   if (
     !embedded &&
@@ -688,7 +688,13 @@ const App: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
 
   if (authLoading || (!isSandbox() && user && accessLoading)) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div
+        className={
+          mobileHub
+            ? 'min-h-[180px] py-12 bg-slate-100 flex items-center justify-center'
+            : 'min-h-screen bg-slate-100 flex items-center justify-center'
+        }
+      >
         <Loader2 size={32} className="animate-spin text-slate-600" />
       </div>
     );
@@ -726,6 +732,7 @@ const App: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
       budgetPlansAlertOverdue={budgetNavAlert.overdue > 0}
       user={user}
       onSignOut={() => signOut()}
+      embeddedMobileHub={mobileHub}
     >
       {renderContent()}
     </Layout>
