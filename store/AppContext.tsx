@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc, SubteachAllowedUser, SubstituteBusyBlock } from '../types';
+import { Teacher, TeacherType, LeaveRecord, SalaryGrade, OvertimeRecord, SpecialActivity, FixedOvertimeConfig, GradeEvent, SemesterDefinition, SubPoolItem, LanguagePayroll, SubstituteApplication, PublicBoardApplication, TeacherLeaveRequestDoc, SubteachAllowedUser, SubstituteBusyBlock, PayType, type SubstituteDetail } from '../types';
 import { GAS_WEB_APP_URL } from '../config';
 import { callGasApi } from '../utils/api';
-import { convertSlotsToDetails } from '../utils/calculations';
+import { convertSlotsToDetails, deduplicateDetails } from '../utils/calculations';
+import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
 import { normalizeTaiwanMobileDigits } from '../utils/taiwanPhone';
 import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import {
@@ -45,6 +46,32 @@ function sanitizeForFirestore<T>(obj: T): T {
     return out as T;
   }
   return obj;
+}
+
+/** 公開代課週課表：月薪資明細節次文字（與手機查詢中心一致） */
+const PUBLIC_SUB_PERIOD_ORDER = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
+
+function padPublicSubstituteMonthSet(set: Set<string>, pad: number) {
+  const sorted = Array.from(set).filter(Boolean).sort();
+  if (sorted.length === 0) return;
+  const [y0, m0] = sorted[0].split('-').map(Number);
+  const [y1, m1] = sorted[sorted.length - 1].split('-').map(Number);
+  let cur = new Date(y0, m0 - 1 - pad, 1);
+  const end = new Date(y1, m1 - 1 + pad, 1);
+  while (cur <= end) {
+    set.add(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+    cur.setMonth(cur.getMonth() + 1);
+  }
+}
+
+function publicSubstituteDetailPeriodText(d: SubstituteDetail): string {
+  if (d.payType === PayType.HOURLY) {
+    const periods = [...(d.selectedPeriods || [])].map((x) => String(x));
+    periods.sort((a, b) => PUBLIC_SUB_PERIOD_ORDER.indexOf(a) - PUBLIC_SUB_PERIOD_ORDER.indexOf(b));
+    return periods.length > 0 ? `第${periods.join(',')}節` : `${d.periodCount || 0}節`;
+  }
+  if (d.payType === PayType.HALF_DAY) return '半日薪';
+  return `${d.periodCount || 1}日薪`;
 }
 
 export interface AppSettings {
@@ -563,6 +590,94 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       item.slots.sort((a, b) => a.date.localeCompare(b.date) || a.period.localeCompare(b.period));
     }
 
+    type PublicSubMonthFinance = {
+      rows: Array<{
+        date: string;
+        originalTeacherName: string;
+        periodText: string;
+        amount: number;
+        isPtaHomeroom: boolean;
+      }>;
+      substituteTotal: number;
+      homeroomFeeEstimate: number;
+      ptaHomeroomFeeTotal: number;
+      overtimeTotal: number;
+      fixedOvertimeTotal: number;
+      grandTotal: number;
+    };
+    const financeByTeacherId = new Map<string, Record<string, PublicSubMonthFinance>>();
+
+    scheduleBySubId.forEach((item, teacherId) => {
+      const monthSet = new Set<string>();
+      item.slots.forEach((s) => {
+        if (s.date && s.date.length >= 7) monthSet.add(s.date.slice(0, 7));
+      });
+      recordsForBuild.forEach((record) => {
+        deduplicateDetails(record.details || []).forEach((d) => {
+          if (d.substituteTeacherId !== teacherId) return;
+          const ds = String(d.date || '');
+          if (ds.length >= 7) monthSet.add(ds.slice(0, 7));
+        });
+      });
+      overtimeRecords.forEach((o) => {
+        if (o.teacherId === teacherId) monthSet.add(o.yearMonth);
+      });
+
+      if (monthSet.size === 0) {
+        const n = new Date();
+        monthSet.add(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`);
+      } else {
+        padPublicSubstituteMonthSet(monthSet, 2);
+      }
+
+      const monthlyFinance: Record<string, PublicSubMonthFinance> = {};
+      Array.from(monthSet)
+        .sort()
+        .forEach((ym) => {
+          const breakdown = calculateSubstituteMonthlyBreakdown({
+            teacherId,
+            yearMonth: ym,
+            records: recordsForBuild,
+            teachers: teachersForBuild,
+            overtimeRecords,
+            fixedOvertimeConfig,
+            holidays,
+            settings,
+            activeSemesterId,
+          });
+          const rows: PublicSubMonthFinance['rows'] = [];
+          recordsForBuild.forEach((record) => {
+            const originalTeacherName =
+              teacherById.get(record.originalTeacherId)?.name || String(record.originalTeacherId || '');
+            deduplicateDetails(record.details || []).forEach((d) => {
+              if (d.substituteTeacherId !== teacherId) return;
+              if (!String(d.date || '').startsWith(ym)) return;
+              if (d.isOvertime === true) return;
+              const isPtaHomeroom =
+                record.homeroomFeeByPta === true && record.leaveType !== '自理 (事假/病假)';
+              rows.push({
+                date: d.date,
+                originalTeacherName,
+                periodText: publicSubstituteDetailPeriodText(d),
+                amount: Number(d.calculatedAmount) || 0,
+                isPtaHomeroom,
+              });
+            });
+          });
+          rows.sort((a, b) => a.date.localeCompare(b.date));
+          monthlyFinance[ym] = {
+            rows,
+            substituteTotal: breakdown.substituteTotal,
+            homeroomFeeEstimate: breakdown.homeroomFeeEstimate,
+            ptaHomeroomFeeTotal: breakdown.ptaHomeroomFeeTotal,
+            overtimeTotal: breakdown.overtimeTotal,
+            fixedOvertimeTotal: breakdown.fixedOvertimeTotal,
+            grandTotal: breakdown.grandTotal,
+          };
+        });
+      financeByTeacherId.set(teacherId, monthlyFinance);
+    });
+
     const publicCollectionRef = collection(db, 'publicSubstituteSchedules');
     const existingSnap = await getDocs(publicCollectionRef);
     const existingIds = new Set(existingSnap.docs.map((d) => d.id));
@@ -577,6 +692,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           teacherName: item.teacherName,
           phoneDigits: item.phoneDigits,
           slots: item.slots,
+          monthlyFinance: financeByTeacherId.get(teacherId) || {},
           updatedAt: Date.now(),
         }),
       );
@@ -600,8 +716,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       void syncPublicSubstituteSchedules();
     }, 800);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- teachers/records 變動時重建公開查詢資料，避免依賴函式參考造成無限重綁
-  }, [currentUser, loading, teachers, records]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 主資料變動時重建公開查詢（含月薪資）；避免依賴函式參考造成無限重綁
+  }, [
+    currentUser,
+    loading,
+    teachers,
+    records,
+    overtimeRecords,
+    fixedOvertimeConfig,
+    holidays,
+    settings,
+    activeSemesterId,
+  ]);
 
   const addTeacher = async (teacher: Teacher) => {
     if (!db) throw new Error("Firebase not initialized");

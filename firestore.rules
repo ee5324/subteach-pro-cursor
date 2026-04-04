@@ -137,6 +137,20 @@ service cloud.firestore {
       allow read: if true;
       allow write: if canAccessSubteach();
     }
+    // 代課週課表公開查詢（#/sub-weekly）瀏覽紀錄：未登入可寫入；僅代課系統管理員可讀
+    match /substituteWeeklyLookupViews/{docId} {
+      allow create: if request.resource.data.keys().hasOnly(['teacherId', 'teacherName', 'yearMonth', 'viewedAt', 'source'])
+        && request.resource.data.source == 'sub-weekly'
+        && request.resource.data.teacherId is string
+        && request.resource.data.teacherId.size() > 0
+        && request.resource.data.teacherId.size() <= 128
+        && request.resource.data.teacherName is string
+        && request.resource.data.teacherName.size() <= 100
+        && request.resource.data.yearMonth is string
+        && request.resource.data.yearMonth.matches('^\\d{4}-\\d{2}$');
+      allow read: if isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
+      allow update, delete: if false;
+    }
     match /subteach_allowed_users/{email} {
       allow read: if (isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin()) && (request.auth.token.email == email || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin());
       allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();

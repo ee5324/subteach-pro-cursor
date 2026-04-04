@@ -1,13 +1,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2, Smartphone, ClipboardList, LayoutDashboard } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2, Smartphone, ClipboardList, LayoutDashboard, Eye } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 
 const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
-  const { settings, checkGasConnection, records, loading, currentUser, publicBoardApplications, teacherLeaveRequests } = useAppStore();
+  const { settings, checkGasConnection, records, loading, currentUser, publicBoardApplications, teacherLeaveRequests, isSubteachAdmin } = useAppStore();
   const hasGasUrl = Boolean(settings?.gasWebAppUrl?.trim());
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline' | 'unset'>(hasGasUrl ? 'checking' : 'unset');
   const navigate = useNavigate();
@@ -136,6 +136,13 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           <Smartphone size={18} />
           <span>手機查詢中心</span>
         </NavLink>
+
+        {isSubteachAdmin && (
+          <NavLink to="/substitute-lookup-stats" className={linkClass} onClick={onClose}>
+            <Eye size={18} />
+            <span>連結查閱統計</span>
+          </NavLink>
+        )}
 
         <NavLink to="/edutrack" className={linkClass} onClick={onClose}>
           <ClipboardList size={18} />

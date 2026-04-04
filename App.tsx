@@ -27,6 +27,7 @@ import PublicBoardApplicationsPage from './pages/PublicBoardApplicationsPage';
 import TeacherLeaveRequest from './pages/TeacherLeaveRequest';
 import SubstituteContactExchange from './pages/SubstituteContactExchange';
 import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
+import SubstituteLookupViewStats from './pages/SubstituteLookupViewStats';
 import MobileQueryHub from './pages/MobileQueryHub';
 import EduTrackPage from './pages/EduTrackPage';
 import SystemDashboard from './pages/SystemDashboard';
@@ -161,6 +162,14 @@ const App: React.FC = () => {
           <Route path="fixed-overtime" element={<FixedOvertimePage />} />
           <Route path="hakka-salary" element={<LanguageSalary />} />
           <Route path="settings" element={<Settings />} />
+          <Route
+            path="substitute-lookup-stats"
+            element={
+              <PageErrorBoundary fallbackTitle="連結查閱統計載入錯誤">
+                <SubstituteLookupViewStats />
+              </PageErrorBoundary>
+            }
+          />
         </Route>
         
         <Route path="*" element={<Navigate to="/" replace />} />
