@@ -30,6 +30,7 @@ type PublicMonthFinanceRow = {
   periodText: string;
   amount: number;
   isPtaHomeroom?: boolean;
+  isOvertimeSubstitute?: boolean;
 };
 
 type PublicMonthFinance = {
@@ -403,23 +404,37 @@ const SubstituteWeeklyLookup: React.FC = () => {
                         <span className="font-semibold">${monthFinanceForView.ptaHomeroomFeeTotal.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between p-3">
-                        <span>超鐘點</span>
+                        <span>超鐘點（另冊）</span>
                         <span className="font-semibold">${monthFinanceForView.overtimeTotal.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between p-3 bg-sky-50 text-sky-900">
+                        <span className="font-semibold">代課費＋家長會加計＋超鐘點（小計）</span>
+                        <span className="font-bold tabular-nums">
+                          $
+                          {(
+                            monthFinanceForView.substituteTotal +
+                            monthFinanceForView.ptaHomeroomFeeTotal +
+                            monthFinanceForView.overtimeTotal
+                          ).toLocaleString()}
+                        </span>
                       </div>
                       <div className="flex justify-between p-3">
                         <span>固定兼課</span>
                         <span className="font-semibold">${monthFinanceForView.fixedOvertimeTotal.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between p-3 bg-emerald-50">
-                        <span className="font-bold">合計</span>
+                        <span className="font-bold">月合計</span>
                         <span className="font-bold text-emerald-700">${monthFinanceForView.grandTotal.toLocaleString()}</span>
                       </div>
                     </div>
 
                     <div className="border border-slate-200 rounded-lg overflow-hidden">
                       <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-700">
-                        代課狀況明細（{financeViewMonth}）
+                        本月代課節次明細（{financeViewMonth}）
                       </div>
+                      <p className="px-3 py-2 text-[11px] text-slate-500 border-b border-slate-100 bg-slate-50/50">
+                        含超鐘點時段代課節次。超鐘點列為單筆試算；該月實際超鐘點給付以上方「超鐘點（另冊）」為準。「代課費＋家長會加計＋超鐘點（小計）」含代課費、家長會導師費加計與超鐘點。
+                      </p>
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[520px] text-sm">
                           <thead className="bg-slate-50">
@@ -434,7 +449,14 @@ const SubstituteWeeklyLookup: React.FC = () => {
                             {monthFinanceForView.rows.length === 0 ? (
                               <tr>
                                 <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
-                                  本月無代課明細（若有超鐘點／固定兼課，請見上方合計）
+                                  {monthFinanceForView.substituteTotal > 0 ||
+                                  monthFinanceForView.overtimeTotal > 0 ? (
+                                    <>
+                                      無可逐筆列出之請假代課明細；代課費、家長會加計或超鐘點請見上方摘要與「代課費＋家長會加計＋超鐘點（小計）」。
+                                    </>
+                                  ) : (
+                                    <>本月無代課明細（若有固定兼課，請見上方合計）</>
+                                  )}
                                 </td>
                               </tr>
                             ) : (
@@ -450,7 +472,16 @@ const SubstituteWeeklyLookup: React.FC = () => {
                                       </span>
                                     )}
                                   </td>
-                                  <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                                  <td
+                                    className={`px-3 py-2 text-right font-semibold tabular-nums ${
+                                      row.isOvertimeSubstitute ? 'text-violet-700' : 'text-slate-700'
+                                    }`}
+                                    title={
+                                      row.isOvertimeSubstitute
+                                        ? '超鐘點時段單筆試算；該月實際給付見「超鐘點（另冊）」'
+                                        : undefined
+                                    }
+                                  >
                                     ${row.amount.toLocaleString()}
                                   </td>
                                 </tr>

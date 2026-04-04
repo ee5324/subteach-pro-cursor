@@ -597,6 +597,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         periodText: string;
         amount: number;
         isPtaHomeroom: boolean;
+        isOvertimeSubstitute?: boolean;
       }>;
       substituteTotal: number;
       homeroomFeeEstimate: number;
@@ -652,15 +653,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             deduplicateDetails(record.details || []).forEach((d) => {
               if (d.substituteTeacherId !== teacherId) return;
               if (!String(d.date || '').startsWith(ym)) return;
-              if (d.isOvertime === true) return;
               const isPtaHomeroom =
                 record.homeroomFeeByPta === true && record.leaveType !== '自理 (事假/病假)';
+              let periodText = publicSubstituteDetailPeriodText(d);
+              if (d.isOvertime === true) periodText += '（超鐘點代課）';
               rows.push({
                 date: d.date,
                 originalTeacherName,
-                periodText: publicSubstituteDetailPeriodText(d),
+                periodText,
                 amount: Number(d.calculatedAmount) || 0,
                 isPtaHomeroom,
+                isOvertimeSubstitute: d.isOvertime === true,
               });
             });
           });

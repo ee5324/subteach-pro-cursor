@@ -4,7 +4,7 @@ import EduTrackApp from '../edutrack/App';
 import { useAppStore } from '../store/useAppStore';
 import { resolveTeacherDefaultSchedule, teacherMatchesClassKeyword } from '../utils/teacherSchedule';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
-import { PayType, type Teacher, type TeacherScheduleSlot } from '../types';
+import { PayType, type SubstituteDetail, type Teacher, type TeacherScheduleSlot } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
 
 type TabKey = 'weekly' | 'teacher' | 'salary' | 'edutrack';
@@ -44,6 +44,21 @@ const getWeekDays = (baseDate: Date) => {
 
 const sortTeachersByName = (list: Teacher[]) =>
   [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+
+function salaryDetailPeriodText(d: SubstituteDetail, periodOrder: string[]): string {
+  let periodText = '';
+  if (d.payType === PayType.HOURLY) {
+    const periods = [...(d.selectedPeriods || [])].map((x) => String(x));
+    periods.sort((a, b) => periodOrder.indexOf(a) - periodOrder.indexOf(b));
+    periodText = periods.length > 0 ? `第${periods.join(',')}節` : `${d.periodCount || 0}節`;
+  } else if (d.payType === PayType.HALF_DAY) {
+    periodText = '半日薪';
+  } else {
+    periodText = `${d.periodCount || 1}日薪`;
+  }
+  if (d.isOvertime === true) periodText += '（超鐘點代課）';
+  return periodText;
+}
 
 /** 過濾 Firestore／匯入造成的異常節次，避免 map／篩選時拋錯 */
 const sanitizeScheduleSlots = (raw: TeacherScheduleSlot[] | undefined): TeacherScheduleSlot[] =>
@@ -176,19 +191,21 @@ const MobileQueryHub: React.FC = () => {
     [teacherList, salaryTeacherId],
   );
 
-  /** 該月在請假紀錄中有代課明細者（與下方「代課狀況明細」條件一致：非超鐘點明細） */
+  /** 該月有代課明細或超鐘點清冊之教師（查詢時可檢視本月所有與代課／超鐘點相關之給付摘要） */
   const substituteTeacherIdsInMonth = useMemo(() => {
     const ids = new Set<string>();
     recordList.forEach((record) => {
       deduplicateDetails(record.details || []).forEach((d) => {
         if (!d.substituteTeacherId) return;
         if (!String(d.date || '').startsWith(salaryMonth)) return;
-        if (d.isOvertime === true) return;
         ids.add(d.substituteTeacherId);
       });
     });
+    (overtimeRecords || []).forEach((o) => {
+      if (o.teacherId && o.yearMonth === salaryMonth) ids.add(o.teacherId);
+    });
     return ids;
-  }, [recordList, salaryMonth]);
+  }, [recordList, salaryMonth, overtimeRecords]);
 
   useEffect(() => {
     if (!salaryTeacherId) return;
@@ -229,23 +246,21 @@ const MobileQueryHub: React.FC = () => {
   const salaryDetails = useMemo(() => {
     if (!selectedSalaryTeacher) return [];
     const periodOrder = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
-    const rows: { date: string; originalTeacherName: string; periodText: string; amount: number; isPtaHomeroom: boolean }[] = [];
+    const rows: {
+      date: string;
+      originalTeacherName: string;
+      periodText: string;
+      amount: number;
+      isPtaHomeroom: boolean;
+      isOvertimeSubstitute: boolean;
+    }[] = [];
     recordList.forEach((record) => {
       const originalTeacherName = teacherList.find((t) => t.id === record.originalTeacherId)?.name || record.originalTeacherId;
       deduplicateDetails(record.details || []).forEach((d) => {
         if (d.substituteTeacherId !== selectedSalaryTeacher.id) return;
         if (!String(d.date || '').startsWith(salaryMonth)) return;
-        if (d.isOvertime === true) return;
-        let periodText = '';
-        if (d.payType === PayType.HOURLY) {
-          const periods = [...(d.selectedPeriods || [])].map((x) => String(x));
-          periods.sort((a, b) => periodOrder.indexOf(a) - periodOrder.indexOf(b));
-          periodText = periods.length > 0 ? `第${periods.join(',')}節` : `${d.periodCount || 0}節`;
-        } else if (d.payType === PayType.HALF_DAY) {
-          periodText = '半日薪';
-        } else {
-          periodText = `${d.periodCount || 1}日薪`;
-        }
+        const isOvertimeSubstitute = d.isOvertime === true;
+        const periodText = salaryDetailPeriodText(d, periodOrder);
         const isPtaHomeroom = !!record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)';
         rows.push({
           date: String(d.date || ''),
@@ -253,6 +268,7 @@ const MobileQueryHub: React.FC = () => {
           periodText,
           amount: Number(d.calculatedAmount) || 0,
           isPtaHomeroom,
+          isOvertimeSubstitute,
         });
       });
     });
@@ -272,16 +288,25 @@ const MobileQueryHub: React.FC = () => {
     const systemUrl = `${window.location.origin}${window.location.pathname}#/`;
     const detailCardsHtml = salaryDetails.length === 0
       ? `<div style="padding:14px;border:1px solid #e2e8f0;border-radius:12px;text-align:center;color:#94a3b8;background:#ffffff;">本月無代課明細</div>`
-      : salaryDetails.map((row) => `
+      : salaryDetails.map((row) => {
+          const amtStyle = row.isOvertimeSubstitute
+            ? 'font-weight:700;color:#6d28d9;font-size:14px;'
+            : 'font-weight:700;color:#334155;font-size:14px;';
+          const otNote = row.isOvertimeSubstitute
+            ? '<div style="margin-top:4px;font-size:11px;color:#6d28d9;">※ 超鐘點時段；該月實際給付已合併於摘要「超鐘點（另冊）」欄（與代課費、家長會加計合計見「代課費＋家長會加計＋超鐘點」小計）。</div>'
+            : '';
+          return `
           <div style="border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#ffffff;box-shadow:0 1px 2px rgba(15,23,42,0.04);">
             <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
               <div style="font-weight:700;color:#0f172a;font-size:14px;">${row.date}</div>
-              <div style="font-weight:700;color:#334155;font-size:14px;">$${row.amount.toLocaleString()}</div>
+              <div style="${amtStyle}">$${row.amount.toLocaleString()}</div>
             </div>
             <div style="margin-top:6px;font-size:13px;color:#334155;">請假教師：${row.originalTeacherName}</div>
             <div style="margin-top:4px;font-size:13px;color:#475569;">節數：${row.periodText}${row.isPtaHomeroom ? '（家長會導師費）' : ''}</div>
+            ${otNote}
           </div>
-        `).join('');
+        `;
+        }).join('');
     popup.document.write(`
       <html>
         <head>
@@ -292,20 +317,21 @@ const MobileQueryHub: React.FC = () => {
         <div style="max-width:720px;margin:0 auto;padding:14px;">
           <div style="background:linear-gradient(135deg,#4338ca,#0ea5e9);color:#fff;border-radius:16px;padding:14px 14px 12px 14px;box-shadow:0 10px 25px rgba(37,99,235,0.2);">
             <div style="font-size:18px;font-weight:800;line-height:1.35;">${title}</div>
-            <div style="margin-top:6px;font-size:12px;opacity:0.95;">代課、超鐘點、固定兼課、導師費（估算）整合摘要</div>
+            <div style="margin-top:6px;font-size:12px;opacity:0.95;">本月代課費、超鐘點（另冊核算）、固定兼課、導師費等整合摘要</div>
           </div>
 
           <div style="margin-top:12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>代課費（含導師費）</span><strong>$${monthlyBreakdown.substituteTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#64748b;"><span>導師費（估算，已含於代課費）</span><span>$${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#7c3aed;"><span>家長會導師費（加計）</span><strong>$${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</strong></div>
-            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>超鐘點</span><strong>$${monthlyBreakdown.overtimeTotal.toLocaleString()}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>超鐘點（另冊）</span><strong>$${monthlyBreakdown.overtimeTotal.toLocaleString()}</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;background:#eff6ff;"><span style="font-weight:700;color:#1e40af;">代課費＋家長會加計＋超鐘點（小計）</span><strong style="color:#1e40af;">$${(monthlyBreakdown.substituteTotal + monthlyBreakdown.ptaHomeroomFeeTotal + monthlyBreakdown.overtimeTotal).toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;"><span>固定兼課</span><strong>$${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</strong></div>
             <div style="display:flex;justify-content:space-between;padding:12px;background:#ecfdf5;font-size:15px;font-weight:800;"><span>月合計</span><span style="color:#0f766e;">$${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
           </div>
 
           <div style="margin-top:14px;">
-            <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:#1e293b;">代課狀況明細（${salaryMonth}）</div>
+            <div style="font-size:15px;font-weight:800;margin-bottom:8px;color:#1e293b;">本月代課節次明細（${salaryMonth}）</div>
             <div style="display:grid;gap:8px;">${detailCardsHtml}</div>
           </div>
 
@@ -586,7 +612,7 @@ const MobileQueryHub: React.FC = () => {
             {filteredSalaryTeachers.length === 0 && (
               <div className="px-3 py-6 text-center text-sm text-slate-400">
                 {substituteTeacherIdsInMonth.size === 0
-                  ? `所選月份（${salaryMonth}）尚無代課紀錄。`
+                  ? `所選月份（${salaryMonth}）尚無代課或超鐘點薪資資料。`
                   : '找不到符合查詢的教師。'}
               </div>
             )}
@@ -597,13 +623,29 @@ const MobileQueryHub: React.FC = () => {
                 <div className="flex justify-between p-3"><span>代課費（含導師費）</span><span className="font-semibold">${monthlyBreakdown.substituteTotal.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3 text-slate-500"><span>導師費（估算，已含於代課費）</span><span>${monthlyBreakdown.homeroomFeeEstimate.toLocaleString()}</span></div>
                 <div className="flex justify-between p-3 text-violet-700 bg-violet-50/60"><span>家長會導師費（加計）</span><span className="font-semibold">${monthlyBreakdown.ptaHomeroomFeeTotal.toLocaleString()}</span></div>
-                <div className="flex justify-between p-3"><span>超鐘點</span><span className="font-semibold">${monthlyBreakdown.overtimeTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3"><span>超鐘點（另冊）</span><span className="font-semibold">${monthlyBreakdown.overtimeTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3 bg-sky-50 text-sky-900">
+                  <span className="font-semibold">代課費＋家長會加計＋超鐘點（小計）</span>
+                  <span className="font-bold tabular-nums">
+                    $
+                    {(
+                      monthlyBreakdown.substituteTotal +
+                      monthlyBreakdown.ptaHomeroomFeeTotal +
+                      monthlyBreakdown.overtimeTotal
+                    ).toLocaleString()}
+                  </span>
+                </div>
                 <div className="flex justify-between p-3"><span>固定兼課</span><span className="font-semibold">${monthlyBreakdown.fixedOvertimeTotal.toLocaleString()}</span></div>
-                <div className="flex justify-between p-3 bg-emerald-50"><span className="font-bold">合計</span><span className="font-bold text-emerald-700">${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between p-3 bg-emerald-50"><span className="font-bold">月合計</span><span className="font-bold text-emerald-700">${monthlyBreakdown.grandTotal.toLocaleString()}</span></div>
               </div>
 
               <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-700">代課狀況明細（{salaryMonth}）</div>
+                <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-700">
+                  本月代課節次明細（{salaryMonth}）
+                </div>
+                <p className="px-3 py-2 text-[11px] text-slate-500 border-b border-slate-100 bg-slate-50/50">
+                  下列為本月每次代課（含超鐘點時段）。超鐘點列右側為單筆試算；該月實際超鐘點給付以上方「超鐘點（另冊）」為準，勿與「代課費」重複加總。若要一眼看「代課費＋家長會加計＋超鐘點」合計，請看上方小計列。
+                </p>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[520px] text-sm">
                     <thead className="bg-slate-50">
@@ -617,7 +659,11 @@ const MobileQueryHub: React.FC = () => {
                     <tbody className="divide-y divide-slate-100">
                       {salaryDetails.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-6 text-center text-slate-400">本月無代課明細</td>
+                          <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
+                            {monthlyBreakdown.substituteTotal > 0 || monthlyBreakdown.overtimeTotal > 0
+                              ? '本月無可逐筆列出之請假代課明細（若仍有代課費或超鐘點金額，請以上方摘要為準；僅有超鐘點者依另冊核算）。'
+                              : '本月無代課明細。'}
+                          </td>
                         </tr>
                       ) : (
                         salaryDetails.map((row, idx) => (
@@ -628,7 +674,18 @@ const MobileQueryHub: React.FC = () => {
                               {row.periodText}
                               {row.isPtaHomeroom && <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">家長會導師費</span>}
                             </td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-700">${row.amount.toLocaleString()}</td>
+                            <td
+                              className={`px-3 py-2 text-right font-semibold tabular-nums ${
+                                row.isOvertimeSubstitute ? 'text-violet-700' : 'text-slate-700'
+                              }`}
+                              title={
+                                row.isOvertimeSubstitute
+                                  ? '超鐘點時段單筆試算；該月實際給付見摘要「超鐘點（另冊）」'
+                                  : undefined
+                              }
+                            >
+                              ${row.amount.toLocaleString()}
+                            </td>
                           </tr>
                         ))
                       )}
