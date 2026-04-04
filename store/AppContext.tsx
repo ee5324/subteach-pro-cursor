@@ -655,8 +655,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (!String(d.date || '').startsWith(ym)) return;
               const isPtaHomeroom =
                 record.homeroomFeeByPta === true && record.leaveType !== '自理 (事假/病假)';
-              let periodText = publicSubstituteDetailPeriodText(d);
-              if (d.isOvertime === true) periodText += '（超鐘點代課）';
+              const periodText = publicSubstituteDetailPeriodText(d);
               rows.push({
                 date: d.date,
                 originalTeacherName,

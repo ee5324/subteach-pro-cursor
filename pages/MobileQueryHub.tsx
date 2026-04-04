@@ -56,7 +56,6 @@ function salaryDetailPeriodText(d: SubstituteDetail, periodOrder: string[]): str
   } else {
     periodText = `${d.periodCount || 1}日薪`;
   }
-  if (d.isOvertime === true) periodText += '（超鐘點代課）';
   return periodText;
 }
 
@@ -207,16 +206,46 @@ const MobileQueryHub: React.FC = () => {
     return ids;
   }, [recordList, salaryMonth, overtimeRecords]);
 
+  /** 該月月薪資整合「月合計」大於 0 者才列名單（排除各項皆 0 之幽靈列） */
+  const salaryTeacherIdsWithNonZeroPayout = useMemo(() => {
+    const ids = new Set<string>();
+    const baseArgs = {
+      yearMonth: salaryMonth,
+      records: recordList,
+      teachers: teacherList,
+      overtimeRecords,
+      fixedOvertimeConfig,
+      holidays,
+      settings,
+      activeSemesterId,
+    };
+    substituteTeacherIdsInMonth.forEach((teacherId) => {
+      const b = calculateSubstituteMonthlyBreakdown({ ...baseArgs, teacherId });
+      if (b.grandTotal > 0) ids.add(teacherId);
+    });
+    return ids;
+  }, [
+    substituteTeacherIdsInMonth,
+    salaryMonth,
+    recordList,
+    teacherList,
+    overtimeRecords,
+    fixedOvertimeConfig,
+    holidays,
+    settings,
+    activeSemesterId,
+  ]);
+
   useEffect(() => {
     if (!salaryTeacherId) return;
-    if (!substituteTeacherIdsInMonth.has(salaryTeacherId)) {
+    if (!salaryTeacherIdsWithNonZeroPayout.has(salaryTeacherId)) {
       setSalaryTeacherId('');
     }
-  }, [salaryTeacherId, substituteTeacherIdsInMonth]);
+  }, [salaryTeacherId, salaryTeacherIdsWithNonZeroPayout]);
 
   const filteredSalaryTeachers = useMemo(() => {
     const base = sortTeachersByName(
-      teacherList.filter((t) => substituteTeacherIdsInMonth.has(t.id)),
+      teacherList.filter((t) => salaryTeacherIdsWithNonZeroPayout.has(t.id)),
     );
     const q = salaryTeacherQuery.trim().toLowerCase();
     if (!q) return base;
@@ -226,7 +255,7 @@ const MobileQueryHub: React.FC = () => {
         (t.phone || '').includes(q) ||
         (t.subjects || '').toLowerCase().includes(q),
     );
-  }, [teacherList, salaryTeacherQuery, substituteTeacherIdsInMonth]);
+  }, [teacherList, salaryTeacherQuery, salaryTeacherIdsWithNonZeroPayout]);
 
   const monthlyBreakdown = useMemo(() => {
     if (!selectedSalaryTeacher) return null;
@@ -302,7 +331,15 @@ const MobileQueryHub: React.FC = () => {
               <div style="${amtStyle}">$${row.amount.toLocaleString()}</div>
             </div>
             <div style="margin-top:6px;font-size:13px;color:#334155;">請假教師：${row.originalTeacherName}</div>
-            <div style="margin-top:4px;font-size:13px;color:#475569;">節數：${row.periodText}${row.isPtaHomeroom ? '（家長會導師費）' : ''}</div>
+            <div style="margin-top:4px;font-size:13px;color:#475569;">節數：${row.periodText}${
+              row.isOvertimeSubstitute
+                ? '<span style="display:inline-block;margin-left:6px;font-size:11px;padding:2px 6px;border-radius:4px;background:#ede9fe;color:#6d28d9;font-weight:600;vertical-align:middle;">超鐘點代課</span>'
+                : ''
+            }${
+              row.isPtaHomeroom
+                ? '<span style="display:inline-block;margin-left:6px;font-size:11px;padding:2px 6px;border-radius:4px;background:#ede9fe;color:#6d28d9;font-weight:600;vertical-align:middle;">家長會導師費</span>'
+                : ''
+            }</div>
             ${otNote}
           </div>
         `;
@@ -613,7 +650,9 @@ const MobileQueryHub: React.FC = () => {
               <div className="px-3 py-6 text-center text-sm text-slate-400">
                 {substituteTeacherIdsInMonth.size === 0
                   ? `所選月份（${salaryMonth}）尚無代課或超鐘點薪資資料。`
-                  : '找不到符合查詢的教師。'}
+                  : salaryTeacherIdsWithNonZeroPayout.size === 0
+                    ? `所選月份（${salaryMonth}）代課薪資合計皆為 0，無列示代課老師。`
+                    : '找不到符合查詢的教師。'}
               </div>
             )}
           </div>
@@ -672,7 +711,16 @@ const MobileQueryHub: React.FC = () => {
                             <td className="px-3 py-2 text-slate-700">{row.originalTeacherName}</td>
                             <td className="px-3 py-2 text-slate-600">
                               {row.periodText}
-                              {row.isPtaHomeroom && <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">家長會導師費</span>}
+                              {row.isOvertimeSubstitute && (
+                                <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold">
+                                  超鐘點代課
+                                </span>
+                              )}
+                              {row.isPtaHomeroom && (
+                                <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold">
+                                  家長會導師費
+                                </span>
+                              )}
                             </td>
                             <td
                               className={`px-3 py-2 text-right font-semibold tabular-nums ${

@@ -106,6 +106,17 @@ function formatYearMonthLabel(ym: string): string {
   return `${y}年${m}月`;
 }
 
+const OVERTIME_SUBSTITUTE_PERIOD_SUFFIX = /（超鐘點代課）$/;
+
+/** 節數欄：與徽章分離；相容舊版同步資料（periodText 尾端仍含「（超鐘點代課）」） */
+function financeRowPeriodParts(row: PublicMonthFinanceRow) {
+  const periodText = row.periodText || '';
+  const periodBase = periodText.replace(OVERTIME_SUBSTITUTE_PERIOD_SUFFIX, '');
+  const showOvertimeBadge =
+    row.isOvertimeSubstitute === true || OVERTIME_SUBSTITUTE_PERIOD_SUFFIX.test(periodText);
+  return { periodBase, showOvertimeBadge };
+}
+
 const SubstituteWeeklyLookup: React.FC = () => {
   const [phoneInput, setPhoneInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -460,24 +471,31 @@ const SubstituteWeeklyLookup: React.FC = () => {
                                 </td>
                               </tr>
                             ) : (
-                              monthFinanceForView.rows.map((row, idx) => (
+                              monthFinanceForView.rows.map((row, idx) => {
+                                const { periodBase, showOvertimeBadge } = financeRowPeriodParts(row);
+                                return (
                                 <tr key={`${row.date}_${row.originalTeacherName}_${idx}`}>
                                   <td className="px-3 py-2 text-slate-700">{row.date}</td>
                                   <td className="px-3 py-2 text-slate-700">{row.originalTeacherName}</td>
                                   <td className="px-3 py-2 text-slate-600">
-                                    {row.periodText}
+                                    {periodBase}
+                                    {showOvertimeBadge && (
+                                      <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold">
+                                        超鐘點代課
+                                      </span>
+                                    )}
                                     {row.isPtaHomeroom && (
-                                      <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                                      <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold">
                                         家長會導師費
                                       </span>
                                     )}
                                   </td>
                                   <td
                                     className={`px-3 py-2 text-right font-semibold tabular-nums ${
-                                      row.isOvertimeSubstitute ? 'text-violet-700' : 'text-slate-700'
+                                      showOvertimeBadge ? 'text-violet-700' : 'text-slate-700'
                                     }`}
                                     title={
-                                      row.isOvertimeSubstitute
+                                      showOvertimeBadge
                                         ? '超鐘點時段單筆試算；該月實際給付見「超鐘點（另冊）」'
                                         : undefined
                                     }
@@ -485,7 +503,8 @@ const SubstituteWeeklyLookup: React.FC = () => {
                                     ${row.amount.toLocaleString()}
                                   </td>
                                 </tr>
-                              ))
+                              );
+                              })
                             )}
                           </tbody>
                         </table>
