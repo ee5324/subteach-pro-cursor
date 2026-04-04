@@ -138,7 +138,22 @@ export function calculateSubstituteMonthlyBreakdown(args: {
     }
   }
   overtimePeriods = Math.max(0, overtimePeriods);
-  const overtimeTotal = overtimePeriods * HOURLY_RATE;
+  const overtimeFromRecord = overtimePeriods * HOURLY_RATE;
+
+  // 超鐘點清冊（OvertimeRecord）為主；若該月清冊核算為 0，但請假紀錄已有標示超鐘點之代課明細，則以明細金額加總作為超鐘點（避免另冊未登錄時總額漏計）
+  let overtimeFromLeaveDetails = 0;
+  records.forEach((record) => {
+    const details = deduplicateDetails(record.details || []);
+    details.forEach((d) => {
+      if (d.substituteTeacherId !== teacherId) return;
+      if (toYmd(d.date).startsWith(yearMonth) !== true) return;
+      if (d.isOvertime !== true) return;
+      overtimeFromLeaveDetails += Number(d.calculatedAmount) || 0;
+    });
+  });
+
+  const overtimeTotal =
+    overtimeFromRecord > 0 ? overtimeFromRecord : overtimeFromLeaveDetails;
 
   const teacher = teachers.find((t) => t.id === teacherId);
   const fixedConfig = fixedOvertimeConfig.find((c) => c.teacherId === teacherId);
