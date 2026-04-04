@@ -124,6 +124,7 @@ function hashHref(path: string): string {
 const SystemDashboard: React.FC = () => {
   const examSubmitHref = useMemo(() => hashHref('/exam-submit'), []);
   const teacherRequestHref = useMemo(() => hashHref('/teacher-request'), []);
+  const subWeeklyHref = useMemo(() => hashHref('/sub-weekly'), []);
 
   return (
     <div className="min-h-full bg-gradient-to-b from-slate-50 to-slate-100/90 p-4 md:p-8">
@@ -198,6 +199,7 @@ const SystemDashboard: React.FC = () => {
 
         <div className="mt-8 p-5 rounded-2xl border border-dashed border-slate-300 bg-white/60 text-sm text-slate-600">
           <p className="font-medium text-slate-800 mb-2">對外填報與表單</p>
+          <p className="text-xs text-slate-500 mb-3">無需登入主系統；可複製連結或另開分頁提供給老師。</p>
           <ul className="space-y-2">
             <li>
               <a
@@ -219,6 +221,17 @@ const SystemDashboard: React.FC = () => {
               >
                 <ExternalLink size={14} />
                 教師請假申請表單
+              </a>
+            </li>
+            <li>
+              <a
+                href={subWeeklyHref}
+                className="text-indigo-600 hover:underline inline-flex items-center gap-1"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink size={14} />
+                代課老師週課表查詢（手機全碼驗證）
               </a>
             </li>
           </ul>
