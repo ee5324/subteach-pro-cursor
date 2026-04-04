@@ -176,16 +176,40 @@ const MobileQueryHub: React.FC = () => {
     [teacherList, salaryTeacherId],
   );
 
+  /** 該月在請假紀錄中有代課明細者（與下方「代課狀況明細」條件一致：非超鐘點明細） */
+  const substituteTeacherIdsInMonth = useMemo(() => {
+    const ids = new Set<string>();
+    recordList.forEach((record) => {
+      deduplicateDetails(record.details || []).forEach((d) => {
+        if (!d.substituteTeacherId) return;
+        if (!String(d.date || '').startsWith(salaryMonth)) return;
+        if (d.isOvertime === true) return;
+        ids.add(d.substituteTeacherId);
+      });
+    });
+    return ids;
+  }, [recordList, salaryMonth]);
+
+  useEffect(() => {
+    if (!salaryTeacherId) return;
+    if (!substituteTeacherIdsInMonth.has(salaryTeacherId)) {
+      setSalaryTeacherId('');
+    }
+  }, [salaryTeacherId, substituteTeacherIdsInMonth]);
+
   const filteredSalaryTeachers = useMemo(() => {
-    const q = salaryTeacherQuery.trim().toLowerCase();
-    const source = sortTeachersByName(teacherList);
-    if (!q) return source;
-    return source.filter((t) =>
-      (t.name || '').toLowerCase().includes(q) ||
-      (t.phone || '').includes(q) ||
-      (t.subjects || '').toLowerCase().includes(q),
+    const base = sortTeachersByName(
+      teacherList.filter((t) => substituteTeacherIdsInMonth.has(t.id)),
     );
-  }, [teacherList, salaryTeacherQuery]);
+    const q = salaryTeacherQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(
+      (t) =>
+        (t.name || '').toLowerCase().includes(q) ||
+        (t.phone || '').includes(q) ||
+        (t.subjects || '').toLowerCase().includes(q),
+    );
+  }, [teacherList, salaryTeacherQuery, substituteTeacherIdsInMonth]);
 
   const monthlyBreakdown = useMemo(() => {
     if (!selectedSalaryTeacher) return null;
@@ -530,7 +554,8 @@ const MobileQueryHub: React.FC = () => {
 
       {tab === 'salary' && (
         <section className="bg-white border border-slate-200 rounded-xl p-3">
-          <div className="flex items-center gap-2 font-semibold text-slate-700 mb-2"><Wallet size={16} /> 代課老師月薪資整合</div>
+          <div className="flex items-center gap-2 font-semibold text-slate-700 mb-1"><Wallet size={16} /> 代課老師月薪資整合</div>
+          <p className="text-xs text-slate-500 mb-2">僅列出所選月份在代課紀錄中有明細的教師。</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
             <input
               value={salaryTeacherQuery}
@@ -559,7 +584,11 @@ const MobileQueryHub: React.FC = () => {
               </button>
             ))}
             {filteredSalaryTeachers.length === 0 && (
-              <div className="px-3 py-6 text-center text-sm text-slate-400">找不到符合的教師</div>
+              <div className="px-3 py-6 text-center text-sm text-slate-400">
+                {substituteTeacherIdsInMonth.size === 0
+                  ? `所選月份（${salaryMonth}）尚無代課紀錄。`
+                  : '找不到符合查詢的教師。'}
+              </div>
             )}
           </div>
           {selectedSalaryTeacher && monthlyBreakdown && (
