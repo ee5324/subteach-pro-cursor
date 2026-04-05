@@ -65,7 +65,7 @@ const sanitizeScheduleSlots = (raw: TeacherScheduleSlot[] | undefined): TeacherS
 
 const slotClassMatchesQuery = (slot: TeacherScheduleSlot | null | undefined, classQueryLower: string): boolean => {
   if (!classQueryLower || slot == null) return false;
-  return (slot.className || '').toLowerCase().includes(classQueryLower);
+  return String(slot.className ?? '').toLowerCase().includes(classQueryLower);
 };
 
 const TeacherWeekGrid: React.FC<{
@@ -89,7 +89,7 @@ const TeacherWeekGrid: React.FC<{
                     hit ? 'border-amber-300 bg-amber-50 font-medium' : 'border-slate-100 bg-slate-50'
                   }`}
                 >
-                  第{s.period}節 {s.subject || ''} {s.className || ''}
+                  第{s.period}節 {s.subject != null ? String(s.subject) : ''} {String(s.className ?? '')}
                 </div>
               );
             })}
