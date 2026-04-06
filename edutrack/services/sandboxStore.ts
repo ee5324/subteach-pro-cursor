@@ -173,6 +173,8 @@ const store = {
       paidBy: '教學組',
       status: 'outstanding',
       memo: '待主計核銷後歸還',
+      settledDate: '',
+      paidToPayeeDate: '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -187,6 +189,7 @@ const store = {
       status: 'outstanding',
       memo: '有新計畫後可改掛',
       settledDate: '',
+      paidToPayeeDate: '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -602,7 +605,13 @@ export function sandboxSaveBudgetPlanAdvance(
   const id = payload.id ?? uid();
   const now = new Date().toISOString();
   const idx = store.budgetPlanAdvances.findIndex((a) => a.id === id);
-  const st = payload.status === 'settled' || payload.status === 'cancelled' ? payload.status : 'outstanding';
+  const sd = String(payload.settledDate ?? '').trim();
+  const pd = String(payload.paidToPayeeDate ?? '').trim();
+  let st: BudgetPlanAdvance['status'];
+  if (payload.status === 'cancelled') st = 'cancelled';
+  else if (sd && pd) st = 'settled';
+  else if (payload.status === 'settled') st = 'settled';
+  else st = 'outstanding';
   const planId = String(payload.budgetPlanId ?? '').trim();
   const row: BudgetPlanAdvance = {
     id,
@@ -614,6 +623,7 @@ export function sandboxSaveBudgetPlanAdvance(
     paidBy: payload.paidBy != null ? String(payload.paidBy).trim() : '',
     status: st,
     settledDate: String(payload.settledDate ?? '').trim(),
+    paidToPayeeDate: String(payload.paidToPayeeDate ?? '').trim(),
     memo: payload.memo ?? '',
     createdAt: idx >= 0 ? store.budgetPlanAdvances[idx].createdAt ?? now : now,
     updatedAt: now,

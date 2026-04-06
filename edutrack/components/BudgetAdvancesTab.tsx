@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Banknote, Plus, Trash2, Save, Loader2, RefreshCw, Link2, Printer, ChevronDown, Calculator } from 'lucide-react';
+import {
+  Banknote,
+  Plus,
+  Trash2,
+  Save,
+  Loader2,
+  RefreshCw,
+  Link2,
+  Printer,
+  ChevronDown,
+  Calculator,
+  CheckCircle2,
+} from 'lucide-react';
 import type { BudgetPlan, BudgetPlanAdvance, BudgetAdvanceStatus, BudgetPlanLedgerEntry } from '../types';
 import {
   getBudgetPlans,
@@ -21,12 +33,45 @@ const fmtMoney = (n: number) =>
   n.toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const STATUS_LABEL: Record<BudgetAdvanceStatus, string> = {
-  outstanding: '待歸還／沖銷',
-  settled: '已核銷或歸還',
+  outstanding: '進行中',
+  settled: '已結清',
   cancelled: '作廢',
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function trimDate(s?: string) {
+  return String(s ?? '').trim();
+}
+
+/** 學校尚未補款（補款試算池、待學校補款彙總） */
+function awaitsSchoolReimburse(a: BudgetPlanAdvance): boolean {
+  if (a.status === 'cancelled') return false;
+  if (trimDate(a.settledDate)) return false;
+  if (a.status === 'settled' && !trimDate(a.settledDate)) return false;
+  return true;
+}
+
+/** 學校已補款、您尚未給受款人 */
+function schoolDonePayeePending(a: BudgetPlanAdvance): boolean {
+  if (a.status === 'cancelled') return false;
+  return !!trimDate(a.settledDate) && !trimDate(a.paidToPayeeDate);
+}
+
+function mergeAdvanceStatusOnSave(
+  row: BudgetPlanAdvance,
+  patch: Partial<BudgetPlanAdvance>,
+): BudgetAdvanceStatus {
+  if (patch.status === 'cancelled') return 'cancelled';
+  const sd = trimDate(patch.settledDate !== undefined ? patch.settledDate : row.settledDate);
+  const pd = trimDate(patch.paidToPayeeDate !== undefined ? patch.paidToPayeeDate : row.paidToPayeeDate);
+  if (patch.settledDate !== undefined || patch.paidToPayeeDate !== undefined) {
+    if (sd && pd) return 'settled';
+    return 'outstanding';
+  }
+  if (patch.status !== undefined) return patch.status;
+  return row.status;
+}
 
 function escHtml(s: unknown): string {
   return String(s ?? '')
@@ -66,6 +111,8 @@ const BudgetAdvancesTab: React.FC = () => {
     truncatedPool: boolean;
     poolSize: number;
   } | null>(null);
+  const [applySettledDate, setApplySettledDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
   const [newRow, setNewRow] = useState({
     budgetPlanId: '',
     ledgerEntryId: '',
@@ -160,7 +207,7 @@ const BudgetAdvancesTab: React.FC = () => {
       else if (fp) rows = rows.filter((a) => a.budgetPlanId === fp);
       if (filterStatus) rows = rows.filter((a) => a.status === filterStatus);
     }
-    return rows.filter((a) => a.status === 'outstanding');
+    return rows.filter((a) => awaitsSchoolReimburse(a));
   }, [advances, filterPlanId, filterStatus, reimburseUseFilter]);
 
   const runReimburseMatch = useCallback(() => {
@@ -178,24 +225,96 @@ const BudgetAdvancesTab: React.FC = () => {
     setMatchOutcome({ target: targetInt, solutions, truncatedPool, poolSize });
   }, [reimburseAmount, poolForReimburseMatch]);
 
+  const handleApplyReimburseSolution = useCallback(
+    async (sol: BudgetPlanAdvance[]) => {
+      const d = applySettledDate.trim();
+      if (d && !ISO_DATE.test(d)) {
+        setError('「套用」用的補款／核銷日格式不正確（須為 YYYY-MM-DD）');
+        return;
+      }
+      const stale = sol.some((a) => {
+        const cur = advances.find((x) => x.id === a.id);
+        return (
+          !cur ||
+          !!trimDate(cur.settledDate) ||
+          Math.round(Number(cur.amount)) !== Math.round(Number(a.amount))
+        );
+      });
+      if (stale) {
+        setError('列表已變更，請按「試算可能組合」重新計算後再套用');
+        await load();
+        return;
+      }
+      if (
+        !confirm(
+          `確定將此組合 ${sol.length} 筆標記為「學校已補款」？\n（僅填學校補款／入帳日，不代表您已把代墊款給受款人；請日後再填「已給受款人日」。）\n${d ? `補款日：${d}` : '（未填補款日，可稍後在列表補上）'}`,
+        )
+      ) {
+        return;
+      }
+      setSaving(true);
+      setError(null);
+      setApplyFeedback(null);
+      try {
+        for (const row of sol) {
+          const sd = trimDate(d);
+          const pd = trimDate(row.paidToPayeeDate);
+          await saveBudgetPlanAdvance({
+            id: row.id,
+            budgetPlanId: row.budgetPlanId,
+            ledgerEntryId: row.ledgerEntryId,
+            amount: row.amount,
+            advanceDate: row.advanceDate,
+            title: row.title,
+            paidBy: row.paidBy,
+            status: sd && pd ? 'settled' : 'outstanding',
+            settledDate: d,
+            paidToPayeeDate: row.paidToPayeeDate,
+            memo: row.memo,
+          });
+        }
+        await load();
+        setMatchOutcome(null);
+        setApplyFeedback(
+          `已為 ${sol.length} 筆填入學校補款日；狀態維持「進行中」直到您也填寫「已給受款人日」。`,
+        );
+        window.setTimeout(() => setApplyFeedback(null), 5000);
+      } catch (e: any) {
+        setError(e?.message || '套用失敗');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [advances, applySettledDate, load],
+  );
+
   const summary = useMemo(() => {
-    const outstanding = filteredAdvances.filter((a) => a.status === 'outstanding');
-    const totalOut = outstanding.reduce((s, a) => s + a.amount, 0);
+    const awaitingSchool = filteredAdvances.filter((a) => awaitsSchoolReimburse(a));
+    const totalOut = awaitingSchool.reduce((s, a) => s + a.amount, 0);
     const byPlan = new Map<string, number>();
     const byPayee = new Map<string, number>();
-    for (const a of outstanding) {
+    for (const a of awaitingSchool) {
       const pk = a.budgetPlanId.trim() || '__none__';
       byPlan.set(pk, (byPlan.get(pk) ?? 0) + a.amount);
       const payee = (a.paidBy ?? '').trim() || '（未填受款人）';
       byPayee.set(payee, (byPayee.get(payee) ?? 0) + a.amount);
     }
-    return { totalOut, byPlan, byPayee, outstandingCount: outstanding.length };
+    const pendingPayeeOnly = filteredAdvances.filter((a) => schoolDonePayeePending(a));
+    const totalPendingPayee = pendingPayeeOnly.reduce((s, a) => s + a.amount, 0);
+    return {
+      totalOut,
+      byPlan,
+      byPayee,
+      outstandingCount: awaitingSchool.length,
+      totalPendingPayee,
+      pendingPayeeCount: pendingPayeeOnly.length,
+    };
   }, [filteredAdvances]);
 
   const activePayeeRows = useMemo(() => {
     if (!activePayee) return [];
     return filteredAdvances
-      .filter((a) => a.status === 'outstanding')
+      .filter((a) => awaitsSchoolReimburse(a))
       .filter((a) => ((a.paidBy ?? '').trim() || '（未填受款人）') === activePayee)
       .sort((a, b) => (b.advanceDate || '').localeCompare(a.advanceDate || '') || b.amount - a.amount);
   }, [activePayee, filteredAdvances]);
@@ -240,11 +359,11 @@ const BudgetAdvancesTab: React.FC = () => {
       const now = new Date();
       const title =
         mode === 'byPayeeOutstanding'
-          ? `代墊清單（依受款人彙整／待歸還）`
+          ? `代墊清單（依受款人彙整／待學校補款）`
           : `代墊清單（目前篩選明細）`;
       const rows =
         mode === 'byPayeeOutstanding'
-          ? filteredAdvances.filter((a) => a.status === 'outstanding')
+          ? filteredAdvances.filter((a) => awaitsSchoolReimburse(a))
           : filteredAdvances;
 
       const planNameById = new Map(plans.map((p) => [p.id, p.name]));
@@ -274,6 +393,7 @@ const BudgetAdvancesTab: React.FC = () => {
                       ? '未綁計畫'
                       : planNameById.get(a.budgetPlanId) ?? a.budgetPlanId;
                     const settled = (a.settledDate ?? '').trim();
+                    const paidPayee = (a.paidToPayeeDate ?? '').trim();
                     return `<tr>
   <td class="nowrap">${escHtml(a.advanceDate)}</td>
   <td>${escHtml(STATUS_LABEL[a.status])}</td>
@@ -281,6 +401,7 @@ const BudgetAdvancesTab: React.FC = () => {
   <td>${escHtml(a.title)}</td>
   <td class="num">${escHtml(fmtMoney(a.amount || 0))}</td>
   <td class="nowrap">${escHtml(settled || '—')}</td>
+  <td class="nowrap">${escHtml(paidPayee || '—')}</td>
   <td>${escHtml(a.memo ?? '')}</td>
 </tr>`;
                   })
@@ -289,7 +410,7 @@ const BudgetAdvancesTab: React.FC = () => {
   <div class="pageHeader">
     <div>
       <div class="h2">${escHtml(payee)}</div>
-      <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? '待歸還／沖銷' : '明細（依目前篩選）')}</div>
+      <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? '待學校補款' : '明細（依目前篩選）')}</div>
     </div>
     <div class="total">總額 ${escHtml(fmtMoney(total))}</div>
   </div>
@@ -301,7 +422,8 @@ const BudgetAdvancesTab: React.FC = () => {
         <th>計畫</th>
         <th>摘要</th>
         <th class="num">金額</th>
-        <th>補款／核銷日</th>
+        <th>學校補款日</th>
+        <th>已給受款人日</th>
         <th>備註</th>
       </tr>
     </thead>
@@ -421,6 +543,7 @@ const BudgetAdvancesTab: React.FC = () => {
       if (patch.budgetPlanId !== undefined && !budgetPlanId) {
         ledgerEntryId = '';
       }
+      const nextStatus = mergeAdvanceStatusOnSave(row, patch);
       await saveBudgetPlanAdvance({
         id: row.id,
         budgetPlanId,
@@ -429,8 +552,9 @@ const BudgetAdvancesTab: React.FC = () => {
         advanceDate: patch.advanceDate !== undefined ? patch.advanceDate : row.advanceDate,
         title: patch.title !== undefined ? patch.title : row.title,
         paidBy: patch.paidBy !== undefined ? patch.paidBy : row.paidBy,
-        status: patch.status !== undefined ? patch.status : row.status,
+        status: nextStatus,
         settledDate: patch.settledDate !== undefined ? patch.settledDate : row.settledDate,
+        paidToPayeeDate: patch.paidToPayeeDate !== undefined ? patch.paidToPayeeDate : row.paidToPayeeDate,
         memo: patch.memo !== undefined ? patch.memo : row.memo,
       });
       await load();
@@ -466,7 +590,8 @@ const BudgetAdvancesTab: React.FC = () => {
             計畫代墊紀錄
           </h1>
           <p className="text-sm text-slate-600 mt-1 max-w-xl">
-            可先記<strong>未綁計畫</strong>代墊，日後有新計畫再從列表改掛；有綁計畫時可連結支用明細。並可填<strong>補款／核銷日</strong>對應學校撥款入帳。
+            可先記<strong>未綁計畫</strong>代墊，日後有新計畫再從列表改掛；有綁計畫時可連結支用明細。
+            <strong>學校補款日</strong>與<strong>已給受款人日</strong>分開填：學校匯給您不代表您已把代墊款給受款人；兩者皆填時狀態為「已結清」。
           </p>
         </div>
         <button
@@ -504,9 +629,8 @@ const BudgetAdvancesTab: React.FC = () => {
         {reimburseSectionOpen ? (
           <div className="p-4 space-y-3 text-sm">
             <p className="text-slate-600 text-xs leading-relaxed">
-              學校若將<strong>多筆待歸還</strong>合併一筆匯給您，可在此輸入<strong>實際入帳金額</strong>，系統會從待歸還明細中找出<strong>加總恰好相等</strong>的組合（可能多組，請再依實際核銷勾選）。
-              單筆最多納入 {REIMBURSE_MATCH_MAX_POOL} 筆試算；組合筆數上限 {REIMBURSE_MATCH_MAX_COMBO_SIZE} 筆；最多列出{' '}
-              {REIMBURSE_MATCH_MAX_SOLUTIONS} 種組合。
+              學校若將<strong>多筆「待學校補款」</strong>合併一筆匯給您，可在此輸入<strong>實際入帳金額</strong>，系統會從試算池中找出<strong>加總恰好相等</strong>的組合（可能多組）。
+              按<strong>套用此組合</strong>只會批次填入<strong>學校補款日</strong>，不表示您已給受款人。試算池單次最多 {REIMBURSE_MATCH_MAX_POOL} 筆；組合筆數上限 {REIMBURSE_MATCH_MAX_COMBO_SIZE} 筆；最多列出 {REIMBURSE_MATCH_MAX_SOLUTIONS} 種組合。
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[10rem]">
@@ -541,14 +665,14 @@ const BudgetAdvancesTab: React.FC = () => {
               </button>
             </div>
             <div className="text-[11px] text-slate-500">
-              目前試算池：<span className="font-medium text-slate-700">{poolForReimburseMatch.length}</span> 筆待歸還
-              {reimburseUseFilter ? '（已套用篩選）' : '（全部待歸還）'}
+              目前試算池：<span className="font-medium text-slate-700">{poolForReimburseMatch.length}</span> 筆待學校補款
+              {reimburseUseFilter ? '（已套用篩選）' : '（全部）'}
             </div>
             {matchOutcome ? (
               <div className="rounded-xl border border-emerald-100 bg-white p-3 space-y-3">
                 {matchOutcome.truncatedPool ? (
                   <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
-                    待歸還筆數超過 {REIMBURSE_MATCH_MAX_POOL} 筆，已僅以前 {REIMBURSE_MATCH_MAX_POOL} 筆（金額較大者優先）試算。請用篩選縮小範圍後再試。
+                    待學校補款筆數超過 {REIMBURSE_MATCH_MAX_POOL} 筆，已僅以前 {REIMBURSE_MATCH_MAX_POOL} 筆（金額較大者優先）試算。請用篩選縮小範圍後再試。
                   </p>
                 ) : null}
                 {matchOutcome.solutions.length === 0 ? (
@@ -562,6 +686,28 @@ const BudgetAdvancesTab: React.FC = () => {
                       找到 {matchOutcome.solutions.length} 種組合（加總皆為 ${fmtMoney(matchOutcome.target)}）
                       {matchOutcome.solutions.length >= REIMBURSE_MATCH_MAX_SOLUTIONS ? '（已達顯示上限，可能尚有其他組合）' : ''}
                     </p>
+                    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                          套用時一併填入學校補款日（選填）
+                        </label>
+                        <input
+                          type="date"
+                          value={applySettledDate}
+                          onChange={(e) => setApplySettledDate(e.target.value)}
+                          disabled={saving}
+                          className="border border-emerald-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-500 pb-1 max-w-md">
+                        套用後僅寫入<strong>學校補款日</strong>；「已給受款人日」請在列表另填。兩者皆填時狀態才會變為已結清。
+                      </p>
+                    </div>
+                    {applyFeedback ? (
+                      <div className="text-xs font-medium text-emerald-800 bg-emerald-100/80 border border-emerald-200 rounded-lg px-3 py-2">
+                        {applyFeedback}
+                      </div>
+                    ) : null}
                     <ul className="space-y-3 max-h-[min(60vh,28rem)] overflow-y-auto">
                       {matchOutcome.solutions.map((sol, si) => {
                         const sumCheck = sol.reduce((s, x) => s + (Number(x.amount) || 0), 0);
@@ -570,8 +716,19 @@ const BudgetAdvancesTab: React.FC = () => {
                             key={si}
                             className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-2"
                           >
-                            <div className="text-xs font-semibold text-slate-800">
-                              組合 {si + 1}（{sol.length} 筆，小計 ${fmtMoney(sumCheck)}）
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="text-xs font-semibold text-slate-800">
+                                組合 {si + 1}（{sol.length} 筆，小計 ${fmtMoney(sumCheck)}）
+                              </div>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void handleApplyReimburseSolution(sol)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 disabled:opacity-50"
+                              >
+                                <CheckCircle2 size={14} />
+                                套用此組合
+                              </button>
                             </div>
                             <ul className="text-xs space-y-1.5 pl-1 border-l-2 border-emerald-300">
                               {sol.map((a) => {
@@ -601,16 +758,21 @@ const BudgetAdvancesTab: React.FC = () => {
       </div>
 
       {/* 摘要 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-amber-100/60 p-4 shadow-sm">
-          <div className="text-xs font-medium text-amber-900/80 uppercase tracking-wide">待歸還／沖銷（篩選後）</div>
+          <div className="text-xs font-medium text-amber-900/80 uppercase tracking-wide">待學校補款（篩選後）</div>
           <div className="text-2xl font-bold text-amber-900 mt-1">${fmtMoney(summary.totalOut)}</div>
           <div className="text-xs text-amber-800 mt-1">{summary.outstandingCount} 筆</div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:col-span-2 shadow-sm">
-          <div className="text-xs font-medium text-slate-500 mb-2">依計畫彙總（待歸還，篩選後）</div>
+        <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50 to-sky-100/50 p-4 shadow-sm">
+          <div className="text-xs font-medium text-sky-900/80 uppercase tracking-wide">學校已補、待給受款人（篩選後）</div>
+          <div className="text-2xl font-bold text-sky-900 mt-1">${fmtMoney(summary.totalPendingPayee)}</div>
+          <div className="text-xs text-sky-800 mt-1">{summary.pendingPayeeCount} 筆</div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 md:col-span-2 shadow-sm">
+          <div className="text-xs font-medium text-slate-500 mb-2">依計畫彙總（待學校補款，篩選後）</div>
           {summary.byPlan.size === 0 ? (
-            <p className="text-sm text-slate-400">無待歸還項目</p>
+            <p className="text-sm text-slate-400">無待學校補款項目</p>
           ) : (
             <ul className="text-sm space-y-1 max-h-24 overflow-y-auto">
               {[...summary.byPlan.entries()].map(([pid, amt]) => {
@@ -626,9 +788,9 @@ const BudgetAdvancesTab: React.FC = () => {
             </ul>
           )}
         </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:col-span-2 lg:col-span-3 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 md:col-span-2 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="text-xs font-medium text-slate-500">依受款人彙總（待歸還，篩選後）</div>
+            <div className="text-xs font-medium text-slate-500">依受款人彙總（待學校補款，篩選後）</div>
             <button
               type="button"
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs bg-white hover:bg-slate-50 shadow-sm"
@@ -636,13 +798,13 @@ const BudgetAdvancesTab: React.FC = () => {
                 openPrintPage('byPayeeOutstanding');
               }}
               disabled={summary.byPayee.size === 0}
-              title="開新分頁列印（依受款人彙整／待歸還）"
+              title="開新分頁列印（依受款人彙整／待學校補款）"
             >
               <Printer size={14} /> 列印清單
             </button>
           </div>
           {summary.byPayee.size === 0 ? (
-            <p className="text-sm text-slate-400">無待歸還項目</p>
+            <p className="text-sm text-slate-400">無待學校補款項目</p>
           ) : (
             <ul className="text-sm space-y-1 max-h-28 overflow-y-auto">
               {[...summary.byPayee.entries()]
@@ -674,17 +836,17 @@ const BudgetAdvancesTab: React.FC = () => {
             </ul>
           )}
           <p className="text-[11px] text-slate-500 mt-2">
-            建議在每筆代墊填「受款人」；就能直接看到各受款人待歸還總額。
+            建議在每筆代墊填「受款人」；此處為各受款人「待學校補款」總額。學校已補但尚未給受款人者見上方藍卡。
           </p>
 
           {activePayee ? (
             <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 overflow-hidden">
               <div className="px-3 py-2 border-b border-emerald-200/70 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-emerald-950 truncate">{activePayee} · 待歸還細項</div>
+                <div className="text-sm font-semibold text-emerald-950 truncate">{activePayee} · 待學校補款細項</div>
                 <div className="text-sm font-bold tabular-nums text-emerald-950">總額 ${fmtMoney(activePayeeTotal)}</div>
               </div>
               {activePayeeRows.length === 0 ? (
-                <div className="px-3 py-4 text-sm text-slate-500">無符合的待歸還項目</div>
+                <div className="px-3 py-4 text-sm text-slate-500">無符合的待學校補款項目</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -1009,7 +1171,8 @@ const BudgetAdvancesTab: React.FC = () => {
                   <th className="px-3 py-2 font-semibold">摘要</th>
                   <th className="px-3 py-2 font-semibold text-right">金額</th>
                   <th className="px-3 py-2 font-semibold">狀態</th>
-                  <th className="px-3 py-2 font-semibold whitespace-nowrap">補款／核銷日</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">學校補款日</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">已給受款人日</th>
                   <th className="px-3 py-2 font-semibold w-28">操作</th>
                 </tr>
               </thead>
@@ -1120,7 +1283,24 @@ const BudgetAdvancesTab: React.FC = () => {
                             }
                           }}
                           disabled={saving}
-                          title="學校撥款補回或核銷完成日（選填）"
+                          title="學校已補款／匯入您帳戶日（選填）"
+                          className="border border-slate-200 rounded px-1 py-0.5 text-xs max-w-[9.5rem]"
+                        />
+                      </td>
+                      <td className="px-3 py-2 align-top whitespace-nowrap">
+                        <input
+                          type="date"
+                          defaultValue={(row.paidToPayeeDate ?? '').trim()}
+                          key={`pd-${row.id}-${row.updatedAt}`}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const cur = (row.paidToPayeeDate ?? '').trim();
+                            if (v !== cur) {
+                              if (!v || ISO_DATE.test(v)) void handleUpdateRow(row, { paidToPayeeDate: v });
+                            }
+                          }}
+                          disabled={saving}
+                          title="您實際將代墊款給受款人之日（選填）"
                           className="border border-slate-200 rounded px-1 py-0.5 text-xs max-w-[9.5rem]"
                         />
                       </td>

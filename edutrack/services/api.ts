@@ -865,6 +865,7 @@ export async function getBudgetPlanAdvances(_filter?: { budgetPlanId?: string })
       paidBy: data.paidBy != null ? String(data.paidBy) : '',
       status: parseAdvanceStatus(data.status),
       settledDate: data.settledDate != null ? String(data.settledDate).trim() : '',
+      paidToPayeeDate: data.paidToPayeeDate != null ? String(data.paidToPayeeDate).trim() : '',
       memo: data.memo != null ? String(data.memo) : '',
       createdAt,
       updatedAt,
@@ -893,6 +894,7 @@ export async function saveBudgetPlanAdvance(
     paidBy: String(payload.paidBy ?? '').trim(),
     status: parseAdvanceStatus(payload.status),
     settledDate: String(payload.settledDate ?? '').trim(),
+    paidToPayeeDate: String(payload.paidToPayeeDate ?? '').trim(),
     memo: payload.memo ?? '',
     updatedAt: serverTimestamp(),
   };

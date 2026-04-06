@@ -264,8 +264,13 @@ export interface BudgetPlanAdvance {
   /** 受款人（選填；資料欄位名 paidBy 為歷史命名） */
   paidBy?: string;
   status: BudgetAdvanceStatus;
-  /** 學校撥款補回／核銷完成日 YYYY-MM-DD（選填；建議與「已核銷或歸還」一併填寫） */
+  /**
+   * 學校已補款／匯入您帳戶日 YYYY-MM-DD（選填）。
+   * 與「已給受款人日」分開：學校補給您不代表您已把代墊款給受款人。
+   */
   settledDate?: string;
+  /** 您實際將代墊款給受款人（老師等）之日 YYYY-MM-DD（選填） */
+  paidToPayeeDate?: string;
   memo?: string;
   createdAt?: string;
   updatedAt?: string;
