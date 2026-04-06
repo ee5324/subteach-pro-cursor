@@ -58,6 +58,12 @@ function schoolDonePayeePending(a: BudgetPlanAdvance): boolean {
   return !!trimDate(a.settledDate) && !trimDate(a.paidToPayeeDate);
 }
 
+/** 尚未填已給受款人日（您尚欠受款人該筆金額） */
+function stillOwesPayee(a: BudgetPlanAdvance): boolean {
+  if (a.status === 'cancelled') return false;
+  return !trimDate(a.paidToPayeeDate);
+}
+
 function mergeAdvanceStatusOnSave(
   row: BudgetPlanAdvance,
   patch: Partial<BudgetPlanAdvance>,
@@ -113,6 +119,8 @@ const BudgetAdvancesTab: React.FC = () => {
   } | null>(null);
   const [applySettledDate, setApplySettledDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
+  /** 摘要區：待學校補款 vs 尚欠受款人（未填已給受款人日） */
+  const [summaryViewMode, setSummaryViewMode] = useState<'school' | 'owePayee'>('school');
   const [newRow, setNewRow] = useState({
     budgetPlanId: '',
     ledgerEntryId: '',
@@ -290,22 +298,36 @@ const BudgetAdvancesTab: React.FC = () => {
 
   const summary = useMemo(() => {
     const awaitingSchool = filteredAdvances.filter((a) => awaitsSchoolReimburse(a));
-    const totalOut = awaitingSchool.reduce((s, a) => s + a.amount, 0);
-    const byPlan = new Map<string, number>();
-    const byPayee = new Map<string, number>();
+    const totalSchool = awaitingSchool.reduce((s, a) => s + a.amount, 0);
+    const byPlanSchool = new Map<string, number>();
+    const byPayeeSchool = new Map<string, number>();
     for (const a of awaitingSchool) {
       const pk = a.budgetPlanId.trim() || '__none__';
-      byPlan.set(pk, (byPlan.get(pk) ?? 0) + a.amount);
+      byPlanSchool.set(pk, (byPlanSchool.get(pk) ?? 0) + a.amount);
       const payee = (a.paidBy ?? '').trim() || '（未填受款人）';
-      byPayee.set(payee, (byPayee.get(payee) ?? 0) + a.amount);
+      byPayeeSchool.set(payee, (byPayeeSchool.get(payee) ?? 0) + a.amount);
+    }
+    const owesPayee = filteredAdvances.filter((a) => stillOwesPayee(a));
+    const totalOwe = owesPayee.reduce((s, a) => s + a.amount, 0);
+    const byPlanOwe = new Map<string, number>();
+    const byPayeeOwe = new Map<string, number>();
+    for (const a of owesPayee) {
+      const pk = a.budgetPlanId.trim() || '__none__';
+      byPlanOwe.set(pk, (byPlanOwe.get(pk) ?? 0) + a.amount);
+      const payee = (a.paidBy ?? '').trim() || '（未填受款人）';
+      byPayeeOwe.set(payee, (byPayeeOwe.get(payee) ?? 0) + a.amount);
     }
     const pendingPayeeOnly = filteredAdvances.filter((a) => schoolDonePayeePending(a));
     const totalPendingPayee = pendingPayeeOnly.reduce((s, a) => s + a.amount, 0);
     return {
-      totalOut,
-      byPlan,
-      byPayee,
-      outstandingCount: awaitingSchool.length,
+      totalSchool,
+      byPlanSchool,
+      byPayeeSchool,
+      awaitingSchoolCount: awaitingSchool.length,
+      totalOwe,
+      byPlanOwe,
+      byPayeeOwe,
+      oweCount: owesPayee.length,
       totalPendingPayee,
       pendingPayeeCount: pendingPayeeOnly.length,
     };
@@ -313,16 +335,34 @@ const BudgetAdvancesTab: React.FC = () => {
 
   const activePayeeRows = useMemo(() => {
     if (!activePayee) return [];
+    const inView = (a: BudgetPlanAdvance) =>
+      summaryViewMode === 'school' ? awaitsSchoolReimburse(a) : stillOwesPayee(a);
     return filteredAdvances
-      .filter((a) => awaitsSchoolReimburse(a))
+      .filter(inView)
       .filter((a) => ((a.paidBy ?? '').trim() || '（未填受款人）') === activePayee)
       .sort((a, b) => (b.advanceDate || '').localeCompare(a.advanceDate || '') || b.amount - a.amount);
-  }, [activePayee, filteredAdvances]);
+  }, [activePayee, filteredAdvances, summaryViewMode]);
 
   const activePayeeTotal = useMemo(
     () => activePayeeRows.reduce((s, a) => s + (a.amount || 0), 0),
     [activePayeeRows]
   );
+
+  const summaryByPlan = summaryViewMode === 'school' ? summary.byPlanSchool : summary.byPlanOwe;
+  const summaryByPayee = summaryViewMode === 'school' ? summary.byPayeeSchool : summary.byPayeeOwe;
+  const summaryPrimaryTotal = summaryViewMode === 'school' ? summary.totalSchool : summary.totalOwe;
+  const summaryPrimaryCount = summaryViewMode === 'school' ? summary.awaitingSchoolCount : summary.oweCount;
+
+  useEffect(() => {
+    if (!activePayee) return;
+    const inView = (a: BudgetPlanAdvance) =>
+      summaryViewMode === 'school' ? awaitsSchoolReimburse(a) : stillOwesPayee(a);
+    const has = filteredAdvances.some(
+      (a) =>
+        inView(a) && ((a.paidBy ?? '').trim() || '（未填受款人）') === activePayee,
+    );
+    if (!has) setActivePayee('');
+  }, [summaryViewMode, activePayee, filteredAdvances]);
 
   const payeeSuggestions = useMemo(() => {
     const keyword = newRow.paidBy.trim();
@@ -357,13 +397,16 @@ const BudgetAdvancesTab: React.FC = () => {
   const openPrintPage = useCallback(
     (mode: 'byPayeeOutstanding' | 'filteredList') => {
       const now = new Date();
+      const payeeScopeLabel = summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人';
       const title =
         mode === 'byPayeeOutstanding'
-          ? `代墊清單（依受款人彙整／待學校補款）`
+          ? `代墊清單（依受款人彙整／${payeeScopeLabel}）`
           : `代墊清單（目前篩選明細）`;
       const rows =
         mode === 'byPayeeOutstanding'
-          ? filteredAdvances.filter((a) => awaitsSchoolReimburse(a))
+          ? filteredAdvances.filter((a) =>
+              summaryViewMode === 'school' ? awaitsSchoolReimburse(a) : stillOwesPayee(a),
+            )
           : filteredAdvances;
 
       const planNameById = new Map(plans.map((p) => [p.id, p.name]));
@@ -410,7 +453,7 @@ const BudgetAdvancesTab: React.FC = () => {
   <div class="pageHeader">
     <div>
       <div class="h2">${escHtml(payee)}</div>
-      <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? '待學校補款' : '明細（依目前篩選）')}</div>
+      <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? payeeScopeLabel : '明細（依目前篩選）')}</div>
     </div>
     <div class="total">總額 ${escHtml(fmtMoney(total))}</div>
   </div>
@@ -484,7 +527,7 @@ const BudgetAdvancesTab: React.FC = () => {
       w.document.write(docHtml);
       w.document.close();
     },
-    [filteredAdvances, plans]
+    [filteredAdvances, plans, summaryViewMode]
   );
 
   const handleAdd = async () => {
@@ -758,11 +801,50 @@ const BudgetAdvancesTab: React.FC = () => {
       </div>
 
       {/* 摘要 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-slate-800">摘要彙總視角</span>
+          <div
+            className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-0.5 text-xs font-medium shadow-sm"
+            role="group"
+            aria-label="摘要彙總視角"
+          >
+            <button
+              type="button"
+              onClick={() => setSummaryViewMode('school')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                summaryViewMode === 'school'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              待學校補款
+            </button>
+            <button
+              type="button"
+              onClick={() => setSummaryViewMode('owePayee')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                summaryViewMode === 'owePayee'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              尚欠受款人
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 -mt-1">
+          {summaryViewMode === 'school'
+            ? '依「學校是否已補款」彙總；與您是否已給受款人無關。'
+            : '依「是否已填已給受款人日」彙總：未填者皆視為尚欠該受款人。'}
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-amber-100/60 p-4 shadow-sm">
-          <div className="text-xs font-medium text-amber-900/80 uppercase tracking-wide">待學校補款（篩選後）</div>
-          <div className="text-2xl font-bold text-amber-900 mt-1">${fmtMoney(summary.totalOut)}</div>
-          <div className="text-xs text-amber-800 mt-1">{summary.outstandingCount} 筆</div>
+          <div className="text-xs font-medium text-amber-900/80 uppercase tracking-wide">
+            {summaryViewMode === 'school' ? '待學校補款（篩選後）' : '尚欠受款人（篩選後）'}
+          </div>
+          <div className="text-2xl font-bold text-amber-900 mt-1">${fmtMoney(summaryPrimaryTotal)}</div>
+          <div className="text-xs text-amber-800 mt-1">{summaryPrimaryCount} 筆</div>
         </div>
         <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-sky-50 to-sky-100/50 p-4 shadow-sm">
           <div className="text-xs font-medium text-sky-900/80 uppercase tracking-wide">學校已補、待給受款人（篩選後）</div>
@@ -770,12 +852,16 @@ const BudgetAdvancesTab: React.FC = () => {
           <div className="text-xs text-sky-800 mt-1">{summary.pendingPayeeCount} 筆</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 md:col-span-2 shadow-sm">
-          <div className="text-xs font-medium text-slate-500 mb-2">依計畫彙總（待學校補款，篩選後）</div>
-          {summary.byPlan.size === 0 ? (
-            <p className="text-sm text-slate-400">無待學校補款項目</p>
+          <div className="text-xs font-medium text-slate-500 mb-2">
+            依計畫彙總（{summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人'}，篩選後）
+          </div>
+          {summaryByPlan.size === 0 ? (
+            <p className="text-sm text-slate-400">
+              無{summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人'}項目
+            </p>
           ) : (
             <ul className="text-sm space-y-1 max-h-24 overflow-y-auto">
-              {[...summary.byPlan.entries()].map(([pid, amt]) => {
+              {[...summaryByPlan.entries()].map(([pid, amt]) => {
                 const p = pid === '__none__' ? null : planById.get(pid);
                 const label = pid === '__none__' ? '未綁計畫' : p ? p.name : pid;
                 return (
@@ -790,24 +876,32 @@ const BudgetAdvancesTab: React.FC = () => {
         </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 md:col-span-2 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="text-xs font-medium text-slate-500">依受款人彙總（待學校補款，篩選後）</div>
+            <div className="text-xs font-medium text-slate-500">
+              依受款人彙總（{summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人'}，篩選後）
+            </div>
             <button
               type="button"
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs bg-white hover:bg-slate-50 shadow-sm"
               onClick={() => {
                 openPrintPage('byPayeeOutstanding');
               }}
-              disabled={summary.byPayee.size === 0}
-              title="開新分頁列印（依受款人彙整／待學校補款）"
+              disabled={summaryByPayee.size === 0}
+              title={
+                summaryViewMode === 'school'
+                  ? '開新分頁列印（依受款人彙整／待學校補款）'
+                  : '開新分頁列印（依受款人彙整／尚欠受款人）'
+              }
             >
               <Printer size={14} /> 列印清單
             </button>
           </div>
-          {summary.byPayee.size === 0 ? (
-            <p className="text-sm text-slate-400">無待學校補款項目</p>
+          {summaryByPayee.size === 0 ? (
+            <p className="text-sm text-slate-400">
+              無{summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人'}項目
+            </p>
           ) : (
             <ul className="text-sm space-y-1 max-h-28 overflow-y-auto">
-              {[...summary.byPayee.entries()]
+              {[...summaryByPayee.entries()]
                 .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-TW'))
                 .map(([payee, amt]) => {
                   const active = payee === activePayee;
@@ -836,17 +930,23 @@ const BudgetAdvancesTab: React.FC = () => {
             </ul>
           )}
           <p className="text-[11px] text-slate-500 mt-2">
-            建議在每筆代墊填「受款人」；此處為各受款人「待學校補款」總額。學校已補但尚未給受款人者見上方藍卡。
+            {summaryViewMode === 'school'
+              ? '建議在每筆代墊填「受款人」。此處為各受款人「待學校補款」總額；學校已補但尚未給受款人者見上方藍卡。'
+              : '此處為各受款人「尚欠受款人」總額（未填已給受款人日者）；藍卡為其中「學校已補款」子集合。'}
           </p>
 
           {activePayee ? (
             <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 overflow-hidden">
               <div className="px-3 py-2 border-b border-emerald-200/70 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-emerald-950 truncate">{activePayee} · 待學校補款細項</div>
+                <div className="text-sm font-semibold text-emerald-950 truncate">
+                  {activePayee} · {summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人'}細項
+                </div>
                 <div className="text-sm font-bold tabular-nums text-emerald-950">總額 ${fmtMoney(activePayeeTotal)}</div>
               </div>
               {activePayeeRows.length === 0 ? (
-                <div className="px-3 py-4 text-sm text-slate-500">無符合的待學校補款項目</div>
+                <div className="px-3 py-4 text-sm text-slate-500">
+                  無符合的{summaryViewMode === 'school' ? '待學校補款' : '尚欠受款人'}項目
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -893,6 +993,7 @@ const BudgetAdvancesTab: React.FC = () => {
               )}
             </div>
           ) : null}
+        </div>
         </div>
       </div>
 
