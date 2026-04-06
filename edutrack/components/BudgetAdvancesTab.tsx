@@ -96,6 +96,65 @@ function escHtml(s: unknown): string {
     .replaceAll("'", '&#39;');
 }
 
+/**
+ * 新分頁開啟 HTML 供預覽／列印。
+ * 優先使用 blob: URL（相容性較佳）；若無法開啟再退回 about:blank + document.write。
+ */
+function openHtmlInNewWindowForPrint(html: string, onError: (msg: string) => void): void {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  // 勿傳第三參數 noopener：部分瀏覽器會讓 window.open 回傳 null
+  const w = window.open(url, '_blank');
+  if (w) {
+    try {
+      w.opener = null;
+    } catch {
+      /* ignore */
+    }
+    let revoked = false;
+    const safeRevoke = () => {
+      if (revoked) return;
+      revoked = true;
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        /* ignore */
+      }
+    };
+    w.addEventListener('load', safeRevoke, { once: true });
+    window.setTimeout(safeRevoke, 180_000);
+    return;
+  }
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    /* ignore */
+  }
+
+  const w2 = window.open('', '_blank');
+  if (!w2) {
+    onError('無法開啟列印視窗，請允許此網站的彈出視窗後再試。');
+    return;
+  }
+  try {
+    w2.opener = null;
+  } catch {
+    /* ignore */
+  }
+  try {
+    w2.document.open();
+    w2.document.write(html);
+    w2.document.close();
+  } catch {
+    onError('無法寫入列印內容，請換用 Chrome / Edge / Firefox 最新版，或檢查是否阻擋腳本。');
+    try {
+      w2.close();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function planLabel(p: BudgetPlan): string {
   const k = periodKindLabel(p.periodKind);
   return `${p.name}（${k} ${p.academicYear} · ${p.accountingCode || '—'}）`;
@@ -557,20 +616,8 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
 </body>
 </html>`;
 
-      // 勿在第三參數使用 noopener：多數瀏覽器會讓 window.open 回傳 null，導致無法 write 列印內容
-      const w = window.open('', '_blank');
-      if (!w) {
-        setError('無法開啟列印視窗，請允許此網站的彈出視窗後再試。');
-        return;
-      }
-      try {
-        w.opener = null;
-      } catch {
-        /* ignore */
-      }
-      w.document.open();
-      w.document.write(docHtml);
-      w.document.close();
+      setError(null);
+      openHtmlInNewWindowForPrint(docHtml, (msg) => setError(msg));
     },
     [filteredAdvances, plans, summaryViewMode, mainTab]
   );
