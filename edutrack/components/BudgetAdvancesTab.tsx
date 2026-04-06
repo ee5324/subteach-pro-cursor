@@ -500,56 +500,28 @@ const BudgetAdvancesTab: React.FC = () => {
           : filteredAdvances;
 
       const planNameById = new Map(plans.map((p) => [p.id, p.name]));
-      const group = new Map<string, BudgetPlanAdvance[]>();
-      for (const a of rows) {
-        const payee = (a.paidBy ?? '').trim() || '（未填受款人）';
-        if (!group.has(payee)) group.set(payee, []);
-        group.get(payee)!.push(a);
-      }
 
-      const payees = [...group.entries()].sort((a, b) => {
-        const sumA = a[1].reduce((s, x) => s + (x.amount || 0), 0);
-        const sumB = b[1].reduce((s, x) => s + (x.amount || 0), 0);
-        return sumB - sumA || a[0].localeCompare(b[0], 'zh-TW');
+      const payeeLabel = (a: BudgetPlanAdvance) => (a.paidBy ?? '').trim() || '（未填受款人）';
+      const flatRows = [...rows].sort((a, b) => {
+        const c = payeeLabel(a).localeCompare(payeeLabel(b), 'zh-TW');
+        if (c !== 0) return c;
+        return (b.advanceDate || '').localeCompare(a.advanceDate || '');
       });
+      const grandTotal = flatRows.reduce((s, x) => s + (x.amount || 0), 0);
+
+      const archiveTh = includeArchiveCol ? '<th class="nowrap">封存日</th>' : '';
+      const tfootColspanAfterAmount = includeArchiveCol ? 4 : 3;
 
       const htmlSections =
-        payees.length === 0
+        flatRows.length === 0
           ? `<p class="muted">無資料</p>`
-          : payees
-              .map(([payee, list]) => {
-                const total = list.reduce((s, x) => s + (x.amount || 0), 0);
-                const lines = [...list].sort((a, b) => (b.advanceDate || '').localeCompare(a.advanceDate || ''));
-                const trs = lines
-                  .map((a) => {
-                    const planName = !a.budgetPlanId.trim()
-                      ? '未綁計畫'
-                      : planNameById.get(a.budgetPlanId) ?? a.budgetPlanId;
-                    const settled = (a.settledDate ?? '').trim();
-                    const paidPayee = (a.paidToPayeeDate ?? '').trim();
-                    const archived = (a.archivedAt ?? '').trim();
-                    const tdArchive = includeArchiveCol
-                      ? `  <td class="nowrap">${escHtml(archived || '—')}</td>\n`
-                      : '';
-                    return `<tr>
-  <td class="nowrap">${escHtml(a.advanceDate)}</td>
-  <td>${escHtml(STATUS_LABEL[a.status])}</td>
-  <td>${escHtml(planName)}</td>
-  <td>${escHtml(a.title)}</td>
-  <td class="num">${escHtml(fmtMoney(a.amount || 0))}</td>
-  <td class="nowrap">${escHtml(settled || '—')}</td>
-  <td class="nowrap">${escHtml(paidPayee || '—')}</td>
-${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
-</tr>`;
-                  })
-                  .join('\n');
-                return `<section class="page">
+          : `<section class="printBlock">
   <div class="pageHeader">
     <div>
-      <div class="h2">${escHtml(payee)}</div>
+      <div class="h2">合併列印（全部受款人）</div>
       <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? payeeScopeLabel : includeArchiveCol ? '歷史封存（依目前篩選）' : '明細（依目前篩選）')}</div>
     </div>
-    <div class="total">總額 ${escHtml(fmtMoney(total))}</div>
+    <div class="total">總計 ${escHtml(fmtMoney(grandTotal))}</div>
   </div>
   <table>
     <thead>
@@ -557,21 +529,50 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
         <th class="nowrap">日期</th>
         <th>狀態</th>
         <th>計畫</th>
+        <th>受款人</th>
         <th>摘要</th>
         <th class="num">金額</th>
         <th>學校補款日</th>
         <th>已給受款人日</th>
-        ${includeArchiveCol ? '<th>封存日</th>' : ''}
+        ${archiveTh}
         <th>備註</th>
       </tr>
     </thead>
     <tbody>
-      ${trs}
+${flatRows
+  .map((a) => {
+    const planName = !a.budgetPlanId.trim()
+      ? '未綁計畫'
+      : planNameById.get(a.budgetPlanId) ?? a.budgetPlanId;
+    const settled = (a.settledDate ?? '').trim();
+    const paidPayee = (a.paidToPayeeDate ?? '').trim();
+    const archived = (a.archivedAt ?? '').trim();
+    const tdArchive = includeArchiveCol
+      ? `  <td class="nowrap">${escHtml(archived || '—')}</td>\n`
+      : '';
+    return `<tr>
+  <td class="nowrap">${escHtml(a.advanceDate)}</td>
+  <td>${escHtml(STATUS_LABEL[a.status])}</td>
+  <td>${escHtml(planName)}</td>
+  <td>${escHtml(payeeLabel(a))}</td>
+  <td>${escHtml(a.title)}</td>
+  <td class="num">${escHtml(fmtMoney(a.amount || 0))}</td>
+  <td class="nowrap">${escHtml(settled || '—')}</td>
+  <td class="nowrap">${escHtml(paidPayee || '—')}</td>
+${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
+</tr>`;
+  })
+  .join('\n')}
     </tbody>
+    <tfoot>
+      <tr class="tfootRow">
+        <td colspan="5" class="tfootLabel">總計</td>
+        <td class="num">${escHtml(fmtMoney(grandTotal))}</td>
+        <td colspan="${tfootColspanAfterAmount}"></td>
+      </tr>
+    </tfoot>
   </table>
 </section>`;
-              })
-              .join('\n');
 
       const docHtml = `<!doctype html>
 <html lang="zh-Hant">
@@ -586,7 +587,7 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
     .top { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:16px; }
     .h1 { font-size:18px; font-weight:800; }
     .meta { font-size:12px; color:var(--muted); }
-    .page { padding:16px 0; }
+    .printBlock { padding:16px 0; }
     .pageHeader { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
     .h2 { font-size:16px; font-weight:800; }
     .muted { font-size:12px; color:var(--muted); }
@@ -594,12 +595,12 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
     table { width:100%; border-collapse: collapse; font-size:12px; }
     th, td { border:1px solid var(--line); padding:6px 8px; vertical-align: top; }
     thead th { background:#f8fafc; text-align:left; }
+    tfoot .tfootRow td { border-top:2px solid var(--line); font-weight:800; }
+    .tfootLabel { text-align:right; }
     .num { text-align:right; white-space:nowrap; font-variant-numeric: tabular-nums; }
     .nowrap { white-space:nowrap; }
     @media print {
       body { padding: 10mm; }
-      .page { page-break-after: always; }
-      .page:last-child { page-break-after: auto; }
     }
   </style>
 </head>
