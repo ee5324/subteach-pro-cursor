@@ -502,6 +502,19 @@ const BudgetAdvancesTab: React.FC = () => {
       const planNameById = new Map(plans.map((p) => [p.id, p.name]));
 
       const payeeLabel = (a: BudgetPlanAdvance) => (a.paidBy ?? '').trim() || '（未填受款人）';
+      const payeeAgg = new Map<string, { count: number; sum: number }>();
+      for (const a of rows) {
+        const p = payeeLabel(a);
+        const cur = payeeAgg.get(p) ?? { count: 0, sum: 0 };
+        cur.count += 1;
+        cur.sum += a.amount || 0;
+        payeeAgg.set(p, cur);
+      }
+      const payeeTotalsSorted = [...payeeAgg.entries()].sort((a, b) => {
+        const d = b[1].sum - a[1].sum;
+        if (d !== 0) return d;
+        return a[0].localeCompare(b[0], 'zh-TW');
+      });
       const flatRows = [...rows].sort((a, b) => {
         const c = payeeLabel(a).localeCompare(payeeLabel(b), 'zh-TW');
         if (c !== 0) return c;
@@ -522,6 +535,36 @@ const BudgetAdvancesTab: React.FC = () => {
       <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? payeeScopeLabel : includeArchiveCol ? '歷史封存（依目前篩選）' : '明細（依目前篩選）')}</div>
     </div>
     <div class="total">總計 ${escHtml(fmtMoney(grandTotal))}</div>
+  </div>
+  <div class="payeeSummaryWrap">
+    <div class="h3">依受款人小計</div>
+    <table class="payeeSummary">
+      <thead>
+        <tr>
+          <th>受款人</th>
+          <th class="num">筆數</th>
+          <th class="num">小計</th>
+        </tr>
+      </thead>
+      <tbody>
+${payeeTotalsSorted
+  .map(
+    ([name, { count, sum }]) => `<tr>
+  <td>${escHtml(name)}</td>
+  <td class="num">${escHtml(String(count))}</td>
+  <td class="num">${escHtml(fmtMoney(sum))}</td>
+</tr>`,
+  )
+  .join('\n')}
+      </tbody>
+      <tfoot>
+        <tr class="payeeSummaryFoot">
+          <td class="tfootLabel">合計</td>
+          <td class="num">${escHtml(String(flatRows.length))}</td>
+          <td class="num">${escHtml(fmtMoney(grandTotal))}</td>
+        </tr>
+      </tfoot>
+    </table>
   </div>
   <table>
     <thead>
@@ -592,6 +635,12 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
     .h2 { font-size:16px; font-weight:800; }
     .muted { font-size:12px; color:var(--muted); }
     .total { font-size:14px; font-weight:800; }
+    .h3 { font-size:13px; font-weight:800; margin:0 0 8px; }
+    .payeeSummaryWrap { margin-bottom:16px; max-width:420px; }
+    table.payeeSummary { width:100%; border-collapse: collapse; font-size:12px; }
+    table.payeeSummary th, table.payeeSummary td { border:1px solid var(--line); padding:6px 8px; }
+    table.payeeSummary thead th { background:#f1f5f9; }
+    .payeeSummaryFoot td { border-top:2px solid var(--line); font-weight:800; }
     table { width:100%; border-collapse: collapse; font-size:12px; }
     th, td { border:1px solid var(--line); padding:6px 8px; vertical-align: top; }
     thead th { background:#f8fafc; text-align:left; }
