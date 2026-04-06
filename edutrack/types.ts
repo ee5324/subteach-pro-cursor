@@ -247,13 +247,13 @@ export interface MonthlyRecurringTodoRule {
 export type BudgetAdvanceStatus = 'outstanding' | 'settled' | 'cancelled';
 
 /**
- * 與計畫專案連結的代墊金額紀錄（標明暫從哪一筆計畫預算脈絡代墊，便於日後核銷／歸還追蹤）
+ * 代墊金額紀錄（可日後再綁計畫；有綁計畫時可連結支用明細）
  */
 export interface BudgetPlanAdvance {
   id: string;
-  /** 關聯的計畫專案 id（edutrack_budget_plans） */
+  /** 計畫專案 id；空字串表示尚未綁計畫（之後可從列表改掛） */
   budgetPlanId: string;
-  /** 可選：連結到某一筆「支用明細」(ledger_entries) 的 expense 節點 id，用於帶入/對照 */
+  /** 可選：連結到某一筆「支用明細」(ledger_entries) 的 expense 節點 id（僅在有綁計畫時有效） */
   ledgerEntryId?: string;
   /** 代墊金額（元，正數） */
   amount: number;
@@ -261,9 +261,11 @@ export interface BudgetPlanAdvance {
   advanceDate: string;
   /** 摘要說明（例：報名費、材料費） */
   title: string;
-  /** 我要給誰／受款人（選填；舊欄位沿用 paidBy 命名） */
+  /** 受款人（選填；資料欄位名 paidBy 為歷史命名） */
   paidBy?: string;
   status: BudgetAdvanceStatus;
+  /** 學校撥款補回／核銷完成日 YYYY-MM-DD（選填；建議與「已核銷或歸還」一併填寫） */
+  settledDate?: string;
   memo?: string;
   createdAt?: string;
   updatedAt?: string;

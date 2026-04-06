@@ -176,6 +176,20 @@ const store = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
+    {
+      id: 'sandbox-adv-2',
+      budgetPlanId: '',
+      ledgerEntryId: '',
+      amount: 800,
+      advanceDate: new Date().toISOString().slice(0, 10),
+      title: '範例：尚未綁計畫之代墊',
+      paidBy: '李老師',
+      status: 'outstanding',
+      memo: '有新計畫後可改掛',
+      settledDate: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
   ] as BudgetPlanAdvance[],
   /** 計畫專案底下巢狀支用／資料夾（key = planId） */
   budgetPlanLedgerByPlanId: {
@@ -583,21 +597,23 @@ export function sandboxGetBudgetPlanAdvances(): Promise<BudgetPlanAdvance[]> {
 }
 
 export function sandboxSaveBudgetPlanAdvance(
-  payload: Partial<BudgetPlanAdvance> & { budgetPlanId: string; amount: number; advanceDate: string; title: string }
+  payload: Partial<BudgetPlanAdvance> & { amount: number; advanceDate: string; title: string }
 ) {
   const id = payload.id ?? uid();
   const now = new Date().toISOString();
   const idx = store.budgetPlanAdvances.findIndex((a) => a.id === id);
   const st = payload.status === 'settled' || payload.status === 'cancelled' ? payload.status : 'outstanding';
+  const planId = String(payload.budgetPlanId ?? '').trim();
   const row: BudgetPlanAdvance = {
     id,
-    budgetPlanId: String(payload.budgetPlanId).trim(),
-    ledgerEntryId: payload.ledgerEntryId != null ? String(payload.ledgerEntryId).trim() : '',
+    budgetPlanId: planId,
+    ledgerEntryId: planId ? (payload.ledgerEntryId != null ? String(payload.ledgerEntryId).trim() : '') : '',
     amount: Math.max(0, Number(payload.amount) || 0),
     advanceDate: String(payload.advanceDate).trim(),
     title: String(payload.title).trim(),
     paidBy: payload.paidBy != null ? String(payload.paidBy).trim() : '',
     status: st,
+    settledDate: String(payload.settledDate ?? '').trim(),
     memo: payload.memo ?? '',
     createdAt: idx >= 0 ? store.budgetPlanAdvances[idx].createdAt ?? now : now,
     updatedAt: now,

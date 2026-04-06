@@ -864,6 +864,7 @@ export async function getBudgetPlanAdvances(_filter?: { budgetPlanId?: string })
       title: data.title != null ? String(data.title) : '',
       paidBy: data.paidBy != null ? String(data.paidBy) : '',
       status: parseAdvanceStatus(data.status),
+      settledDate: data.settledDate != null ? String(data.settledDate).trim() : '',
       memo: data.memo != null ? String(data.memo) : '',
       createdAt,
       updatedAt,
@@ -875,21 +876,23 @@ export async function getBudgetPlanAdvances(_filter?: { budgetPlanId?: string })
 }
 
 export async function saveBudgetPlanAdvance(
-  payload: Partial<BudgetPlanAdvance> & { budgetPlanId: string; amount: number; advanceDate: string; title: string }
+  payload: Partial<BudgetPlanAdvance> & { amount: number; advanceDate: string; title: string }
 ) {
   if (isSandbox()) return sandboxSaveBudgetPlanAdvance(payload);
   const db = getDb();
   if (!db) throw new Error('Firebase 未初始化');
   const id = payload.id ?? (crypto.randomUUID?.() ?? `bpadv-${Date.now()}`);
   const amount = Math.max(0, numFromFirestore(payload.amount));
+  const planId = String(payload.budgetPlanId ?? '').trim();
   const data: DocumentData = {
-    budgetPlanId: String(payload.budgetPlanId).trim(),
-    ledgerEntryId: payload.ledgerEntryId != null ? String(payload.ledgerEntryId).trim() : '',
+    budgetPlanId: planId,
+    ledgerEntryId: planId ? (payload.ledgerEntryId != null ? String(payload.ledgerEntryId).trim() : '') : '',
     amount,
     advanceDate: String(payload.advanceDate ?? '').trim(),
     title: String(payload.title ?? '').trim(),
     paidBy: String(payload.paidBy ?? '').trim(),
     status: parseAdvanceStatus(payload.status),
+    settledDate: String(payload.settledDate ?? '').trim(),
     memo: payload.memo ?? '',
     updatedAt: serverTimestamp(),
   };

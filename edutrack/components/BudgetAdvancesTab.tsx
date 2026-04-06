@@ -122,7 +122,9 @@ const BudgetAdvancesTab: React.FC = () => {
 
   const filteredAdvances = useMemo(() => {
     let rows = advances;
-    if (filterPlanId.trim()) rows = rows.filter((a) => a.budgetPlanId === filterPlanId.trim());
+    const fp = filterPlanId.trim();
+    if (fp === '__none__') rows = rows.filter((a) => !a.budgetPlanId.trim());
+    else if (fp) rows = rows.filter((a) => a.budgetPlanId === fp);
     if (filterStatus) rows = rows.filter((a) => a.status === filterStatus);
     return rows;
   }, [advances, filterPlanId, filterStatus]);
@@ -140,7 +142,8 @@ const BudgetAdvancesTab: React.FC = () => {
     const byPlan = new Map<string, number>();
     const byPayee = new Map<string, number>();
     for (const a of outstanding) {
-      byPlan.set(a.budgetPlanId, (byPlan.get(a.budgetPlanId) ?? 0) + a.amount);
+      const pk = a.budgetPlanId.trim() || '__none__';
+      byPlan.set(pk, (byPlan.get(pk) ?? 0) + a.amount);
       const payee = (a.paidBy ?? '').trim() || '（未填受款人）';
       byPayee.set(payee, (byPayee.get(payee) ?? 0) + a.amount);
     }
@@ -225,13 +228,17 @@ const BudgetAdvancesTab: React.FC = () => {
                 const lines = [...list].sort((a, b) => (b.advanceDate || '').localeCompare(a.advanceDate || ''));
                 const trs = lines
                   .map((a) => {
-                    const planName = planNameById.get(a.budgetPlanId) ?? a.budgetPlanId;
+                    const planName = !a.budgetPlanId.trim()
+                      ? '未綁計畫'
+                      : planNameById.get(a.budgetPlanId) ?? a.budgetPlanId;
+                    const settled = (a.settledDate ?? '').trim();
                     return `<tr>
   <td class="nowrap">${escHtml(a.advanceDate)}</td>
   <td>${escHtml(STATUS_LABEL[a.status])}</td>
   <td>${escHtml(planName)}</td>
   <td>${escHtml(a.title)}</td>
   <td class="num">${escHtml(fmtMoney(a.amount || 0))}</td>
+  <td class="nowrap">${escHtml(settled || '—')}</td>
   <td>${escHtml(a.memo ?? '')}</td>
 </tr>`;
                   })
@@ -252,6 +259,7 @@ const BudgetAdvancesTab: React.FC = () => {
         <th>計畫</th>
         <th>摘要</th>
         <th class="num">金額</th>
+        <th>補款／核銷日</th>
         <th>備註</th>
       </tr>
     </thead>
@@ -316,10 +324,6 @@ const BudgetAdvancesTab: React.FC = () => {
   );
 
   const handleAdd = async () => {
-    if (!newRow.budgetPlanId.trim()) {
-      setError('請選擇計畫專案（標明代墊來自哪一筆計畫）');
-      return;
-    }
     if (!newRow.title.trim()) {
       setError('請填寫摘要說明');
       return;
@@ -336,9 +340,10 @@ const BudgetAdvancesTab: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
+      const pid = newRow.budgetPlanId.trim();
       await saveBudgetPlanAdvance({
-        budgetPlanId: newRow.budgetPlanId.trim(),
-        ledgerEntryId: newRow.ledgerEntryId.trim(),
+        budgetPlanId: pid,
+        ledgerEntryId: pid ? newRow.ledgerEntryId.trim() : '',
         amount: amt,
         advanceDate: newRow.advanceDate.trim(),
         title: newRow.title.trim(),
@@ -368,15 +373,22 @@ const BudgetAdvancesTab: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
+      const budgetPlanId = patch.budgetPlanId !== undefined ? patch.budgetPlanId.trim() : row.budgetPlanId.trim();
+      let ledgerEntryId =
+        patch.ledgerEntryId !== undefined ? String(patch.ledgerEntryId).trim() : String(row.ledgerEntryId ?? '').trim();
+      if (patch.budgetPlanId !== undefined && !budgetPlanId) {
+        ledgerEntryId = '';
+      }
       await saveBudgetPlanAdvance({
         id: row.id,
-        budgetPlanId: row.budgetPlanId,
-        ledgerEntryId: patch.ledgerEntryId !== undefined ? patch.ledgerEntryId : row.ledgerEntryId,
+        budgetPlanId,
+        ledgerEntryId,
         amount: patch.amount !== undefined ? patch.amount : row.amount,
         advanceDate: patch.advanceDate !== undefined ? patch.advanceDate : row.advanceDate,
         title: patch.title !== undefined ? patch.title : row.title,
         paidBy: patch.paidBy !== undefined ? patch.paidBy : row.paidBy,
         status: patch.status !== undefined ? patch.status : row.status,
+        settledDate: patch.settledDate !== undefined ? patch.settledDate : row.settledDate,
         memo: patch.memo !== undefined ? patch.memo : row.memo,
       });
       await load();
@@ -412,7 +424,7 @@ const BudgetAdvancesTab: React.FC = () => {
             計畫代墊紀錄
           </h1>
           <p className="text-sm text-slate-600 mt-1 max-w-xl">
-            記錄暫時代墊金額並<strong>連結計畫專案</strong>，方便追蹤該筆代墊是從哪一個計畫預算脈絡支出、是否已核銷歸還。
+            可先記<strong>未綁計畫</strong>代墊，日後有新計畫再從列表改掛；有綁計畫時可連結支用明細。並可填<strong>補款／核銷日</strong>對應學校撥款入帳。
           </p>
         </div>
         <button
@@ -444,10 +456,11 @@ const BudgetAdvancesTab: React.FC = () => {
           ) : (
             <ul className="text-sm space-y-1 max-h-24 overflow-y-auto">
               {[...summary.byPlan.entries()].map(([pid, amt]) => {
-                const p = planById.get(pid);
+                const p = pid === '__none__' ? null : planById.get(pid);
+                const label = pid === '__none__' ? '未綁計畫' : p ? p.name : pid;
                 return (
                   <li key={pid} className="flex justify-between gap-2">
-                    <span className="text-slate-700 truncate">{p ? p.name : pid}</span>
+                    <span className="text-slate-700 truncate">{label}</span>
                     <span className="font-medium text-slate-900 shrink-0">${fmtMoney(amt)}</span>
                   </li>
                 );
@@ -503,7 +516,7 @@ const BudgetAdvancesTab: React.FC = () => {
             </ul>
           )}
           <p className="text-[11px] text-slate-500 mt-2">
-            建議在每筆代墊填「我要給誰（受款人）」；就能直接看到各受款人應付總額。
+            建議在每筆代墊填「受款人」；就能直接看到各受款人待歸還總額。
           </p>
 
           {activePayee ? (
@@ -527,12 +540,14 @@ const BudgetAdvancesTab: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-emerald-100/80">
                       {activePayeeRows.map((a) => {
-                        const p = planById.get(a.budgetPlanId);
+                        const p = a.budgetPlanId.trim() ? planById.get(a.budgetPlanId) : undefined;
                         return (
                           <tr key={a.id} className="bg-white/40">
                             <td className="px-3 py-2 whitespace-nowrap align-top">{a.advanceDate}</td>
                             <td className="px-3 py-2 align-top min-w-[10rem]">
-                              <div className="text-slate-800">{p ? p.name : a.budgetPlanId}</div>
+                              <div className="text-slate-800">
+                                {!a.budgetPlanId.trim() ? '未綁計畫' : p ? p.name : a.budgetPlanId}
+                              </div>
                               {p ? (
                                 <div className="text-[10px] text-slate-500 mt-0.5">
                                   {periodKindLabel(p.periodKind)} {p.academicYear} · {p.accountingCode || '—'}
@@ -580,14 +595,20 @@ const BudgetAdvancesTab: React.FC = () => {
           <div className="md:col-span-2 lg:col-span-3">
             <label className="block text-xs font-medium text-slate-600 mb-1">
               <Link2 size={12} className="inline mr-1" />
-              計畫專案（代墊所屬預算來源）<span className="text-red-500">*</span>
+              計畫專案（選填，可日後改掛）
             </label>
             <select
               value={newRow.budgetPlanId}
-              onChange={(e) => setNewRow((r) => ({ ...r, budgetPlanId: e.target.value }))}
+              onChange={(e) =>
+                setNewRow((r) => ({
+                  ...r,
+                  budgetPlanId: e.target.value,
+                  ledgerEntryId: e.target.value.trim() ? r.ledgerEntryId : '',
+                }))
+              }
               className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
             >
-              <option value="">— 請選擇 —</option>
+              <option value="">（未綁計畫，日後可再綁）</option>
               {plans.map((p) => (
                 <option key={p.id} value={p.id}>
                   {planLabel(p)}
@@ -595,9 +616,9 @@ const BudgetAdvancesTab: React.FC = () => {
                 </option>
               ))}
             </select>
-            {plans.length === 0 && !loading && (
-              <p className="text-xs text-amber-700 mt-1">請先到「計畫專案」建立計畫後再新增代墊。</p>
-            )}
+            <p className="text-xs text-slate-500 mt-1">
+              先付老師、學校尚未對應計畫時可維持未綁；有新計畫後再於下方列表改選計畫。
+            </p>
           </div>
           <div className="md:col-span-2 lg:col-span-3">
             <label className="block text-xs font-medium text-slate-600 mb-1">帶入支出項目（選填）</label>
@@ -672,7 +693,7 @@ const BudgetAdvancesTab: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">我要給誰（受款人，選填）</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">受款人（選填）</label>
             <div className="relative">
               <input
                 value={newRow.paidBy}
@@ -754,7 +775,7 @@ const BudgetAdvancesTab: React.FC = () => {
           <div className="md:col-span-2 lg:col-span-3 flex justify-end">
             <button
               type="button"
-              disabled={saving || plans.length === 0}
+              disabled={saving}
               onClick={() => void handleAdd()}
               className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 disabled:opacity-50"
             >
@@ -781,6 +802,7 @@ const BudgetAdvancesTab: React.FC = () => {
               className="border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white"
             >
               <option value="">全部計畫</option>
+              <option value="__none__">未綁計畫</option>
               {plans.map((p) => (
                 <option key={p.id} value={p.id}>
                   {periodKindLabel(p.periodKind)} {p.academicYear} · {p.name}
@@ -829,13 +851,14 @@ const BudgetAdvancesTab: React.FC = () => {
                   <th className="px-3 py-2 font-semibold">摘要</th>
                   <th className="px-3 py-2 font-semibold text-right">金額</th>
                   <th className="px-3 py-2 font-semibold">狀態</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">補款／核銷日</th>
                   <th className="px-3 py-2 font-semibold w-28">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredAdvances.map((row) => {
-                  const p = planById.get(row.budgetPlanId);
-                  const missingPlan = !p;
+                  const p = row.budgetPlanId.trim() ? planById.get(row.budgetPlanId) : undefined;
+                  const missingPlan = row.budgetPlanId.trim() !== '' && !p;
                   return (
                     <tr key={row.id} className={`${missingPlan ? 'bg-amber-50/50' : ''} hover:bg-slate-50/60 transition-colors`}>
                       <td className="px-3 py-2 whitespace-nowrap align-top">
@@ -859,6 +882,7 @@ const BudgetAdvancesTab: React.FC = () => {
                           disabled={saving}
                           className="w-full border border-slate-200 rounded px-1 py-1 text-xs"
                         >
+                          <option value="">（未綁計畫）</option>
                           {missingPlan && (
                             <option value={row.budgetPlanId}>（原計畫已不存在）</option>
                           )}
@@ -924,6 +948,23 @@ const BudgetAdvancesTab: React.FC = () => {
                             </option>
                           ))}
                         </select>
+                      </td>
+                      <td className="px-3 py-2 align-top whitespace-nowrap">
+                        <input
+                          type="date"
+                          defaultValue={(row.settledDate ?? '').trim()}
+                          key={`sd-${row.id}-${row.updatedAt}`}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const cur = (row.settledDate ?? '').trim();
+                            if (v !== cur) {
+                              if (!v || ISO_DATE.test(v)) void handleUpdateRow(row, { settledDate: v });
+                            }
+                          }}
+                          disabled={saving}
+                          title="學校撥款補回或核銷完成日（選填）"
+                          className="border border-slate-200 rounded px-1 py-0.5 text-xs max-w-[9.5rem]"
+                        />
                       </td>
                       <td className="px-3 py-2 align-top">
                         <button
