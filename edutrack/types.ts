@@ -271,6 +271,11 @@ export interface BudgetPlanAdvance {
   settledDate?: string;
   /** 您實際將代墊款給受款人（老師等）之日 YYYY-MM-DD（選填） */
   paidToPayeeDate?: string;
+  /**
+   * 封存日 YYYY-MM-DD（系統寫入）。學校補款日與已給受款人日皆填時自動封存並自「進行中」列表移出。
+   * 清空任一日或作廢時會清除封存。
+   */
+  archivedAt?: string;
   memo?: string;
   createdAt?: string;
   updatedAt?: string;

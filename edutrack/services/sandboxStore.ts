@@ -175,6 +175,7 @@ const store = {
       memo: '待主計核銷後歸還',
       settledDate: '',
       paidToPayeeDate: '',
+      archivedAt: '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -190,6 +191,23 @@ const store = {
       memo: '有新計畫後可改掛',
       settledDate: '',
       paidToPayeeDate: '',
+      archivedAt: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'sandbox-adv-archived',
+      budgetPlanId: 'sandbox-bp-1',
+      ledgerEntryId: '',
+      amount: 500,
+      advanceDate: '2025-09-01',
+      title: '範例：已封存（雙日期皆填）',
+      paidBy: '王老師',
+      status: 'settled',
+      memo: '僅在「歷史封存」可見',
+      settledDate: '2025-09-15',
+      paidToPayeeDate: '2025-09-20',
+      archivedAt: '2025-09-20',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -593,10 +611,15 @@ export function sandboxDeleteBudgetPlanLedgerEntry(planId: string, entryId: stri
 }
 
 // --- Budget plan advances (代墊紀錄) ---
-export function sandboxGetBudgetPlanAdvances(): Promise<BudgetPlanAdvance[]> {
-  return Promise.resolve(
-    [...store.budgetPlanAdvances].sort((a, b) => (b.advanceDate || '').localeCompare(a.advanceDate || ''))
-  );
+export function sandboxGetBudgetPlanAdvances(
+  scope?: 'active' | 'archived' | 'all',
+): Promise<BudgetPlanAdvance[]> {
+  let list = [...store.budgetPlanAdvances];
+  const s = scope ?? 'all';
+  if (s === 'active') list = list.filter((a) => !String(a.archivedAt ?? '').trim());
+  else if (s === 'archived') list = list.filter((a) => !!String(a.archivedAt ?? '').trim());
+  list.sort((a, b) => (b.advanceDate || '').localeCompare(a.advanceDate || ''));
+  return Promise.resolve(list);
 }
 
 export function sandboxSaveBudgetPlanAdvance(
@@ -612,6 +635,10 @@ export function sandboxSaveBudgetPlanAdvance(
   else if (sd && pd) st = 'settled';
   else if (payload.status === 'settled') st = 'settled';
   else st = 'outstanding';
+  const shouldArchive = sd && pd && st !== 'cancelled';
+  const prevArchived =
+    idx >= 0 ? String(store.budgetPlanAdvances[idx].archivedAt ?? '').trim() : '';
+  const archivedAt = shouldArchive ? prevArchived || new Date().toISOString().slice(0, 10) : '';
   const planId = String(payload.budgetPlanId ?? '').trim();
   const row: BudgetPlanAdvance = {
     id,
@@ -624,6 +651,7 @@ export function sandboxSaveBudgetPlanAdvance(
     status: st,
     settledDate: String(payload.settledDate ?? '').trim(),
     paidToPayeeDate: String(payload.paidToPayeeDate ?? '').trim(),
+    archivedAt,
     memo: payload.memo ?? '',
     createdAt: idx >= 0 ? store.budgetPlanAdvances[idx].createdAt ?? now : now,
     updatedAt: now,

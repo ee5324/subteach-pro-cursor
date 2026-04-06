@@ -839,9 +839,13 @@ function parseAdvanceStatus(v: unknown): BudgetAdvanceStatus {
   return 'outstanding';
 }
 
-export async function getBudgetPlanAdvances(_filter?: { budgetPlanId?: string }): Promise<BudgetPlanAdvance[]> {
+export async function getBudgetPlanAdvances(_filter?: {
+  budgetPlanId?: string;
+  /** active=未封存；archived=已封存；預設 all（相容舊行為） */
+  scope?: 'active' | 'archived' | 'all';
+}): Promise<BudgetPlanAdvance[]> {
   if (isSandbox()) {
-    const list = await sandboxGetBudgetPlanAdvances();
+    const list = await sandboxGetBudgetPlanAdvances(_filter?.scope);
     const pid = _filter?.budgetPlanId?.trim();
     if (!pid) return list;
     return list.filter((a) => a.budgetPlanId === pid);
@@ -866,11 +870,18 @@ export async function getBudgetPlanAdvances(_filter?: { budgetPlanId?: string })
       status: parseAdvanceStatus(data.status),
       settledDate: data.settledDate != null ? String(data.settledDate).trim() : '',
       paidToPayeeDate: data.paidToPayeeDate != null ? String(data.paidToPayeeDate).trim() : '',
+      archivedAt: data.archivedAt != null ? String(data.archivedAt).trim() : '',
       memo: data.memo != null ? String(data.memo) : '',
       createdAt,
       updatedAt,
     } as BudgetPlanAdvance;
   });
+  const scope = _filter?.scope ?? 'all';
+  if (scope === 'active') {
+    rows = rows.filter((a) => !String(a.archivedAt ?? '').trim());
+  } else if (scope === 'archived') {
+    rows = rows.filter((a) => !!String(a.archivedAt ?? '').trim());
+  }
   const pid = _filter?.budgetPlanId?.trim();
   if (pid) rows = rows.filter((a) => a.budgetPlanId === pid);
   return rows;
@@ -885,6 +896,17 @@ export async function saveBudgetPlanAdvance(
   const id = payload.id ?? (crypto.randomUUID?.() ?? `bpadv-${Date.now()}`);
   const amount = Math.max(0, numFromFirestore(payload.amount));
   const planId = String(payload.budgetPlanId ?? '').trim();
+  const sd = String(payload.settledDate ?? '').trim();
+  const pd = String(payload.paidToPayeeDate ?? '').trim();
+  const st = parseAdvanceStatus(payload.status);
+  const existing = await getDoc(doc(db, COLLECTIONS.BUDGET_PLAN_ADVANCES, id));
+  const existingData = existing.exists() ? existing.data() : undefined;
+  const existingArchived =
+    existingData?.archivedAt != null ? String(existingData.archivedAt).trim() : '';
+  const shouldArchive = sd.length > 0 && pd.length > 0 && st !== 'cancelled';
+  const archivedAt = shouldArchive
+    ? existingArchived || new Date().toISOString().slice(0, 10)
+    : '';
   const data: DocumentData = {
     budgetPlanId: planId,
     ledgerEntryId: planId ? (payload.ledgerEntryId != null ? String(payload.ledgerEntryId).trim() : '') : '',
@@ -892,13 +914,13 @@ export async function saveBudgetPlanAdvance(
     advanceDate: String(payload.advanceDate ?? '').trim(),
     title: String(payload.title ?? '').trim(),
     paidBy: String(payload.paidBy ?? '').trim(),
-    status: parseAdvanceStatus(payload.status),
-    settledDate: String(payload.settledDate ?? '').trim(),
-    paidToPayeeDate: String(payload.paidToPayeeDate ?? '').trim(),
+    status: st,
+    settledDate: sd,
+    paidToPayeeDate: pd,
+    archivedAt,
     memo: payload.memo ?? '',
     updatedAt: serverTimestamp(),
   };
-  const existing = await getDoc(doc(db, COLLECTIONS.BUDGET_PLAN_ADVANCES, id));
   if (!existing.exists()) {
     data.createdAt = serverTimestamp();
   }

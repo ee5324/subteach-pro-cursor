@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Calculator,
   CheckCircle2,
+  Archive,
 } from 'lucide-react';
 import type { BudgetPlan, BudgetPlanAdvance, BudgetAdvanceStatus, BudgetPlanLedgerEntry } from '../types';
 import {
@@ -44,8 +45,13 @@ function trimDate(s?: string) {
   return String(s ?? '').trim();
 }
 
+function isAdvanceArchived(a: BudgetPlanAdvance): boolean {
+  return !!trimDate(a.archivedAt);
+}
+
 /** 學校尚未補款（補款試算池、待學校補款彙總） */
 function awaitsSchoolReimburse(a: BudgetPlanAdvance): boolean {
+  if (isAdvanceArchived(a)) return false;
   if (a.status === 'cancelled') return false;
   if (trimDate(a.settledDate)) return false;
   if (a.status === 'settled' && !trimDate(a.settledDate)) return false;
@@ -54,12 +60,14 @@ function awaitsSchoolReimburse(a: BudgetPlanAdvance): boolean {
 
 /** 學校已補款、您尚未給受款人 */
 function schoolDonePayeePending(a: BudgetPlanAdvance): boolean {
+  if (isAdvanceArchived(a)) return false;
   if (a.status === 'cancelled') return false;
   return !!trimDate(a.settledDate) && !trimDate(a.paidToPayeeDate);
 }
 
 /** 尚未填已給受款人日（您尚欠受款人該筆金額） */
 function stillOwesPayee(a: BudgetPlanAdvance): boolean {
+  if (isAdvanceArchived(a)) return false;
   if (a.status === 'cancelled') return false;
   return !trimDate(a.paidToPayeeDate);
 }
@@ -121,6 +129,9 @@ const BudgetAdvancesTab: React.FC = () => {
   const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
   /** 摘要區：待學校補款 vs 尚欠受款人（未填已給受款人日） */
   const [summaryViewMode, setSummaryViewMode] = useState<'school' | 'owePayee'>('school');
+  /** 進行中列表 vs 歷史封存 */
+  const [mainTab, setMainTab] = useState<'active' | 'history'>('active');
+  const [historySearch, setHistorySearch] = useState('');
   const [newRow, setNewRow] = useState({
     budgetPlanId: '',
     ledgerEntryId: '',
@@ -142,7 +153,10 @@ const BudgetAdvancesTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [pList, aList] = await Promise.all([getBudgetPlans(undefined), getBudgetPlanAdvances()]);
+      const [pList, aList] = await Promise.all([
+        getBudgetPlans(undefined),
+        getBudgetPlanAdvances({ scope: mainTab === 'history' ? 'archived' : 'active' }),
+      ]);
       setPlans(pList);
       setAdvances(aList);
     } catch (e: any) {
@@ -150,11 +164,15 @@ const BudgetAdvancesTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mainTab]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (mainTab === 'history') setActivePayee('');
+  }, [mainTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,8 +214,18 @@ const BudgetAdvancesTab: React.FC = () => {
     if (fp === '__none__') rows = rows.filter((a) => !a.budgetPlanId.trim());
     else if (fp) rows = rows.filter((a) => a.budgetPlanId === fp);
     if (filterStatus) rows = rows.filter((a) => a.status === filterStatus);
+    if (mainTab === 'history' && historySearch.trim()) {
+      const kw = historySearch.trim().toLowerCase();
+      rows = rows.filter((a) => {
+        const planName = a.budgetPlanId.trim() ? planById.get(a.budgetPlanId)?.name ?? '' : '';
+        const hay = [a.title, a.paidBy, a.memo, a.advanceDate, a.settledDate, a.paidToPayeeDate, a.archivedAt, planName]
+          .map((x) => String(x ?? '').toLowerCase())
+          .join(' ');
+        return hay.includes(kw);
+      });
+    }
     return rows;
-  }, [advances, filterPlanId, filterStatus]);
+  }, [advances, filterPlanId, filterStatus, mainTab, historySearch, planById]);
 
   // 若篩選變動導致目前點選的對象已無資料，則自動收合
   useEffect(() => {
@@ -625,16 +653,54 @@ const BudgetAdvancesTab: React.FC = () => {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/70 shadow-sm p-4 md:p-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-amber-100 border border-amber-200">
               <Banknote className="text-amber-700" size={22} />
             </span>
             計畫代墊紀錄
           </h1>
-          <p className="text-sm text-slate-600 mt-1 max-w-xl">
-            可先記<strong>未綁計畫</strong>代墊，日後有新計畫再從列表改掛；有綁計畫時可連結支用明細。
-            <strong>學校補款日</strong>與<strong>已給受款人日</strong>分開填：學校匯給您不代表您已把代墊款給受款人；兩者皆填時狀態為「已結清」。
+          <div
+            className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-0.5 text-xs font-medium shadow-sm mt-3"
+            role="tablist"
+            aria-label="進行中或歷史封存"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'active'}
+              onClick={() => setMainTab('active')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+                mainTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Banknote size={14} className="shrink-0 opacity-80" />
+              進行中
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mainTab === 'history'}
+              onClick={() => setMainTab('history')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+                mainTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Archive size={14} className="shrink-0 opacity-80" />
+              歷史封存
+            </button>
+          </div>
+          <p className="text-sm text-slate-600 mt-2 max-w-xl">
+            {mainTab === 'active' ? (
+              <>
+                可先記<strong>未綁計畫</strong>代墊，日後有新計畫再從列表改掛；有綁計畫時可連結支用明細。
+                <strong>學校補款日</strong>與<strong>已給受款人日</strong>分開填：學校匯給您不代表您已把代墊款給受款人；兩者皆填且已結清時會<strong>自動封存</strong>並移至「歷史封存」。
+              </>
+            ) : (
+              <>
+                以下為已<strong>封存</strong>之代墊（學校補款日與已給受款人日皆已填）。可用關鍵字搜尋摘要、受款人、計畫名稱或日期。編輯並清空任一日可解除封存、回到「進行中」。
+              </>
+            )}
           </p>
         </div>
         <button
@@ -652,6 +718,8 @@ const BudgetAdvancesTab: React.FC = () => {
         <div className="rounded-lg border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-2">{error}</div>
       )}
 
+      {mainTab === 'active' && (
+      <>
       {/* 補款對照（學校整筆匯入時對應多筆待歸還） */}
       <div className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 to-white shadow-sm overflow-hidden">
         <button
@@ -1211,12 +1279,32 @@ const BudgetAdvancesTab: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* 篩選與列表 */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 flex flex-wrap gap-3 items-center justify-between">
-          <h2 className="font-semibold text-slate-800">紀錄列表</h2>
-          <div className="flex flex-wrap gap-2 text-sm">
+          <div>
+            <h2 className="font-semibold text-slate-800">
+              {mainTab === 'active' ? '紀錄列表' : '歷史封存'}
+            </h2>
+            {mainTab === 'history' ? (
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                共 {filteredAdvances.length} 筆（篩選後）
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2 text-sm items-center">
+            {mainTab === 'history' ? (
+              <input
+                type="search"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="搜尋摘要、受款人、計畫、日期…"
+                className="min-w-[12rem] max-w-[20rem] border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white text-sm"
+              />
+            ) : null}
             <select
               value={filterPlanId}
               onChange={(e) => setFilterPlanId(e.target.value)}
@@ -1261,7 +1349,9 @@ const BudgetAdvancesTab: React.FC = () => {
             <Loader2 className="animate-spin text-amber-500" size={32} />
           </div>
         ) : filteredAdvances.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-sm">尚無代墊紀錄或無符合篩選的項目</div>
+          <div className="text-center py-12 text-slate-500 text-sm">
+            {mainTab === 'active' ? '尚無代墊紀錄或無符合篩選的項目' : '尚無封存紀錄或無符合篩選／搜尋的項目'}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1274,6 +1364,9 @@ const BudgetAdvancesTab: React.FC = () => {
                   <th className="px-3 py-2 font-semibold">狀態</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">學校補款日</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">已給受款人日</th>
+                  {mainTab === 'history' ? (
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">封存日</th>
+                  ) : null}
                   <th className="px-3 py-2 font-semibold w-28">操作</th>
                 </tr>
               </thead>
@@ -1405,6 +1498,11 @@ const BudgetAdvancesTab: React.FC = () => {
                           className="border border-slate-200 rounded px-1 py-0.5 text-xs max-w-[9.5rem]"
                         />
                       </td>
+                      {mainTab === 'history' ? (
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-700 text-xs">
+                          {(row.archivedAt ?? '').trim() || '—'}
+                        </td>
+                      ) : null}
                       <td className="px-3 py-2 align-top">
                         <button
                           type="button"
