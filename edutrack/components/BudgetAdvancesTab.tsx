@@ -429,7 +429,10 @@ const BudgetAdvancesTab: React.FC = () => {
       const title =
         mode === 'byPayeeOutstanding'
           ? `代墊清單（依受款人彙整／${payeeScopeLabel}）`
-          : `代墊清單（目前篩選明細）`;
+          : mainTab === 'history'
+            ? '代墊清單（歷史封存／篩選）'
+            : '代墊清單（目前篩選明細）';
+      const includeArchiveCol = mode === 'filteredList' && mainTab === 'history';
       const rows =
         mode === 'byPayeeOutstanding'
           ? filteredAdvances.filter((a) =>
@@ -465,6 +468,10 @@ const BudgetAdvancesTab: React.FC = () => {
                       : planNameById.get(a.budgetPlanId) ?? a.budgetPlanId;
                     const settled = (a.settledDate ?? '').trim();
                     const paidPayee = (a.paidToPayeeDate ?? '').trim();
+                    const archived = (a.archivedAt ?? '').trim();
+                    const tdArchive = includeArchiveCol
+                      ? `  <td class="nowrap">${escHtml(archived || '—')}</td>\n`
+                      : '';
                     return `<tr>
   <td class="nowrap">${escHtml(a.advanceDate)}</td>
   <td>${escHtml(STATUS_LABEL[a.status])}</td>
@@ -473,7 +480,7 @@ const BudgetAdvancesTab: React.FC = () => {
   <td class="num">${escHtml(fmtMoney(a.amount || 0))}</td>
   <td class="nowrap">${escHtml(settled || '—')}</td>
   <td class="nowrap">${escHtml(paidPayee || '—')}</td>
-  <td>${escHtml(a.memo ?? '')}</td>
+${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
 </tr>`;
                   })
                   .join('\n');
@@ -481,7 +488,7 @@ const BudgetAdvancesTab: React.FC = () => {
   <div class="pageHeader">
     <div>
       <div class="h2">${escHtml(payee)}</div>
-      <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? payeeScopeLabel : '明細（依目前篩選）')}</div>
+      <div class="muted">${escHtml(mode === 'byPayeeOutstanding' ? payeeScopeLabel : includeArchiveCol ? '歷史封存（依目前篩選）' : '明細（依目前篩選）')}</div>
     </div>
     <div class="total">總額 ${escHtml(fmtMoney(total))}</div>
   </div>
@@ -495,6 +502,7 @@ const BudgetAdvancesTab: React.FC = () => {
         <th class="num">金額</th>
         <th>學校補款日</th>
         <th>已給受款人日</th>
+        ${includeArchiveCol ? '<th>封存日</th>' : ''}
         <th>備註</th>
       </tr>
     </thead>
@@ -549,13 +557,22 @@ const BudgetAdvancesTab: React.FC = () => {
 </body>
 </html>`;
 
-      const w = window.open('', '_blank', 'noopener,noreferrer');
-      if (!w) return;
+      // 勿在第三參數使用 noopener：多數瀏覽器會讓 window.open 回傳 null，導致無法 write 列印內容
+      const w = window.open('', '_blank');
+      if (!w) {
+        setError('無法開啟列印視窗，請允許此網站的彈出視窗後再試。');
+        return;
+      }
+      try {
+        w.opener = null;
+      } catch {
+        /* ignore */
+      }
       w.document.open();
       w.document.write(docHtml);
       w.document.close();
     },
-    [filteredAdvances, plans, summaryViewMode]
+    [filteredAdvances, plans, summaryViewMode, mainTab]
   );
 
   const handleAdd = async () => {
@@ -652,45 +669,70 @@ const BudgetAdvancesTab: React.FC = () => {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/70 shadow-sm p-4 md:p-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-amber-100 border border-amber-200">
-              <Banknote className="text-amber-700" size={22} />
-            </span>
-            計畫代墊紀錄
-          </h1>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/70 shadow-sm p-4 md:p-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-amber-100 border border-amber-200">
+                <Banknote className="text-amber-700" size={22} />
+              </span>
+              計畫代墊紀錄
+            </h1>
+            <p className="text-xs text-slate-500 mt-1.5 max-w-xl">
+              請先選擇<strong>資料範圍</strong>：系統<strong>只會載入</strong>該範圍的代墊（進行中＝未封存；歷史封存＝已結清並封存）。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 shadow-sm shrink-0"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            重新載入
+          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span className="text-sm font-semibold text-slate-800 shrink-0">資料範圍</span>
           <div
-            className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-0.5 text-xs font-medium shadow-sm mt-3"
+            className="inline-flex rounded-xl border-2 border-amber-200/90 bg-amber-50/60 p-1 text-sm font-semibold shadow-sm w-full sm:w-auto"
             role="tablist"
-            aria-label="進行中或歷史封存"
+            aria-label="代墊資料範圍：進行中或歷史封存"
           >
             <button
               type="button"
               role="tab"
               aria-selected={mainTab === 'active'}
               onClick={() => setMainTab('active')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                mainTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              className={`inline-flex flex-1 sm:flex-initial justify-center items-center gap-2 px-4 py-2.5 rounded-lg transition-colors min-w-0 ${
+                mainTab === 'active'
+                  ? 'bg-white text-amber-950 shadow-md ring-1 ring-amber-200/80'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
-              <Banknote size={14} className="shrink-0 opacity-80" />
-              進行中
+              <Banknote size={18} className="shrink-0 opacity-90" />
+              <span className="whitespace-nowrap">進行中（未封存）</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={mainTab === 'history'}
               onClick={() => setMainTab('history')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
-                mainTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              className={`inline-flex flex-1 sm:flex-initial justify-center items-center gap-2 px-4 py-2.5 rounded-lg transition-colors min-w-0 ${
+                mainTab === 'history'
+                  ? 'bg-white text-amber-950 shadow-md ring-1 ring-amber-200/80'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
-              <Archive size={14} className="shrink-0 opacity-80" />
-              歷史封存
+              <Archive size={18} className="shrink-0 opacity-90" />
+              <span className="whitespace-nowrap">歷史封存（已結清）</span>
             </button>
           </div>
-          <p className="text-sm text-slate-600 mt-2 max-w-xl">
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-sm text-slate-600 max-w-3xl">
             {mainTab === 'active' ? (
               <>
                 可先記<strong>未綁計畫</strong>代墊，日後有新計畫再從列表改掛；有綁計畫時可連結支用明細。
@@ -703,15 +745,6 @@ const BudgetAdvancesTab: React.FC = () => {
             )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 shadow-sm"
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          重新載入
-        </button>
       </div>
 
       {error && (
@@ -1286,8 +1319,17 @@ const BudgetAdvancesTab: React.FC = () => {
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 flex flex-wrap gap-3 items-center justify-between">
           <div>
-            <h2 className="font-semibold text-slate-800">
+            <h2 className="font-semibold text-slate-800 flex flex-wrap items-center gap-2">
               {mainTab === 'active' ? '紀錄列表' : '歷史封存'}
+              <span
+                className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                  mainTab === 'active'
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                {mainTab === 'active' ? '目前：僅載入未封存' : '目前：僅載入已封存'}
+              </span>
             </h2>
             {mainTab === 'history' ? (
               <p className="text-[11px] text-slate-500 mt-0.5">
