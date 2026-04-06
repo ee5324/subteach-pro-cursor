@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Banknote, Plus, Trash2, Save, Loader2, RefreshCw, Link2, Printer, ChevronDown } from 'lucide-react';
+import { Banknote, Plus, Trash2, Save, Loader2, RefreshCw, Link2, Printer, ChevronDown, Calculator } from 'lucide-react';
 import type { BudgetPlan, BudgetPlanAdvance, BudgetAdvanceStatus, BudgetPlanLedgerEntry } from '../types';
 import {
   getBudgetPlans,
@@ -10,6 +10,12 @@ import {
   deleteBudgetPlanAdvance,
 } from '../services/api';
 import { periodKindLabel } from '../utils/budgetPlanPeriod';
+import {
+  findOutstandingAdvanceSubsetsExact,
+  REIMBURSE_MATCH_MAX_COMBO_SIZE,
+  REIMBURSE_MATCH_MAX_POOL,
+  REIMBURSE_MATCH_MAX_SOLUTIONS,
+} from '../utils/advanceReimbursementMatch';
 
 const fmtMoney = (n: number) =>
   n.toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -51,6 +57,15 @@ const BudgetAdvancesTab: React.FC = () => {
   const [payeeSuggestActiveIdx, setPayeeSuggestActiveIdx] = useState(0);
   const payeeBlurTimerRef = useRef<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [reimburseSectionOpen, setReimburseSectionOpen] = useState(true);
+  const [reimburseAmount, setReimburseAmount] = useState('');
+  const [reimburseUseFilter, setReimburseUseFilter] = useState(true);
+  const [matchOutcome, setMatchOutcome] = useState<{
+    target: number;
+    solutions: BudgetPlanAdvance[][];
+    truncatedPool: boolean;
+    poolSize: number;
+  } | null>(null);
   const [newRow, setNewRow] = useState({
     budgetPlanId: '',
     ledgerEntryId: '',
@@ -135,6 +150,33 @@ const BudgetAdvancesTab: React.FC = () => {
     const has = filteredAdvances.some((a) => ((a.paidBy ?? '').trim() || '（未填受款人）') === activePayee);
     if (!has) setActivePayee('');
   }, [activePayee, filteredAdvances]);
+
+  /** 補款對照用：待歸還池（可選是否套用與列表相同的計畫／狀態篩選） */
+  const poolForReimburseMatch = useMemo(() => {
+    let rows = advances;
+    if (reimburseUseFilter) {
+      const fp = filterPlanId.trim();
+      if (fp === '__none__') rows = rows.filter((a) => !a.budgetPlanId.trim());
+      else if (fp) rows = rows.filter((a) => a.budgetPlanId === fp);
+      if (filterStatus) rows = rows.filter((a) => a.status === filterStatus);
+    }
+    return rows.filter((a) => a.status === 'outstanding');
+  }, [advances, filterPlanId, filterStatus, reimburseUseFilter]);
+
+  const runReimburseMatch = useCallback(() => {
+    const raw = String(reimburseAmount).replace(/,/g, '').trim();
+    const t = Number(raw);
+    if (!Number.isFinite(t) || t <= 0) {
+      setMatchOutcome(null);
+      return;
+    }
+    const targetInt = Math.round(t);
+    const { solutions, truncatedPool, poolSize } = findOutstandingAdvanceSubsetsExact(
+      poolForReimburseMatch,
+      targetInt,
+    );
+    setMatchOutcome({ target: targetInt, solutions, truncatedPool, poolSize });
+  }, [reimburseAmount, poolForReimburseMatch]);
 
   const summary = useMemo(() => {
     const outstanding = filteredAdvances.filter((a) => a.status === 'outstanding');
@@ -441,6 +483,122 @@ const BudgetAdvancesTab: React.FC = () => {
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-2">{error}</div>
       )}
+
+      {/* 補款對照（學校整筆匯入時對應多筆待歸還） */}
+      <div className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 to-white shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setReimburseSectionOpen((v) => !v)}
+          className="w-full px-4 py-3 border-b border-emerald-100/80 bg-emerald-50/50 flex items-center justify-between gap-2 text-left hover:bg-emerald-50/80"
+          aria-expanded={reimburseSectionOpen}
+        >
+          <span className="flex items-center gap-2 font-semibold text-emerald-950">
+            <Calculator size={20} className="text-emerald-700 shrink-0" />
+            補款對照（整筆匯款拆回多筆代墊）
+          </span>
+          <ChevronDown
+            size={18}
+            className={`text-emerald-700 shrink-0 transition-transform ${reimburseSectionOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+        {reimburseSectionOpen ? (
+          <div className="p-4 space-y-3 text-sm">
+            <p className="text-slate-600 text-xs leading-relaxed">
+              學校若將<strong>多筆待歸還</strong>合併一筆匯給您，可在此輸入<strong>實際入帳金額</strong>，系統會從待歸還明細中找出<strong>加總恰好相等</strong>的組合（可能多組，請再依實際核銷勾選）。
+              單筆最多納入 {REIMBURSE_MATCH_MAX_POOL} 筆試算；組合筆數上限 {REIMBURSE_MATCH_MAX_COMBO_SIZE} 筆；最多列出{' '}
+              {REIMBURSE_MATCH_MAX_SOLUTIONS} 種組合。
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[10rem]">
+                <label className="block text-xs font-medium text-slate-600 mb-1">匯款／入帳金額（元）</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={reimburseAmount}
+                  onChange={(e) => setReimburseAmount(e.target.value)}
+                  placeholder="例如 15800"
+                  className="w-full border border-emerald-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                />
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs text-slate-700 cursor-pointer pb-2">
+                <input
+                  type="checkbox"
+                  checked={reimburseUseFilter}
+                  onChange={(e) => setReimburseUseFilter(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600"
+                />
+                套用與下方列表相同的「計畫／狀態」篩選
+              </label>
+              <button
+                type="button"
+                onClick={() => runReimburseMatch()}
+                disabled={loading || poolForReimburseMatch.length === 0}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Calculator size={16} />
+                試算可能組合
+              </button>
+            </div>
+            <div className="text-[11px] text-slate-500">
+              目前試算池：<span className="font-medium text-slate-700">{poolForReimburseMatch.length}</span> 筆待歸還
+              {reimburseUseFilter ? '（已套用篩選）' : '（全部待歸還）'}
+            </div>
+            {matchOutcome ? (
+              <div className="rounded-xl border border-emerald-100 bg-white p-3 space-y-3">
+                {matchOutcome.truncatedPool ? (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                    待歸還筆數超過 {REIMBURSE_MATCH_MAX_POOL} 筆，已僅以前 {REIMBURSE_MATCH_MAX_POOL} 筆（金額較大者優先）試算。請用篩選縮小範圍後再試。
+                  </p>
+                ) : null}
+                {matchOutcome.solutions.length === 0 ? (
+                  <p className="text-sm text-slate-600">
+                    找不到<strong>恰好 {fmtMoney(matchOutcome.target)} 元</strong>的組合。
+                    若差少許可能是手續費，可改以備註手動對帳；或調整篩選／檢查明細金額是否皆為整數。
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs font-medium text-emerald-900">
+                      找到 {matchOutcome.solutions.length} 種組合（加總皆為 ${fmtMoney(matchOutcome.target)}）
+                      {matchOutcome.solutions.length >= REIMBURSE_MATCH_MAX_SOLUTIONS ? '（已達顯示上限，可能尚有其他組合）' : ''}
+                    </p>
+                    <ul className="space-y-3 max-h-[min(60vh,28rem)] overflow-y-auto">
+                      {matchOutcome.solutions.map((sol, si) => {
+                        const sumCheck = sol.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+                        return (
+                          <li
+                            key={si}
+                            className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-2"
+                          >
+                            <div className="text-xs font-semibold text-slate-800">
+                              組合 {si + 1}（{sol.length} 筆，小計 ${fmtMoney(sumCheck)}）
+                            </div>
+                            <ul className="text-xs space-y-1.5 pl-1 border-l-2 border-emerald-300">
+                              {sol.map((a) => {
+                                const pn = !a.budgetPlanId.trim()
+                                  ? '未綁計畫'
+                                  : planById.get(a.budgetPlanId)?.name ?? a.budgetPlanId;
+                                const payee = (a.paidBy ?? '').trim() || '（未填受款人）';
+                                return (
+                                  <li key={a.id} className="text-slate-700">
+                                    <span className="text-slate-500">{a.advanceDate}</span> · {a.title} ·{' '}
+                                    <span className="font-medium">{payee}</span> · {pn} ·{' '}
+                                    <span className="tabular-nums font-semibold">${fmtMoney(a.amount)}</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {/* 摘要 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
