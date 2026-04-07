@@ -1258,9 +1258,6 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
                             <td className="px-3 py-2 align-top min-w-[10rem]">
                               <div className="text-slate-800">{a.title}</div>
                               {a.memo ? <div className="text-[10px] text-slate-500 mt-0.5">{a.memo}</div> : null}
-                              {a.ledgerEntryId ? (
-                                <div className="text-[10px] text-slate-400 mt-0.5">連結支用：{a.ledgerEntryId}</div>
-                              ) : null}
                             </td>
                             <td className="px-3 py-2 text-right align-top whitespace-nowrap tabular-nums font-semibold text-slate-900">
                               ${fmtMoney(a.amount)}
@@ -1684,9 +1681,6 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
                           <div className="text-[10px] text-slate-500 mt-0.5">
                             受款人：{isEditing ? editDraft.paidBy : row.paidBy}
                           </div>
-                        ) : null}
-                        {row.ledgerEntryId ? (
-                          <div className="text-[10px] text-slate-400 mt-0.5">連結支用：{row.ledgerEntryId}</div>
                         ) : null}
                         {(isEditing ? editDraft.memo : row.memo) ? (
                           <div className="text-[10px] text-slate-400 mt-0.5">
