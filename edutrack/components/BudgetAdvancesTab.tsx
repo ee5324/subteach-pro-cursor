@@ -4,6 +4,8 @@ import {
   Plus,
   Trash2,
   Save,
+  Pencil,
+  X,
   Loader2,
   RefreshCw,
   Link2,
@@ -191,6 +193,16 @@ const BudgetAdvancesTab: React.FC = () => {
   /** 進行中列表 vs 歷史封存 */
   const [mainTab, setMainTab] = useState<'active' | 'history'>('active');
   const [historySearch, setHistorySearch] = useState('');
+  const [editingRowId, setEditingRowId] = useState('');
+  const [editDraft, setEditDraft] = useState<{
+    budgetPlanId: string;
+    amount: string;
+    advanceDate: string;
+    title: string;
+    paidBy: string;
+    status: BudgetAdvanceStatus;
+    memo: string;
+  } | null>(null);
   const [newRow, setNewRow] = useState({
     budgetPlanId: '',
     ledgerEntryId: '',
@@ -292,6 +304,15 @@ const BudgetAdvancesTab: React.FC = () => {
     const has = filteredAdvances.some((a) => ((a.paidBy ?? '').trim() || '（未填受款人）') === activePayee);
     if (!has) setActivePayee('');
   }, [activePayee, filteredAdvances]);
+
+  useEffect(() => {
+    if (!editingRowId) return;
+    const has = filteredAdvances.some((a) => a.id === editingRowId);
+    if (!has) {
+      setEditingRowId('');
+      setEditDraft(null);
+    }
+  }, [editingRowId, filteredAdvances]);
 
   /** 補款對照用：待歸還池（可選是否套用與列表相同的計畫／狀態篩選） */
   const poolForReimburseMatch = useMemo(() => {
@@ -743,6 +764,68 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
         memo: patch.memo !== undefined ? patch.memo : row.memo,
       });
       await load();
+    } catch (e: any) {
+      setError(e?.message || '更新失敗');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEditRow = (row: BudgetPlanAdvance) => {
+    setEditingRowId(row.id);
+    setEditDraft({
+      budgetPlanId: row.budgetPlanId ?? '',
+      amount: String(row.amount ?? ''),
+      advanceDate: row.advanceDate ?? '',
+      title: row.title ?? '',
+      paidBy: row.paidBy ?? '',
+      status: row.status,
+      memo: row.memo ?? '',
+    });
+  };
+
+  const cancelEditRow = () => {
+    setEditingRowId('');
+    setEditDraft(null);
+  };
+
+  const saveEditRow = async (row: BudgetPlanAdvance) => {
+    if (!editDraft) return;
+    const title = editDraft.title.trim();
+    if (!title) {
+      setError('請填寫摘要說明');
+      return;
+    }
+    if (!editDraft.advanceDate.trim() || !ISO_DATE.test(editDraft.advanceDate.trim())) {
+      setError('請填寫有效代墊日期（YYYY-MM-DD）');
+      return;
+    }
+    const amount = Math.max(0, Number(editDraft.amount) || 0);
+    if (!(amount > 0)) {
+      setError('請填寫大於 0 的代墊金額');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const budgetPlanId = editDraft.budgetPlanId.trim();
+      const nextStatus = mergeAdvanceStatusOnSave(row, { status: editDraft.status });
+      await saveBudgetPlanAdvance({
+        id: row.id,
+        budgetPlanId,
+        ledgerEntryId: budgetPlanId ? String(row.ledgerEntryId ?? '').trim() : '',
+        amount,
+        advanceDate: editDraft.advanceDate.trim(),
+        title,
+        paidBy: editDraft.paidBy.trim(),
+        status: nextStatus,
+        settledDate: row.settledDate,
+        paidToPayeeDate: row.paidToPayeeDate,
+        memo: editDraft.memo.trim(),
+      });
+      await load();
+      cancelEditRow();
     } catch (e: any) {
       setError(e?.message || '更新失敗');
     } finally {
@@ -1513,39 +1596,49 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
                 {filteredAdvances.map((row) => {
                   const p = row.budgetPlanId.trim() ? planById.get(row.budgetPlanId) : undefined;
                   const missingPlan = row.budgetPlanId.trim() !== '' && !p;
+                  const isEditing = editingRowId === row.id && !!editDraft;
                   return (
                     <tr key={row.id} className={`${missingPlan ? 'bg-amber-50/50' : ''} hover:bg-slate-50/60 transition-colors`}>
                       <td className="px-3 py-2 whitespace-nowrap align-top">
-                        <input
-                          type="date"
-                          defaultValue={row.advanceDate}
-                          key={`d-${row.id}-${row.updatedAt}`}
-                          onBlur={(e) => {
-                            const v = e.target.value.trim();
-                            if (v && v !== row.advanceDate && ISO_DATE.test(v)) void handleUpdateRow(row, { advanceDate: v });
-                          }}
-                          disabled={saving}
-                          className="border border-slate-200 rounded px-1 py-0.5 text-xs max-w-[9.5rem]"
-                        />
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editDraft.advanceDate}
+                            onChange={(e) =>
+                              setEditDraft((d) => (d ? { ...d, advanceDate: e.target.value } : d))
+                            }
+                            disabled={saving}
+                            className="border border-slate-200 rounded px-1 py-0.5 text-xs max-w-[9.5rem]"
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-700">{row.advanceDate || '—'}</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 align-top min-w-[10rem]">
-                        <select
-                          defaultValue={row.budgetPlanId}
-                          key={`p-${row.id}-${row.updatedAt}`}
-                          onChange={(e) => void handleUpdateRow(row, { budgetPlanId: e.target.value })}
-                          disabled={saving}
-                          className="w-full border border-slate-200 rounded px-1 py-1 text-xs"
-                        >
-                          <option value="">（未綁計畫）</option>
-                          {missingPlan && (
-                            <option value={row.budgetPlanId}>（原計畫已不存在）</option>
-                          )}
-                          {plans.map((pl) => (
-                            <option key={pl.id} value={pl.id}>
-                              {pl.name}
-                            </option>
-                          ))}
-                        </select>
+                        {isEditing ? (
+                          <select
+                            value={editDraft.budgetPlanId}
+                            onChange={(e) =>
+                              setEditDraft((d) => (d ? { ...d, budgetPlanId: e.target.value } : d))
+                            }
+                            disabled={saving}
+                            className="w-full border border-slate-200 rounded px-1 py-1 text-xs"
+                          >
+                            <option value="">（未綁計畫）</option>
+                            {missingPlan && (
+                              <option value={row.budgetPlanId}>（原計畫已不存在）</option>
+                            )}
+                            {plans.map((pl) => (
+                              <option key={pl.id} value={pl.id}>
+                                {pl.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-xs text-slate-800">
+                            {!row.budgetPlanId.trim() ? '未綁計畫' : p ? p.name : row.budgetPlanId}
+                          </div>
+                        )}
                         {p && (
                           <div className="text-[10px] text-slate-500 mt-0.5">
                             {periodKindLabel(p.periodKind)} {p.academicYear} · {p.accountingCode || '—'}
@@ -1554,54 +1647,93 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
                         {missingPlan && <div className="text-[10px] text-amber-700">原計畫已刪除，請改掛其他計畫</div>}
                       </td>
                       <td className="px-3 py-2 align-top min-w-[8rem]">
-                        <input
-                          defaultValue={row.title}
-                          key={`t-${row.id}-${row.updatedAt}`}
-                          onBlur={(e) => {
-                            const v = e.target.value.trim();
-                            if (v && v !== row.title) void handleUpdateRow(row, { title: v });
-                          }}
-                          disabled={saving}
-                          className="w-full border border-slate-200 rounded px-2 py-1 text-xs"
-                        />
-                        {row.paidBy ? (
-                          <div className="text-[10px] text-slate-500 mt-0.5">受款人：{row.paidBy}</div>
+                        {isEditing ? (
+                          <div className="space-y-1.5">
+                            <input
+                              value={editDraft.title}
+                              onChange={(e) =>
+                                setEditDraft((d) => (d ? { ...d, title: e.target.value } : d))
+                              }
+                              disabled={saving}
+                              className="w-full border border-slate-200 rounded px-2 py-1 text-xs"
+                              placeholder="摘要"
+                            />
+                            <input
+                              value={editDraft.paidBy}
+                              onChange={(e) =>
+                                setEditDraft((d) => (d ? { ...d, paidBy: e.target.value } : d))
+                              }
+                              disabled={saving}
+                              className="w-full border border-slate-200 rounded px-2 py-1 text-xs"
+                              placeholder="受款人（可空白）"
+                            />
+                            <input
+                              value={editDraft.memo}
+                              onChange={(e) =>
+                                setEditDraft((d) => (d ? { ...d, memo: e.target.value } : d))
+                              }
+                              disabled={saving}
+                              className="w-full border border-slate-200 rounded px-2 py-1 text-xs"
+                              placeholder="備註（可空白）"
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-800">{row.title || '—'}</div>
+                        )}
+                        {(isEditing ? editDraft.paidBy : row.paidBy) ? (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            受款人：{isEditing ? editDraft.paidBy : row.paidBy}
+                          </div>
                         ) : null}
                         {row.ledgerEntryId ? (
                           <div className="text-[10px] text-slate-400 mt-0.5">連結支用：{row.ledgerEntryId}</div>
                         ) : null}
-                        {row.memo ? <div className="text-[10px] text-slate-400 mt-0.5">{row.memo}</div> : null}
+                        {(isEditing ? editDraft.memo : row.memo) ? (
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {isEditing ? editDraft.memo : row.memo}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 text-right align-top whitespace-nowrap">
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          defaultValue={row.amount}
-                          key={`a-${row.id}-${row.updatedAt}`}
-                          onBlur={(e) => {
-                            const n = Math.max(0, Number(e.target.value) || 0);
-                            if (n > 0 && n !== row.amount) void handleUpdateRow(row, { amount: n });
-                          }}
-                          disabled={saving}
-                          className="w-24 border border-slate-200 rounded px-2 py-1 text-xs text-right"
-                        />
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={editDraft.amount}
+                            onChange={(e) =>
+                              setEditDraft((d) => (d ? { ...d, amount: e.target.value } : d))
+                            }
+                            disabled={saving}
+                            className="w-24 border border-slate-200 rounded px-2 py-1 text-xs text-right"
+                          />
+                        ) : (
+                          <span className="tabular-nums font-medium text-slate-900">
+                            ${fmtMoney(row.amount || 0)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 align-top">
-                        <select
-                          value={row.status}
-                          onChange={(e) =>
-                            void handleUpdateRow(row, { status: e.target.value as BudgetAdvanceStatus })
-                          }
-                          disabled={saving}
-                          className="w-full min-w-[7rem] border border-slate-200 rounded px-1 py-1 text-xs"
-                        >
-                          {(Object.keys(STATUS_LABEL) as BudgetAdvanceStatus[]).map((k) => (
-                            <option key={k} value={k}>
-                              {STATUS_LABEL[k]}
-                            </option>
-                          ))}
-                        </select>
+                        {isEditing ? (
+                          <select
+                            value={editDraft.status}
+                            onChange={(e) =>
+                              setEditDraft((d) => (d ? { ...d, status: e.target.value as BudgetAdvanceStatus } : d))
+                            }
+                            disabled={saving}
+                            className="w-full min-w-[7rem] border border-slate-200 rounded px-1 py-1 text-xs"
+                          >
+                            {(Object.keys(STATUS_LABEL) as BudgetAdvanceStatus[]).map((k) => (
+                              <option key={k} value={k}>
+                                {STATUS_LABEL[k]}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="inline-flex rounded-full px-2 py-0.5 text-xs border border-slate-200 bg-white">
+                            {STATUS_LABEL[row.status]}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 align-top whitespace-nowrap">
                         <input
@@ -1643,15 +1775,49 @@ ${tdArchive}  <td>${escHtml(a.memo ?? '')}</td>
                         </td>
                       ) : null}
                       <td className="px-3 py-2 align-top">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void handleDelete(row.id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                          title="刪除"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void saveEditRow(row)}
+                                className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded"
+                                title="儲存編輯"
+                              >
+                                <Save size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => cancelEditRow()}
+                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded"
+                                title="取消編輯"
+                              >
+                                <X size={16} />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => startEditRow(row)}
+                              className="p-1.5 text-slate-700 hover:bg-slate-100 rounded"
+                              title="編輯"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void handleDelete(row.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                            title="刪除"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
