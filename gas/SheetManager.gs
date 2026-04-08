@@ -1064,6 +1064,7 @@ var SheetManager = {
             ptaSheetsData[sheetName][subTeacherName] = {
                 dates: [], fullDates: [], originalTeachers: [], leaveTypes: [], reasons: [], notes: [],
                 lineItems: [],
+                ptaHalfDaySeenByDate: {},
                 subTeacherObj: teacherMap[subTeacherName] || null,
                 totalDays: 0, totalPeriods: 0, hourlyTotal: 0, homeroomDays: 0, homeroomFee: 0, finalAmount: 0
             };
@@ -1073,7 +1074,8 @@ var SheetManager = {
         var daysInMonth = SheetManagerHelpers.getSafeDaysInMonth(ymd || detail.date);
         var isCase1 = (record.leaveType === '公派(家長會)');
         var isCase2a = (record.ptaPaysHourly && detail.payType === '鐘點費');
-        var isCase2b = (record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)');
+        // 家長會半日導師費：僅針對「鐘點費明細」觸發，日薪/半日薪不應再套入此條件
+        var isCase2b = (record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)' && detail.payType === '鐘點費');
         if (!isCase1 && !isCase2a && !isCase2b) return;
 
         if (group.dates.indexOf(dateStr) === -1) group.dates.push(dateStr);
@@ -1111,6 +1113,10 @@ var SheetManager = {
         }
         // case2b：僅半日導師費由家長會支出（只入導師費，不入代課費）
         if (isCase2b && !isCase1 && !isCase2a) {
+            if (group.ptaHalfDaySeenByDate && group.ptaHalfDaySeenByDate[String(ymd || '')]) {
+                return;
+            }
+            if (group.ptaHalfDaySeenByDate) group.ptaHalfDaySeenByDate[String(ymd || '')] = true;
             lineDaysStr = '0';
             linePeriodsStr = '0';
             lineHomeroomDaysStr = '0.5';
@@ -1167,6 +1173,10 @@ var SheetManager = {
             group.finalAmount += detail.calculatedAmount;
             group.notes.push("家長會支出鐘點 0日" + subPeriods + "節" + (detail.selectedPeriods && detail.selectedPeriods.length ? "(" + detail.selectedPeriods.join(',') + ")" : ""));
         } else if (isCase2b) {
+            if (group.ptaHalfDaySeenByDate && group.ptaHalfDaySeenByDate[String(ymd || '')]) {
+                return;
+            }
+            if (group.ptaHalfDaySeenByDate) group.ptaHalfDaySeenByDate[String(ymd || '')] = true;
             group.homeroomDays += 0.5;
             var feeOnly = Math.round((4000 / daysInMonth) * 0.5);
             group.homeroomFee += feeOnly;
