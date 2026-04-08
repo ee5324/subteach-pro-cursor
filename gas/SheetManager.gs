@@ -1237,10 +1237,13 @@ var SheetManager = {
             if (g.lineItems && g.lineItems.length > 0) {
                 // 依日期排序，確保 A/E/F/G/H/K/L/M 各欄位行對齊
                 g.lineItems.sort(function(a, b) {
-                    var da = String(a.date || '');
-                    var db = String(b.date || '');
-                    if (da < db) return -1;
-                    if (da > db) return 1;
+                    // 注意：a.date 可能是 Date 物件或字串。若用 String(date) 比較，會因格式不同而排序錯置。
+                    var da = a && a.date;
+                    var db = b && b.date;
+                    var ta = (da && Object.prototype.toString.call(da) === '[object Date]') ? da.getTime() : parseDateString(String(da || '')).getTime();
+                    var tb = (db && Object.prototype.toString.call(db) === '[object Date]') ? db.getTime() : parseDateString(String(db || '')).getTime();
+                    if (ta < tb) return -1;
+                    if (ta > tb) return 1;
                     return String(a.leaveTeacherName || '').localeCompare(String(b.leaveTeacherName || ''));
                 });
 
