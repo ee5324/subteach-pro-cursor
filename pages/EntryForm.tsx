@@ -518,6 +518,16 @@ const EntryForm: React.FC = () => {
         rateSnapshotSource: old.rateSnapshotSource || d.rateSnapshotSource || 'legacy',
       };
     });
+    const ptaDateKeys = homeroomFeeByPta
+      ? Array.from(
+          new Set(
+            stabilizedDetails
+              .filter((d) => d.payType === PayType.HOURLY)
+              .map((d) => normalizeDateString(d.date))
+              .filter(Boolean),
+          ),
+        ).sort()
+      : [];
 
     const recordData: LeaveRecord = {
       id: isEditMode && id ? id : crypto.randomUUID(),
@@ -533,7 +543,8 @@ const EntryForm: React.FC = () => {
       createdAt,
       allowPartial: allowPartial || undefined,
       ptaPaysHourly: ptaPaysHourly || undefined,
-      homeroomFeeByPta: homeroomFeeByPta || undefined
+      homeroomFeeByPta: homeroomFeeByPta || undefined,
+      homeroomFeeByPtaDateKeys: ptaDateKeys.length > 0 ? ptaDateKeys : undefined,
     };
 
     try {

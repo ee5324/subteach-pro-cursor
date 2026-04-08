@@ -109,7 +109,11 @@ export function calculateSubstituteMonthlyBreakdown(args: {
       homeroomFeeEstimate += hm;
       // 家長會導師費（半天）：只要勾選且非「自理」，就按「半天導師費」列入（不綁 payType）
       if (record.homeroomFeeByPta === true && record.leaveType !== '自理 (事假/病假)') {
+        const configuredDateKeys = (record.homeroomFeeByPtaDateKeys || []).filter(Boolean);
         const dateKey = toYmd(d.date);
+        if (configuredDateKeys.length > 0 && configuredDateKeys.includes(dateKey) !== true) return;
+        // 無設定新欄位時，fallback：僅鐘點費可觸發半日導師費（避免同張單混合日薪時誤計）
+        if (configuredDateKeys.length === 0 && d.payType !== PayType.HOURLY) return;
         if (!ptaDateSeen.has(dateKey)) {
           ptaDateSeen.add(dateKey);
           ptaHomeroomFeeTotal += estimateHalfDayHomeroomFee(d.date);

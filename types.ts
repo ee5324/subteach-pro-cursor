@@ -383,6 +383,8 @@ export interface LeaveRecord {
   ptaPaysHourly?: boolean;
   /** 家長會支出導師費(半天)：僅半日導師費入家長會清冊 */
   homeroomFeeByPta?: boolean;
+  /** 家長會半日導師費適用日期（由前端儲存時計算；僅含鐘點費明細日期） */
+  homeroomFeeByPtaDateKeys?: string[];
   /** 給代課老師與請假老師的聯絡備註（教室、教材位置、聯繫方式等） */
   contactNoteForSubstitute?: string;
 }
