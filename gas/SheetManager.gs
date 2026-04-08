@@ -1043,32 +1043,98 @@ var SheetManager = {
     records.forEach(function(record) {
       if (!record.details) return;
       record.details.forEach(function(detail) {
+        function normalizeYmdPta_(d) {
+            if (!d) return '';
+            if (Object.prototype.toString.call(d) === '[object Date]') return formatDate(d);
+            var s = String(d).trim();
+            if (!s) return '';
+            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+            if (/^\d{4}\/\d{2}\/\d{2}/.test(s)) return s.substring(0, 10).replace(/\//g, '-');
+            try { return formatDate(parseDateString(s)); } catch (e) {}
+            return s;
+        }
+
         // 超鐘點：前端已為鐘點費明細，納入家長會清冊一次
-        var ym = detail.date.substring(0, 7);
+        var ymd = normalizeYmdPta_(detail.date);
+        var ym = ymd ? ymd.substring(0, 7) : String(detail.date || '').substring(0, 7);
         var sheetName = ym + '_家長會';
         if (!ptaSheetsData[sheetName]) ptaSheetsData[sheetName] = {};
         var subTeacherName = detail.substituteTeacherId === 'pending' || !detail.substituteTeacherId ? '待聘' : detail.substituteTeacherId;
         if (!ptaSheetsData[sheetName][subTeacherName]) {
             ptaSheetsData[sheetName][subTeacherName] = {
                 dates: [], fullDates: [], originalTeachers: [], leaveTypes: [], reasons: [], notes: [],
+                lineItems: [],
                 subTeacherObj: teacherMap[subTeacherName] || null,
                 totalDays: 0, totalPeriods: 0, hourlyTotal: 0, homeroomDays: 0, homeroomFee: 0, finalAmount: 0
             };
         }
         var group = ptaSheetsData[sheetName][subTeacherName];
-        var dateStr = detail.date.substring(5).replace('-', '/');
-        var daysInMonth = SheetManagerHelpers.getSafeDaysInMonth(detail.date);
+        var dateStr = ymd ? ymd.substring(5).replace('-', '/') : String(detail.date || '').substring(5).replace('-', '/');
+        var daysInMonth = SheetManagerHelpers.getSafeDaysInMonth(ymd || detail.date);
         var isCase1 = (record.leaveType === '公派(家長會)');
         var isCase2a = (record.ptaPaysHourly && detail.payType === '鐘點費');
         var isCase2b = (record.homeroomFeeByPta && record.leaveType !== '自理 (事假/病假)');
         if (!isCase1 && !isCase2a && !isCase2b) return;
 
         if (group.dates.indexOf(dateStr) === -1) group.dates.push(dateStr);
-        if (group.fullDates.indexOf(detail.date) === -1) group.fullDates.push(detail.date);
+        if (group.fullDates.indexOf(ymd || String(detail.date || '')) === -1) group.fullDates.push(ymd || String(detail.date || ''));
         if (group.originalTeachers.indexOf(record.originalTeacherId) === -1) group.originalTeachers.push(record.originalTeacherId);
         if (group.leaveTypes.indexOf(record.leaveType) === -1) group.leaveTypes.push(record.leaveType);
         var reason = record.reason || '';
         if (reason && group.reasons.indexOf(reason) === -1) group.reasons.push(reason);
+
+        // 逐筆明細（同一列多欄位同一格換行）— 家長會也需要對齊，避免日期/姓名順序錯置
+        // 這裡會補齊 lineItems，使 buildRowsFromGroups 走「逐筆」路徑，A/E/F/G/H/K/L/M 各欄位行數一致。
+        var leaveTeacherName = teacherMap[record.originalTeacherId] ? teacherMap[record.originalTeacherId].name : record.originalTeacherId;
+        var lineDaysStr = '0';
+        var linePeriodsStr = '0';
+        var lineHomeroomDaysStr = '0';
+        var lineHomeroomFeeStr = '0';
+        var payAmountStr = String(Number(detail.calculatedAmount) || 0);
+        var noteLine = '';
+        if (detail.payType === '鐘點費') {
+            linePeriodsStr = String(Number(detail.periodCount) || 0);
+            noteLine = "0日" + linePeriodsStr + "節" + (detail.selectedPeriods && detail.selectedPeriods.length ? "(" + detail.selectedPeriods.join(',') + ")" : "");
+        } else if (detail.payType === '半日薪') {
+            lineDaysStr = '0.5';
+            lineHomeroomDaysStr = '0.5';
+            lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+            // 家長會清冊的日薪/半日薪：G 欄顯示不含導師費（與一般清冊一致）
+            payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
+            noteLine = "半日0節";
+        } else {
+            lineDaysStr = String(Number(detail.periodCount) || 0);
+            lineHomeroomDaysStr = lineDaysStr;
+            lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
+            payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
+            noteLine = lineDaysStr + "日0節";
+        }
+        // case2b：僅半日導師費由家長會支出（只入導師費，不入代課費）
+        if (isCase2b && !isCase1 && !isCase2a) {
+            lineDaysStr = '0';
+            linePeriodsStr = '0';
+            lineHomeroomDaysStr = '0.5';
+            lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+            payAmountStr = '0';
+            noteLine = "半日導師費家長會";
+        } else if (isCase2a && !isCase1) {
+            noteLine = "家長會支出鐘點 " + noteLine;
+        }
+
+        group.lineItems.push({
+            date: ymd || String(detail.date || ''),
+            dateSortKey: ymd ? Number(ymd.replace(/-/g, '')) : 0,
+            dateMD: dateStr,
+            leaveTeacherName: String(leaveTeacherName),
+            note: String(noteLine),
+            amountStr: String(payAmountStr),
+            daysStr: String(lineDaysStr),
+            periodsStr: String(linePeriodsStr),
+            homeroomDaysStr: String(lineHomeroomDaysStr),
+            homeroomFeeStr: String(lineHomeroomFeeStr),
+            leaveType: String(record.leaveType || ''),
+            reason: String(record.reason || '')
+        });
 
         if (isCase1) {
             var subDays = 0, subPeriods = 0;
