@@ -498,6 +498,27 @@ const EntryForm: React.FC = () => {
       finalEnd = sortedDates[sortedDates.length - 1] > finalEnd ? sortedDates[sortedDates.length - 1] : finalEnd;
     }
 
+    // 編輯模式：沿用既有明細金額快照，避免教師薪級後續提敘時回編資料造成歷史金額被重算
+    const existingRecord = isEditMode && id ? records.find(r => r.id === id) : undefined;
+    const oldMap = new Map<string, typeof details[number]>();
+    (existingRecord?.details || []).forEach((d) => {
+      const periodsKey = (d.selectedPeriods || []).slice().sort().join(',');
+      const key = `${d.date}_${d.substituteTeacherId}_${d.payType}_${d.isOvertime ? 1 : 0}_${periodsKey}_${d.periodCount}`;
+      oldMap.set(key, d);
+    });
+    const stabilizedDetails = details.map((d) => {
+      const periodsKey = (d.selectedPeriods || []).slice().sort().join(',');
+      const key = `${d.date}_${d.substituteTeacherId}_${d.payType}_${d.isOvertime ? 1 : 0}_${periodsKey}_${d.periodCount}`;
+      const old = oldMap.get(key);
+      if (!old) return d;
+      return {
+        ...d,
+        calculatedAmount: Number(old.calculatedAmount) || d.calculatedAmount,
+        unitRateSnapshot: old.unitRateSnapshot != null ? Number(old.unitRateSnapshot) : d.unitRateSnapshot,
+        rateSnapshotSource: old.rateSnapshotSource || d.rateSnapshotSource || 'legacy',
+      };
+    });
+
     const recordData: LeaveRecord = {
       id: isEditMode && id ? id : crypto.randomUUID(),
       originalTeacherId,
@@ -507,7 +528,7 @@ const EntryForm: React.FC = () => {
       applicationDate: applicationDate || undefined,
       startDate: finalStart,
       endDate: finalEnd,
-      details,
+      details: stabilizedDetails,
       slots,
       createdAt,
       allowPartial: allowPartial || undefined,

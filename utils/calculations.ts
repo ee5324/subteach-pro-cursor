@@ -269,6 +269,9 @@ export const convertSlotsToDetails = (
     // DAILY / HALF_DAY: assume homeroom duties (and fee). HALF_DAY = 半日薪，導師費可由家長會清冊另列。
     const isHomeroomSub = (g.payType === PayType.DAILY || g.payType === PayType.HALF_DAY) ? true : (teacher?.isHomeroom || false);
 
+    const amount = calculatePay(g.payType, teacher, g.date, count, salaryGrades, isHomeroomSub);
+    const unitRate = count > 0 ? Math.round((amount / count) * 100) / 100 : 0;
+
     return {
       id: crypto.randomUUID(),
       date: g.date,
@@ -276,7 +279,9 @@ export const convertSlotsToDetails = (
       payType: g.payType,
       periodCount: count,
       selectedPeriods: g.periods,
-      calculatedAmount: calculatePay(g.payType, teacher, g.date, count, salaryGrades, isHomeroomSub),
+      calculatedAmount: amount,
+      unitRateSnapshot: unitRate,
+      rateSnapshotSource: 'slot',
       subject: [...new Set(g.subjects)].join(','),
       className: [...new Set(g.classNames)].join(','),
       isOvertime: g.isOvertime

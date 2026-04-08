@@ -352,6 +352,10 @@ export interface SubstituteDetail {
   periodCount: number; // Number of periods (if hourly) or 1 day (if daily)
   substituteTeacherId: string;
   payType: PayType;
+  /** 建立當下鎖定之單位金額（鐘點為每節；日/半日為該筆單位）。避免後續教師提敘造成歷史資料重算偏差。 */
+  unitRateSnapshot?: number;
+  /** 單價快照來源：slot=由課表轉明細時計算；legacy=舊資料補齊 */
+  rateSnapshotSource?: 'slot' | 'legacy';
   calculatedAmount: number;
   selectedPeriods?: string[]; // 儲存具體節數，例如 ['早', '1', '2']
   subject?: string; // 新增：科目
