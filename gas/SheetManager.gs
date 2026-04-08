@@ -955,8 +955,35 @@ var SheetManager = {
         // === NEW：逐筆明細（同一列多欄位同一格換行） ===
         // 注意：不新增列；每個欄位同一格以「換行」呈現多筆，且各欄位第 N 行需對應同一筆明細
         try {
+            // 將日期正規化為 YYYY-MM-DD，避免 detail.date 為 Date/ISO/其他格式時造成排序或 substring 取值錯置
+            function normalizeYmd_(d) {
+                if (!d) return '';
+                // Apps Script 的 Date 物件
+                if (Object.prototype.toString.call(d) === '[object Date]') return formatDate(d);
+                var s = String(d).trim();
+                if (!s) return '';
+                // ISO / YYYY-MM-DD 直接截前 10 碼
+                if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+                // YYYY/MM/DD -> YYYY-MM-DD
+                if (/^\d{4}\/\d{2}\/\d{2}/.test(s)) return s.substring(0, 10).replace(/\//g, '-');
+                // 其他格式：盡量用 Date.parse 解析，再格式化（以中午避免跨日）
+                var t = Date.parse(s);
+                if (isFinite(t)) {
+                    var dt = new Date(t);
+                    return formatDate(new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 12, 0, 0));
+                }
+                // 最後保底：嘗試既有 parseDateString（期望 YYYY-MM-DD）
+                try {
+                    var d2 = parseDateString(s);
+                    return formatDate(d2);
+                } catch (e) {}
+                return s;
+            }
+
             var leaveTeacherName = teacherMap[record.originalTeacherId] ? teacherMap[record.originalTeacherId].name : record.originalTeacherId;
-            var dateMD = String(detail.date).substring(5).replace('-', '/');
+            var ymd = normalizeYmd_(detail.date);
+            var dateMD = ymd ? ymd.substring(5).replace('-', '/') : '';
+            var dateSortKey = ymd ? Number(ymd.replace(/-/g, '')) : 0;
             var payAmount = Number(detail.calculatedAmount) || 0;
             // G 欄：逐筆金額（先不含導師費；N 欄再做合計）
             // - 鐘點費：原樣顯示 calculatedAmount
@@ -994,7 +1021,8 @@ var SheetManager = {
             }
 
             group.lineItems.push({
-                date: String(detail.date),
+                date: ymd || String(detail.date),
+                dateSortKey: dateSortKey,
                 dateMD: dateMD,
                 leaveTeacherName: String(leaveTeacherName),
                 note: String(note),
@@ -1149,10 +1177,16 @@ var SheetManager = {
             var info = g.subTeacherObj || teacherMap[subKey];
             var subDisplay = (info && info.name) ? String(info.name) : String(subKey);
             var items = g.lineItems.slice().sort(function(a, b) {
-                var da = String(a.date || '');
-                var db = String(b.date || '');
-                if (da < db) return -1;
-                if (da > db) return 1;
+                // 注意：a.date 可能是 Date 物件或字串。若用 String(date) 比較，會因格式不同而排序錯置。
+                var ka = Number(a && a.dateSortKey) || 0;
+                var kb = Number(b && b.dateSortKey) || 0;
+                if (ka && kb && ka !== kb) return ka - kb;
+                var da = a && a.date;
+                var db = b && b.date;
+                var ta = (da && Object.prototype.toString.call(da) === '[object Date]') ? da.getTime() : parseDateString(String(da || '')).getTime();
+                var tb = (db && Object.prototype.toString.call(db) === '[object Date]') ? db.getTime() : parseDateString(String(db || '')).getTime();
+                if (ta < tb) return -1;
+                if (ta > tb) return 1;
                 return String(a.leaveTeacherName || '').localeCompare(String(b.leaveTeacherName || ''));
             });
             var dateLines = [];
@@ -1238,6 +1272,10 @@ var SheetManager = {
                 // 依日期排序，確保 A/E/F/G/H/K/L/M 各欄位行對齊
                 g.lineItems.sort(function(a, b) {
                     // 注意：a.date 可能是 Date 物件或字串。若用 String(date) 比較，會因格式不同而排序錯置。
+                    var ka = Number(a && a.dateSortKey) || 0;
+                    var kb = Number(b && b.dateSortKey) || 0;
+                    if (ka && kb && ka !== kb) return ka - kb;
+                    // fallback：仍用日期解析（避免舊資料沒 dateSortKey）
                     var da = a && a.date;
                     var db = b && b.date;
                     var ta = (da && Object.prototype.toString.call(da) === '[object Date]') ? da.getTime() : parseDateString(String(da || '')).getTime();
