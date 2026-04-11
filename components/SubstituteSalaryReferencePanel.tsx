@@ -90,7 +90,7 @@ const SubstituteSalaryReferencePanel: React.FC<SubstituteSalaryReferencePanelPro
   }, [byPoints]);
 
   return (
-    <div className="mb-4 md:mb-6 rounded-xl border border-indigo-100 bg-indigo-50/40 overflow-hidden">
+    <div className="mb-4 md:mb-6 min-w-0 rounded-xl border border-indigo-100 bg-indigo-50/40 overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -116,13 +116,25 @@ const SubstituteSalaryReferencePanel: React.FC<SubstituteSalaryReferencePanelPro
             個案仍以主管機關、人事及契約為準。
           </p>
 
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-[720px] w-full text-xs md:text-sm border-collapse">
+          <div className="overflow-x-auto min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
+            <table className="w-full min-w-[min(100%,44rem)] text-xs sm:text-sm border-collapse table-fixed">
+              <colgroup>
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '14%' }} />
+              </colgroup>
               <thead>
                 <tr className="bg-slate-100 text-slate-800">
-                  <th className="border border-slate-200 px-2 py-2 text-left w-[100px]">項目</th>
+                  <th className="border border-slate-200 px-2 py-2.5 text-left align-bottom min-w-0">項目</th>
                   {AGENT_COLUMN_SPECS.map((c) => (
-                    <th key={c.key} className="border border-slate-200 px-1 py-1 text-center font-semibold leading-tight">
+                    <th
+                      key={c.key}
+                      className="border border-slate-200 px-1.5 py-2 text-center font-semibold leading-snug min-w-0 break-words [overflow-wrap:anywhere]"
+                    >
                       <div>{c.headerLines[0]}</div>
                       <div className="text-[11px] font-normal text-slate-600">{c.headerLines[1]}</div>
                       <div className="text-[10px] font-mono text-slate-400 mt-0.5">俸點{c.points}</div>
@@ -132,44 +144,63 @@ const SubstituteSalaryReferencePanel: React.FC<SubstituteSalaryReferencePanelPro
               </thead>
               <tbody>
                 <tr>
-                  <td className="border border-slate-200 px-2 py-2 font-medium bg-slate-50">薪級（俸點）</td>
+                  <td className="border border-slate-200 px-2 py-2 font-medium bg-slate-50 align-top min-w-0 break-words">
+                    薪級（俸點）
+                  </td>
                   {cols.map((c) => (
-                    <td key={c.key} className="border border-slate-200 px-1 py-1.5 text-center font-mono">
+                    <td
+                      key={c.key}
+                      className="border border-slate-200 px-1.5 py-2 text-center font-mono tabular-nums align-top min-w-0"
+                    >
                       {c.missing ? '—' : c.points}
                     </td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="border border-slate-200 px-2 py-2 font-medium bg-slate-50">本薪</td>
+                  <td className="border border-slate-200 px-2 py-2 font-medium bg-slate-50 align-top min-w-0 break-words">本薪</td>
                   {cols.map((c) => (
-                    <td key={c.key} className="border border-slate-200 px-1 py-1.5 text-center">
+                    <td
+                      key={c.key}
+                      className="border border-slate-200 px-1.5 py-2 text-center tabular-nums align-top min-w-0"
+                    >
                       {c.missing ? <span className="text-amber-600">無此俸點</span> : fmtMoney(c.base)}
                     </td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="border border-slate-200 px-2 py-2 font-medium bg-slate-50">學術研究加給</td>
+                  <td className="border border-slate-200 px-2 py-2 font-medium bg-slate-50 align-top min-w-0 break-words">
+                    學術研究加給
+                  </td>
                   {cols.map((c) => (
-                    <td key={c.key} className="border border-slate-200 px-1 py-1.5 text-center">
+                    <td
+                      key={c.key}
+                      className="border border-slate-200 px-1.5 py-2 text-center tabular-nums align-top min-w-0"
+                    >
                       {c.missing ? '—' : fmtMoney(c.research)}
                     </td>
                   ))}
                 </tr>
                 <tr className="bg-indigo-50/50 font-bold">
-                  <td className="border border-slate-200 px-2 py-2">合計（月薪參考）</td>
+                  <td className="border border-slate-200 px-2 py-2 align-top min-w-0 break-words">合計（月薪參考）</td>
                   {cols.map((c) => (
-                    <td key={c.key} className="border border-slate-200 px-1 py-1.5 text-center text-indigo-900">
+                    <td
+                      key={c.key}
+                      className="border border-slate-200 px-1.5 py-2 text-center text-indigo-900 tabular-nums align-top min-w-0"
+                    >
                       {c.missing ? '—' : fmtMoney(c.total)}
                     </td>
                   ))}
                 </tr>
                 {[28, 29, 30, 31].map((d) => (
                   <tr key={d}>
-                    <td className="border border-slate-200 px-2 py-1.5 text-slate-600 bg-slate-50">
+                    <td className="border border-slate-200 px-2 py-2 text-slate-600 bg-slate-50 align-top min-w-0 break-words leading-snug">
                       日薪（{d} 日制，四捨五入）
                     </td>
                     {cols.map((c) => (
-                      <td key={`${c.key}-${d}`} className="border border-slate-200 px-1 py-1.5 text-center font-mono">
+                      <td
+                        key={`${c.key}-${d}`}
+                        className="border border-slate-200 px-1.5 py-2 text-center font-mono tabular-nums align-top min-w-0"
+                      >
                         {c.missing ? '—' : fmtDaily(c.total, d)}
                       </td>
                     ))}
