@@ -1549,14 +1549,18 @@ const Records: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                const value = window.prompt('備註（例：已列印 3/8、未印、跑章中）', record.adminNote || '');
-                                if (value !== null) updateRecord({ ...record, adminNote: value.trim() || undefined });
+                                const value = window.prompt(
+                                  '備註（例：已列印 3/8、未印、跑章中；留空則清除）',
+                                  record.adminNote?.trim() ?? '',
+                                );
+                                // 須寫入空字串而非 undefined：setDoc(merge) 會略過 undefined，Firestore 舊備註無法被清除
+                                if (value !== null) updateRecord({ ...record, adminNote: value.trim() });
                               }}
                               className="w-full text-left px-2 py-1 rounded border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-xs text-slate-600 min-h-[32px] flex items-center justify-center gap-1"
                               title="點擊填寫或修改備註"
                             >
-                              {record.adminNote ? (
-                                <span className="truncate block w-full">{record.adminNote}</span>
+                              {record.adminNote?.trim() ? (
+                                <span className="truncate block w-full">{record.adminNote.trim()}</span>
                               ) : (
                                 <span className="text-slate-400 flex items-center gap-1"><MessageSquare size={12} />填備註</span>
                               )}
