@@ -325,6 +325,8 @@ const TeacherLeavePortal: React.FC = () => {
       const deduped = deduplicateDetails(r.details || []);
       for (const d of deduped) {
         if (!d.date || !toYMD(d.date).startsWith(selectedMonth)) continue;
+        // 與一般代課印領清冊相同：超鐘點時段另入超鐘點清冊，不列入本頁
+        if (d.isOvertime === true) continue;
         map.get(lt)!.push(buildLedgerLine(r, d, teachers, gasSubstituteGroupKey(d)));
       }
     }
@@ -381,7 +383,7 @@ const TeacherLeavePortal: React.FC = () => {
               教師請假／代課查詢
             </h1>
             <p className="text-sm md:text-base text-slate-600 mt-1.5">
-              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。
+              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（<strong>不含</strong>標示為超鐘點之代課時段，該類另計入超鐘點清冊）；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。
               <strong>列順序與 GAS 產出清冊一致</strong>（紀錄依建立時間新→舊掃描、代課者以主檔 id 分群；群組內再依日期與請假人排序）。可下方篩選假別。
             </p>
           </div>
@@ -453,7 +455,7 @@ const TeacherLeavePortal: React.FC = () => {
         {groupedByLeaveType.length === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-white p-12 text-center text-slate-600 text-base shadow-sm">
             <span className={NUM_FONT}>{selectedMonth}</span>
-            月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人之紀錄；與產報表相同）
+            月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人與超鐘點時段）
           </div>
         ) : leaveTypeSelection.size === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-slate-50 p-10 text-center text-slate-700 text-base shadow-sm">
