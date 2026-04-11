@@ -679,7 +679,7 @@ const Settings: React.FC = () => {
                 </span>
                 <p className="mt-1.5 ml-1 border-l-2 border-indigo-100 pl-3 text-slate-600">
                   <strong>全站已登入頁面</strong>（含代課各頁與「教學組事務」內計畫專案／計畫代墊等）皆會顯示。預設以<strong>視窗右下角為錨點</strong>（展開、收合時角點不漂移）；左側直條或標題列可<strong>拖曳</strong>暫時改位置，<strong>重新整理頁面後會回到預設角點</strong>。點圓形圖示<strong>展開／收合</strong>。展開後算式欄可<strong>鍵盤輸入</strong>數字與 + − * / . ，Enter 計算、Esc
-                  收合；焦點在算式欄或面板內按鈕時亦可用鍵盤。是否展開僅存於本機（鍵名 <code className="bg-slate-100 px-1 rounded text-xs">floatingCalculatorOpen</code>）。
+                  收合；焦點在算式欄或面板內按鈕時亦可用鍵盤。每次重新載入頁面時<strong>預設為收合</strong>（不記憶上次是否展開）。
                 </p>
               </li>
             </ul>

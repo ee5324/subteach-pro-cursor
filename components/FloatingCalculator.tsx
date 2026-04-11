@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Calculator, ChevronDown, GripVertical } from 'lucide-react';
 
-const STORAGE_OPEN = 'floatingCalculatorOpen';
-/** 舊版鍵名相容 */
-const LEGACY_OPEN = 'settingsFloatingCalcOpen';
-/** 舊版位置鍵：已不再讀寫，載入時清除以免誤解 */
-const LEGACY_POS_KEYS = ['floatingCalculatorPos', 'settingsFloatingCalcPos'] as const;
+/** 舊版 localStorage 鍵：載入時清除，避免與目前行為（每次預設收合）混淆 */
+const LEGACY_CALC_KEYS = [
+  'floatingCalculatorOpen',
+  'settingsFloatingCalcOpen',
+  'floatingCalculatorPos',
+  'settingsFloatingCalcPos',
+] as const;
 
 const PANEL_W = 220;
 const PANEL_H = 340;
@@ -57,13 +59,8 @@ function isTypingInOtherFormField(target: EventTarget | null): boolean {
  * 全站：固定於視窗、可收合、可拖曳；展開後可於算式欄鍵盤輸入，或在面板內（焦點不在算式欄時）用數字與運算子鍵操作。
  */
 const FloatingCalculator: React.FC = () => {
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(STORAGE_OPEN) === '1' || localStorage.getItem(LEGACY_OPEN) === '1';
-    } catch {
-      return false;
-    }
-  });
+  /** 每次載入預設收合；同次瀏覽階段內展開／收合仍保留在 React state */
+  const [open, setOpen] = useState(false);
   const [expr, setExpr] = useState('');
   /** 固定以右下角為錨（CSS right／bottom），避免展開時用 top+大高度、收合後僅剩 FAB 造成視覺位移 */
   const [corner, setCorner] = useState<{ right: number; bottom: number }>({ right: 16, bottom: 16 });
@@ -85,21 +82,13 @@ const FloatingCalculator: React.FC = () => {
 
   useEffect(() => {
     try {
-      for (const k of LEGACY_POS_KEYS) localStorage.removeItem(k);
+      for (const k of LEGACY_CALC_KEYS) localStorage.removeItem(k);
     } catch {
       /* ignore */
     }
     setCorner(defaultCorner());
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_OPEN, open ? '1' : '0');
-    } catch {
-      /* ignore */
-    }
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
