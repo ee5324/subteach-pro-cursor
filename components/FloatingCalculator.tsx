@@ -13,7 +13,7 @@ function clamp(n: number, min: number, max: number) {
 
 function safeCompute(raw: string): string {
   const t = raw.trim();
-  if (!t) return '0';
+  if (!t) return '';
   if (!/^[\d+\-*/.]+$/.test(t)) return '錯誤';
   try {
     const n = Function(`"use strict"; return (${t})`)() as number;
@@ -27,7 +27,6 @@ function safeCompute(raw: string): string {
 
 function sanitizeExpr(raw: string): string {
   const s = raw.replace(/[^0-9+\-*/.]/g, '');
-  if (s === '') return '0';
   return s.slice(0, 200);
 }
 
@@ -49,7 +48,7 @@ const FloatingCalculator: React.FC = () => {
       return false;
     }
   });
-  const [expr, setExpr] = useState('0');
+  const [expr, setExpr] = useState('');
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: 16, top: 120 });
   const [mounted, setMounted] = useState(false);
 
@@ -115,20 +114,22 @@ const FloatingCalculator: React.FC = () => {
 
   const append = useCallback((ch: string) => {
     setExpr((prev) => {
-      if (prev === '0' && /[\d.]/.test(ch) && ch !== '.') return ch;
-      if (prev === '錯誤') return ch === '.' ? '0.' : ch;
+      if (prev === '錯誤') return ch === '.' ? '.' : ch;
+      if (prev === '') return ch;
+      // 單獨一個 0 後接數字：改為新數字開頭，避免 05、012 等
+      if (prev === '0' && /[\d]/.test(ch) && ch !== '.') return ch;
       return prev + ch;
     });
   }, []);
 
   const backspace = useCallback(() => {
     setExpr((prev) => {
-      if (prev.length <= 1) return '0';
+      if (prev.length <= 1) return '';
       return prev.slice(0, -1);
     });
   }, []);
 
-  const clearAll = useCallback(() => setExpr('0'), []);
+  const clearAll = useCallback(() => setExpr(''), []);
 
   const equals = useCallback(() => {
     setExpr((prev) => safeCompute(prev));
@@ -303,7 +304,7 @@ const FloatingCalculator: React.FC = () => {
               }}
               className="w-full font-mono text-right text-sm text-slate-800 px-2 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
               aria-label="算式（可鍵盤輸入數字與加減乘除）"
-              placeholder="0"
+              placeholder="輸入算式…"
             />
             <p className="text-[10px] text-slate-500 leading-tight px-0.5">
               鍵盤：數字與 + − * / . 、Enter 計算、Esc 收合；勿與本頁其他表單同時輸入。
