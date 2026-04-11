@@ -716,7 +716,7 @@ const Settings: React.FC = () => {
           </CollapsibleItem>
           <CollapsibleItem title="白名單（僅允許名單內帳號使用）">
             <p>僅加入白名單且已驗證 Email 的帳號可登入使用主系統。第一位管理員需在 Firebase Console 手動建立 <code>subteach_allowed_users/您的Email</code> 文件，欄位 <code>enabled: true</code>、<code>role: &quot;admin&quot;</code>；之後管理員可在「系統設定」的「白名單管理」區塊新增／編輯／移除其他帳號。</p>
-            <p>「綁定教師」欄位可對應教師主檔：綁定後，該帳號可於側欄「教師請假／代課查詢」檢視本人依假別之請假與代課金額（管理員可不綁定，於該頁改選任意教師）。</p>
+            <p>「綁定教師」欄位可對應教師主檔：綁定後，該帳號可於「教師請假／代課查詢」檢視本人當月代課紀錄之假別彙總（僅當月有代課紀錄者會出現在名單；管理員可自該月有紀錄之代課教師中切換檢視）。</p>
           </CollapsibleItem>
         </div>
       </InstructionPanel>

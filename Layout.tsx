@@ -40,15 +40,6 @@ const Layout: React.FC = () => {
           <span className="text-slate-400 text-xs truncate">教學組事務</span>
         </div>
       )}
-      {isTeacherPortalShell && (
-        <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center gap-3 h-12 px-3 bg-white border-b border-slate-200 shadow-sm">
-          <Link to="/dashboard" className="text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0">
-            ← 返回
-          </Link>
-          <span className="text-slate-400 text-xs truncate">教師請假／代課查詢</span>
-        </div>
-      )}
-
       {/* 主站 Sidebar：教學組模組不顯示 */}
       {!hideMainSidebar && (
         <div
@@ -73,7 +64,7 @@ const Layout: React.FC = () => {
       {/* Main Content */}
       <main
         className={`flex flex-col flex-1 min-h-0 overflow-hidden w-full relative ${
-          isEduTrackShell || isTeacherPortalShell ? 'pt-12 md:pt-0' : 'pt-16 md:pt-0'
+          isEduTrackShell ? 'pt-12 md:pt-0' : isTeacherPortalShell ? 'pt-0' : 'pt-16 md:pt-0'
         }`}
       >
         {isEduTrackShell && (
@@ -85,20 +76,11 @@ const Layout: React.FC = () => {
             <span className="text-slate-600">教學組事務（功能選單見左側）</span>
           </div>
         )}
-        {isTeacherPortalShell && (
-          <div className="hidden md:flex shrink-0 items-center gap-3 px-4 py-2.5 bg-white border-b border-slate-200 text-sm shadow-sm z-20">
-            <Link to="/dashboard" className="text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1">
-              ← 返回系統儀表板
-            </Link>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-600">教師請假／代課查詢</span>
-          </div>
-        )}
         <div className="flex-1 min-h-0 overflow-auto w-full">
           <Outlet />
         </div>
       </main>
-      <FloatingCalculator />
+      {!isTeacherPortalShell && <FloatingCalculator />}
     </div>
   );
 };

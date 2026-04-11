@@ -1,15 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, ChevronLeft, ChevronRight, User, Wallet, BookOpen } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, User, BookOpen } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { LeaveRecord, LeaveType, PayType, SubstituteDetail, Teacher } from '../types';
+import { LeaveRecord, LeaveType, Teacher, TeacherType } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
-
-const LEAVE_TYPE_ALL = '__ALL__' as const;
-
-type AsOriginalRow = { record: LeaveRecord; monthCost: number; detailLines: string[] };
-type AsSubRow = { record: LeaveRecord; detail: SubstituteDetail };
-type ByLtRow = { leaveType: LeaveType; originalCost: number; subIncome: number; leaveCount: number };
 
 const toYMD = (d: string | number | undefined | null): string => {
   if (d == null) return '';
@@ -54,31 +47,58 @@ function originalMatchesTeacher(r: LeaveRecord, teacher: Teacher): boolean {
   return false;
 }
 
-function periodLabel(d: { payType: PayType; selectedPeriods?: string[]; periodCount?: number }): string {
-  if (d.payType === PayType.HOURLY) {
-    const p = [...(d.selectedPeriods || [])].map(String).join(',');
-    return p ? `第${p}節` : `${d.periodCount || 0}節`;
+/**
+ * 與代課清冊「依代課人」標籤邏輯一致：該月 slots（非超鐘）＋ 當月明細之代課者，有代課紀錄才列入。
+ */
+function collectSubstituteTeacherIdsInMonth(
+  records: LeaveRecord[],
+  monthStartStr: string,
+  monthEndStr: string,
+  selectedMonth: string,
+): string[] {
+  const fromDetails = new Set<string>();
+  const fromSlots = new Set<string>();
+  for (const r of records) {
+    if (!recordTouchesMonth(r, monthStartStr, monthEndStr)) continue;
+    if (!r.slots || r.slots.length === 0) continue;
+    const detailsDeduped = deduplicateDetails(r.details || []);
+    detailsDeduped.forEach((d) => {
+      if (d.substituteTeacherId && toYMD(d.date).startsWith(selectedMonth)) {
+        fromDetails.add(d.substituteTeacherId);
+      }
+    });
+    r.slots.forEach((s) => {
+      if (!s.substituteTeacherId) return;
+      const ymd = toYMD(s.date);
+      if (!ymd || !ymd.startsWith(selectedMonth)) return;
+      if (s.isOvertime === true) return;
+      fromSlots.add(s.substituteTeacherId);
+    });
   }
-  if (d.payType === PayType.HALF_DAY) return '半日薪';
-  return `${d.periodCount ?? 1}日薪`;
+  return Array.from(new Set([...fromDetails, ...fromSlots]));
 }
 
+type LeaveTypeRow = {
+  leaveType: LeaveType;
+  /** 擔任代課：當月明細筆數（不含超鐘點） */
+  substituteDetailCount: number;
+  /** 擔任代課：金額加總 */
+  substituteIncome: number;
+  /** 擔任請假人：該假別之請假單筆數（當月有明細者） */
+  leaveAsOriginalRecordCount: number;
+  /** 擔任請假人：當月應付代課費加總 */
+  leaveAsOriginalCost: number;
+};
+
 const TeacherLeavePortal: React.FC = () => {
-  const {
-    currentUser,
-    teachers,
-    records,
-    subteachAllowedUsers,
-    isSubteachAdmin,
-    loading,
-  } = useAppStore();
+  const { currentUser, teachers, records, subteachAllowedUsers, isSubteachAdmin, loading } = useAppStore();
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [leaveTypeKey, setLeaveTypeKey] = useState<string>(LEAVE_TYPE_ALL);
-  const [adminTeacherId, setAdminTeacherId] = useState('');
+  /** 僅能選「當月有代課紀錄」之代課教師 id */
+  const [selectedSubTeacherId, setSelectedSubTeacherId] = useState('');
 
   const { monthStartStr, monthEndStr } = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -95,110 +115,140 @@ const TeacherLeavePortal: React.FC = () => {
     return subteachAllowedUsers.find((u) => (u.email || '').toLowerCase() === em);
   }, [currentUser?.email, subteachAllowedUsers]);
 
-  const sortedTeachers = useMemo(
-    () => [...teachers].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant', { numeric: true })),
-    [teachers],
-  );
-
-  const effectiveTeacherId = isSubteachAdmin ? adminTeacherId : selfWhitelist?.linkedTeacherId || '';
-  const effectiveTeacher = useMemo(
-    () => sortedTeachers.find((t) => t.id === effectiveTeacherId),
-    [sortedTeachers, effectiveTeacherId],
-  );
-
-  useEffect(() => {
-    if (!isSubteachAdmin || adminTeacherId) return;
-    if (sortedTeachers.length > 0) setAdminTeacherId(sortedTeachers[0].id);
-  }, [isSubteachAdmin, adminTeacherId, sortedTeachers]);
-
   const recordsInMonth = useMemo(
-    () =>
-      records.filter((r) => recordTouchesMonth(r, monthStartStr, monthEndStr)),
+    () => records.filter((r) => recordTouchesMonth(r, monthStartStr, monthEndStr)),
     [records, monthStartStr, monthEndStr],
   );
 
-  const portalBody = useMemo(() => {
-    const empty = {
-      asOriginalRows: [] as AsOriginalRow[],
-      asSubRows: [] as AsSubRow[],
-      sumOriginalMonthCost: 0,
-      sumSubstituteIncome: 0,
-      byLeaveType: [] as ByLtRow[],
+  const substituteIdsInMonth = useMemo(
+    () => collectSubstituteTeacherIdsInMonth(records, monthStartStr, monthEndStr, selectedMonth),
+    [records, monthStartStr, monthEndStr, selectedMonth],
+  );
+
+  const substituteTeacherOptions = useMemo(() => {
+    return substituteIdsInMonth
+      .map((id) => ({
+        id,
+        name: id === 'pending' ? '待聘' : teachers.find((t) => t.id === id)?.name || id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant', { numeric: true }));
+  }, [substituteIdsInMonth, teachers]);
+
+  const selectedTeacher: Teacher | undefined = useMemo(() => {
+    if (!selectedSubTeacherId) return undefined;
+    if (selectedSubTeacherId === 'pending') {
+      return {
+        id: 'pending',
+        name: '待聘',
+        type: TeacherType.EXTERNAL,
+        hasCertificate: false,
+        isRetired: false,
+        isSpecialEd: false,
+        isGraduatingHomeroom: false,
+        baseSalary: 0,
+        researchFee: 0,
+        isHomeroom: false,
+      };
+    }
+    const found = teachers.find((t) => t.id === selectedSubTeacherId);
+    if (found) return found;
+    return {
+      id: selectedSubTeacherId,
+      name: selectedSubTeacherId,
+      type: TeacherType.EXTERNAL,
+      hasCertificate: false,
+      isRetired: false,
+      isSpecialEd: false,
+      isGraduatingHomeroom: false,
+      baseSalary: 0,
+      researchFee: 0,
+      isHomeroom: false,
     };
-    if (!effectiveTeacher) return empty;
+  }, [teachers, selectedSubTeacherId]);
 
-    const asOriginal: AsOriginalRow[] = [];
-    const asSub: AsSubRow[] = [];
-    let sumOriginalMonthCost = 0;
-    let sumSubstituteIncome = 0;
+  /** 非管理員：僅能檢視白名單綁定且當月有代課紀錄之本人 */
+  const linkedId = selfWhitelist?.linkedTeacherId?.trim() || '';
+  const canViewLinked =
+    !isSubteachAdmin && linkedId && substituteIdsInMonth.includes(linkedId) && teachers.some((t) => t.id === linkedId);
 
-    const byLt = new Map<LeaveType, { originalCost: number; subIncome: number; leaveCount: number }>();
-    const bumpLt = (lt: LeaveType, oc: number, si: number, incLeave: boolean) => {
-      const cur = byLt.get(lt) || { originalCost: 0, subIncome: 0, leaveCount: 0 };
-      cur.originalCost += oc;
-      cur.subIncome += si;
-      if (incLeave) cur.leaveCount += 1;
-      byLt.set(lt, cur);
+  useEffect(() => {
+    if (isSubteachAdmin) {
+      if (substituteTeacherOptions.length === 0) {
+        setSelectedSubTeacherId('');
+        return;
+      }
+      setSelectedSubTeacherId((prev) =>
+        prev && substituteIdsInMonth.includes(prev) ? prev : substituteTeacherOptions[0].id,
+      );
+      return;
+    }
+    if (canViewLinked) {
+      setSelectedSubTeacherId(linkedId);
+      return;
+    }
+    setSelectedSubTeacherId('');
+  }, [isSubteachAdmin, canViewLinked, linkedId, substituteTeacherOptions, substituteIdsInMonth]);
+
+  const leaveTypeTableRows = useMemo((): LeaveTypeRow[] => {
+    if (!selectedTeacher || !selectedSubTeacherId) return [];
+    const t = selectedTeacher;
+    const byLt = new Map<
+      LeaveType,
+      { substituteDetailCount: number; substituteIncome: number; leaveAsOriginalRecordCount: number; leaveAsOriginalCost: number }
+    >();
+    const bump = (lt: LeaveType) => {
+      if (!byLt.has(lt)) {
+        byLt.set(lt, {
+          substituteDetailCount: 0,
+          substituteIncome: 0,
+          leaveAsOriginalRecordCount: 0,
+          leaveAsOriginalCost: 0,
+        });
+      }
+      return byLt.get(lt)!;
     };
 
     for (const r of recordsInMonth) {
-      const matchesLeave = leaveTypeKey === LEAVE_TYPE_ALL || r.leaveType === leaveTypeKey;
-      if (!matchesLeave) continue;
       const ded = deduplicateDetails(r.details || []);
       const inMonth = ded.filter((d) => toYMD(d.date).startsWith(selectedMonth));
 
-      if (originalMatchesTeacher(r, effectiveTeacher)) {
+      if (originalMatchesTeacher(r, t)) {
         const monthCost = inMonth.reduce((s, d) => s + (Number(d.calculatedAmount) || 0), 0);
         if (monthCost > 0 || inMonth.length > 0) {
-          const detailLines = inMonth.map((d) => {
-            const subName =
-              d.substituteTeacherId === 'pending'
-                ? '待聘'
-                : teachers.find((t) => t.id === d.substituteTeacherId)?.name || d.substituteTeacherId;
-            return `${toYMD(d.date)} ${periodLabel(d)} · ${subName} · $${(Number(d.calculatedAmount) || 0).toLocaleString()}`;
-          });
-          asOriginal.push({ record: r, monthCost, detailLines });
-        }
-        sumOriginalMonthCost += monthCost;
-        if (leaveTypeKey === LEAVE_TYPE_ALL) {
-          bumpLt(r.leaveType, monthCost, 0, true);
+          const cell = bump(r.leaveType);
+          cell.leaveAsOriginalCost += monthCost;
+          cell.leaveAsOriginalRecordCount += 1;
         }
       }
 
       for (const d of inMonth) {
-        if (d.substituteTeacherId !== effectiveTeacher.id) continue;
+        if (d.substituteTeacherId !== t.id) continue;
         if (d.isOvertime === true) continue;
-        const amt = Number(d.calculatedAmount) || 0;
-        sumSubstituteIncome += amt;
-        asSub.push({ record: r, detail: d });
-        if (leaveTypeKey === LEAVE_TYPE_ALL) {
-          const cur = byLt.get(r.leaveType) || { originalCost: 0, subIncome: 0, leaveCount: 0 };
-          cur.subIncome += amt;
-          byLt.set(r.leaveType, cur);
-        }
+        const cell = bump(r.leaveType);
+        cell.substituteIncome += Number(d.calculatedAmount) || 0;
+        cell.substituteDetailCount += 1;
       }
     }
 
-    const byLeaveType = (Object.values(LeaveType) as LeaveType[])
+    return (Object.values(LeaveType) as LeaveType[])
       .map((leaveType) => {
         const x = byLt.get(leaveType);
         return {
           leaveType,
-          originalCost: x?.originalCost ?? 0,
-          subIncome: x?.subIncome ?? 0,
-          leaveCount: x?.leaveCount ?? 0,
+          substituteDetailCount: x?.substituteDetailCount ?? 0,
+          substituteIncome: x?.substituteIncome ?? 0,
+          leaveAsOriginalRecordCount: x?.leaveAsOriginalRecordCount ?? 0,
+          leaveAsOriginalCost: x?.leaveAsOriginalCost ?? 0,
         };
       })
-      .filter((row) => row.originalCost > 0 || row.subIncome > 0 || row.leaveCount > 0);
-
-    return {
-      asOriginalRows: asOriginal,
-      asSubRows: asSub.sort((a, b) => toYMD(a.detail.date).localeCompare(toYMD(b.detail.date))),
-      sumOriginalMonthCost,
-      sumSubstituteIncome,
-      byLeaveType,
-    };
-  }, [recordsInMonth, effectiveTeacher, teachers, selectedMonth, leaveTypeKey]);
+      .filter(
+        (row) =>
+          row.substituteDetailCount > 0 ||
+          row.substituteIncome > 0 ||
+          row.leaveAsOriginalRecordCount > 0 ||
+          row.leaveAsOriginalCost > 0,
+      );
+  }, [recordsInMonth, selectedTeacher, selectedSubTeacherId, selectedMonth]);
 
   const handleMonthChange = (dir: 'prev' | 'next') => {
     const [y, m] = selectedMonth.split('-').map(Number);
@@ -213,18 +263,29 @@ const TeacherLeavePortal: React.FC = () => {
     );
   }
 
-  if (!isSubteachAdmin && !selfWhitelist?.linkedTeacherId) {
+  if (!isSubteachAdmin && !linkedId) {
     return (
       <div className="max-w-lg mx-auto mt-12 px-4">
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900 text-sm leading-relaxed">
-          <h1 className="text-lg font-bold text-amber-950 mb-2">尚無法使用教師查詢</h1>
+          <h1 className="text-lg font-bold text-amber-950 mb-2">尚無法使用本查詢</h1>
           <p>
-            您的帳號已通過白名單，但尚未綁定教師身分。請聯絡<strong>系統管理員</strong>在「系統設定 → 白名單管理」為您的 Email
-            設定<strong>綁定教師</strong>後，即可檢視個人請假與代課資料。
+            您的帳號尚未綁定教師身分。請聯絡<strong>系統管理員</strong>在「系統設定 → 白名單管理」為您的 Email 設定<strong>綁定教師</strong>。
           </p>
-          <Link to="/dashboard" className="inline-block mt-4 text-indigo-700 font-medium hover:underline">
-            返回儀表板
-          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSubteachAdmin && linkedId && !substituteIdsInMonth.includes(linkedId)) {
+    const linkedName = teachers.find((x) => x.id === linkedId)?.name || '已綁定教師';
+    return (
+      <div className="max-w-lg mx-auto mt-12 px-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-700 text-sm leading-relaxed shadow-sm">
+          <h1 className="text-lg font-bold text-slate-900 mb-2">{selectedMonth} 無代課紀錄</h1>
+          <p>
+            名單僅列出<strong>當月有代課紀錄</strong>之代課教師。您（{linkedName}）於 {selectedMonth}{' '}
+            查無擔任代課之紀錄，故無資料可顯示。請切換月份或向教務／人事確認登錄是否完整。
+          </p>
         </div>
       </div>
     );
@@ -232,18 +293,19 @@ const TeacherLeavePortal: React.FC = () => {
 
   return (
     <div className="min-h-full bg-slate-50 text-slate-800">
-      <div className="max-w-5xl mx-auto px-4 py-6 md:py-10">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div className="max-w-4xl mx-auto px-4 py-6 md:py-8">
+        <div className="mb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <BookOpen className="text-indigo-600 shrink-0" size={28} />
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <BookOpen className="text-indigo-600 shrink-0" size={26} />
               教師請假／代課查詢
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              依月份與假別檢視請假紀錄、代課明細與金額加總（資料與代課清冊相同來源）。需 Google 登入且於白名單內。
+            <p className="text-xs md:text-sm text-slate-500 mt-1">
+              僅列出<strong>該月有代課紀錄</strong>之代課教師；下方以<strong>假別彙整</strong>為單一表格（不含超鐘點明細）。需 Google
+              登入且於白名單內。
             </p>
           </div>
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">
             <button
               type="button"
               onClick={() => handleMonthChange('prev')}
@@ -252,7 +314,7 @@ const TeacherLeavePortal: React.FC = () => {
             >
               <ChevronLeft size={18} />
             </button>
-            <div className="px-4 py-2 flex items-center gap-2 font-semibold text-slate-700 tabular-nums">
+            <div className="px-3 py-2 flex items-center gap-2 font-semibold text-slate-700 tabular-nums text-sm">
               <Calendar size={16} className="text-slate-400" />
               {selectedMonth}
             </div>
@@ -267,183 +329,108 @@ const TeacherLeavePortal: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6 mb-6 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-end gap-4">
+        {substituteTeacherOptions.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500 text-sm shadow-sm">
+            {selectedMonth} 尚無可列出之代課教師（當月無代課分配／明細紀錄）。
+          </div>
+        ) : (
+          <div className="space-y-4">
             {isSubteachAdmin && (
-              <label className="flex-1 min-w-0">
-                <span className="text-xs font-semibold text-slate-500 block mb-1">檢視教師（管理員）</span>
+              <label className="block max-w-md">
+                <span className="text-xs font-semibold text-slate-600 block mb-1">代課教師（僅有當月代課紀錄者）</span>
                 <select
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={adminTeacherId}
-                  onChange={(e) => setAdminTeacherId(e.target.value)}
+                  value={selectedSubTeacherId}
+                  onChange={(e) => setSelectedSubTeacherId(e.target.value)}
                 >
-                  {sortedTeachers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}（{t.type}）
+                  {substituteTeacherOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
                     </option>
                   ))}
                 </select>
               </label>
             )}
-            {!isSubteachAdmin && effectiveTeacher && (
-              <div className="flex items-center gap-2 text-slate-700">
+
+            {!isSubteachAdmin && selectedTeacher && (
+              <div className="flex items-center gap-2 text-slate-800 bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm">
                 <User size={18} className="text-indigo-500 shrink-0" />
-                <span className="font-semibold">{effectiveTeacher.name}</span>
-                <span className="text-xs text-slate-400">（{effectiveTeacher.type}）</span>
+                <span className="font-semibold">{selectedTeacher.name}</span>
+                <span className="text-xs text-slate-500">（{selectedTeacher.type}）</span>
               </div>
             )}
-            <label className="flex-1 min-w-0 md:max-w-xs">
-              <span className="text-xs font-semibold text-slate-500 block mb-1">假別篩選</span>
-              <select
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={leaveTypeKey}
-                onChange={(e) => setLeaveTypeKey(e.target.value)}
-              >
-                <option value={LEAVE_TYPE_ALL}>全部假別（下方為分假別彙總）</option>
-                {Object.values(LeaveType).map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
 
-          {effectiveTeacher && leaveTypeKey === LEAVE_TYPE_ALL && portalBody.byLeaveType.length > 0 && (
-            <div className="rounded-lg border border-slate-100 overflow-hidden">
-              <div className="bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">依假別彙總（{selectedMonth}）</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
-                      <th className="px-3 py-2 font-medium">假別</th>
-                      <th className="px-3 py-2 font-medium text-right">請假筆數</th>
-                      <th className="px-3 py-2 font-medium text-right">請假之當月代課支出</th>
-                      <th className="px-3 py-2 font-medium text-right">代課收入</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {portalBody.byLeaveType.map((row) => (
-                      <tr key={row.leaveType} className="hover:bg-slate-50/80">
-                        <td className="px-3 py-2 text-slate-800">{row.leaveType}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.leaveCount}</td>
-                        <td className="px-3 py-2 text-right font-medium tabular-nums">
-                          ${row.originalCost.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-2 text-right font-medium text-emerald-700 tabular-nums">
-                          ${row.subIncome.toLocaleString()}
-                        </td>
+            {selectedTeacher && (
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 text-sm font-bold text-slate-700">
+                  {selectedMonth} · {selectedTeacher.name} — 依假別彙整
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[520px]">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500 border-b border-slate-200 bg-white">
+                        <th className="px-4 py-3 font-semibold">假別</th>
+                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">代課明細筆數</th>
+                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">代課收入合計</th>
+                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">請假單筆數</th>
+                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">請假之代課費合計</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-[11px] text-slate-400 px-3 py-2 border-t border-slate-100">
-                「請假之當月代課支出」為該假別下，您請假時當月應付之代課費加總；「代課收入」為您擔任代課之明細金額加總（同假別之請假單）。
-              </p>
-            </div>
-          )}
-
-          {effectiveTeacher && leaveTypeKey !== LEAVE_TYPE_ALL && (
-            <div className="grid md:grid-cols-2 gap-3">
-              <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
-                <div className="text-xs font-semibold text-indigo-800 mb-1">請假—當月代課費加總</div>
-                <div className="text-2xl font-bold text-indigo-950 tabular-nums">
-                  ${portalBody.sumOriginalMonthCost.toLocaleString()}
-                </div>
-                <p className="text-[11px] text-indigo-700/80 mt-2">您為請假人、假別為「{leaveTypeKey}」之代課明細金額合計（{selectedMonth}）。</p>
-              </div>
-              <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-4">
-                <div className="text-xs font-semibold text-emerald-800 mb-1 flex items-center gap-1">
-                  <Wallet size={14} /> 代課收入加總
-                </div>
-                <div className="text-2xl font-bold text-emerald-900 tabular-nums">
-                  ${portalBody.sumSubstituteIncome.toLocaleString()}
-                </div>
-                <p className="text-[11px] text-emerald-800/80 mt-2">您擔任代課、且請假假別為「{leaveTypeKey}」之明細合計（{selectedMonth}，不含超鐘點明細）。</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {effectiveTeacher && leaveTypeKey !== LEAVE_TYPE_ALL && (
-          <div className="grid gap-6 md:grid-cols-2">
-            <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <h2 className="text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 border-b border-slate-200">
-                請假紀錄（您為請假人）
-              </h2>
-              <div className="max-h-[480px] overflow-y-auto divide-y divide-slate-100">
-                {portalBody.asOriginalRows.length === 0 ? (
-                  <p className="p-6 text-sm text-slate-400 text-center">本月無符合假別之請假紀錄</p>
-                ) : (
-                  portalBody.asOriginalRows.map(({ record, monthCost, detailLines }) => (
-                    <div key={record.id} className="p-4 text-sm">
-                      <div className="font-semibold text-slate-800">{record.reason || '（無事由）'}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {record.startDate}～{record.endDate} · {record.leaveType}
-                      </div>
-                      <div className="mt-2 text-xs font-medium text-indigo-700">
-                        當月代課費小計：${monthCost.toLocaleString()}
-                      </div>
-                      {detailLines.length > 0 && (
-                        <ul className="mt-2 space-y-1 text-xs text-slate-600 font-mono">
-                          {detailLines.map((line, i) => (
-                            <li key={i}>{line}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <h2 className="text-sm font-bold text-slate-700 bg-slate-50 px-4 py-3 border-b border-slate-200">
-                代課紀錄（您為代課人）
-              </h2>
-              <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-left text-xs text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 font-medium whitespace-nowrap">日期</th>
-                      <th className="px-3 py-2 font-medium whitespace-nowrap">請假人</th>
-                      <th className="px-3 py-2 font-medium">科目／班級</th>
-                      <th className="px-3 py-2 font-medium whitespace-nowrap">支薪</th>
-                      <th className="px-3 py-2 font-medium text-right whitespace-nowrap">金額</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {portalBody.asSubRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-8 text-center text-slate-400 text-sm">
-                          本月無符合假別之代課明細
-                        </td>
-                      </tr>
-                    ) : (
-                      portalBody.asSubRows.map(({ record, detail }) => {
-                        const orig = teachers.find(
-                          (t) => t.id === record.originalTeacherId || t.name === record.originalTeacherId,
-                        );
-                        return (
-                          <tr key={`${record.id}_${detail.id}`} className="hover:bg-slate-50/80">
-                            <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{toYMD(detail.date)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{orig?.name || record.originalTeacherId}</td>
-                            <td className="px-3 py-2 text-xs text-slate-600">
-                              {[detail.subject, detail.className].filter(Boolean).join(' ')}
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {leaveTypeTableRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                            本月無可彙整之假別資料
+                          </td>
+                        </tr>
+                      ) : (
+                        leaveTypeTableRows.map((row) => (
+                          <tr key={row.leaveType} className="hover:bg-slate-50/80">
+                            <td className="px-4 py-2.5 text-slate-800">{row.leaveType}</td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">
+                              {row.substituteDetailCount}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-xs">{detail.payType}</td>
-                            <td className="px-3 py-2 text-right font-medium tabular-nums">
-                              ${(Number(detail.calculatedAmount) || 0).toLocaleString()}
+                            <td className="px-4 py-2.5 text-right font-medium tabular-nums text-emerald-700">
+                              ${row.substituteIncome.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">
+                              {row.leaveAsOriginalRecordCount}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-medium tabular-nums text-indigo-800">
+                              ${row.leaveAsOriginalCost.toLocaleString()}
                             </td>
                           </tr>
-                        );
-                      })
+                        ))
+                      )}
+                    </tbody>
+                    {leaveTypeTableRows.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+                          <td className="px-4 py-2.5">合計</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">
+                            {leaveTypeTableRows.reduce((s, r) => s + r.substituteDetailCount, 0)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-emerald-800">
+                            $
+                            {leaveTypeTableRows.reduce((s, r) => s + r.substituteIncome, 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">
+                            {leaveTypeTableRows.reduce((s, r) => s + r.leaveAsOriginalRecordCount, 0)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-indigo-900">
+                            $
+                            {leaveTypeTableRows.reduce((s, r) => s + r.leaveAsOriginalCost, 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      </tfoot>
                     )}
-                  </tbody>
-                </table>
+                  </table>
+                </div>
+                <p className="text-[11px] text-slate-400 px-4 py-2 border-t border-slate-100 bg-slate-50/50">
+                  代課欄位依請假單<strong>假別</strong>歸類；請假欄位為同一人若亦擔任請假人時之當月代課費加總。與代課清冊「依代課人」之資料來源一致（不含超鐘點明細）。
+                </p>
               </div>
-            </section>
+            )}
           </div>
         )}
       </div>
