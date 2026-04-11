@@ -315,11 +315,6 @@ const TeacherLeavePortal: React.FC = () => {
                           <th className={tableHead}>代導師日數</th>
                           <th className={tableHead}>導師費</th>
                           <th className={tableHead}>應發金額</th>
-                          <th className={tableHead}>勞保</th>
-                          <th className={tableHead}>健保</th>
-                          <th className={`${tableHead} max-w-[5rem] leading-tight`}>代扣補充保費</th>
-                          <th className={tableHead}>實領金額</th>
-                          <th className={`${tableHead} min-w-[4rem]`}>代課教師簽名</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -351,11 +346,6 @@ const TeacherLeavePortal: React.FC = () => {
                             <td className={`${tableCell} text-right font-semibold tabular-nums`}>
                               {row.payableAmount.toLocaleString()}
                             </td>
-                            <td className={`${tableCell}`} />
-                            <td className={`${tableCell}`} />
-                            <td className={`${tableCell}`} />
-                            <td className={`${tableCell}`} />
-                            <td className={`${tableCell} min-h-[2rem]`} />
                           </tr>
                         ))}
                         <tr className="bg-slate-100 font-bold">
@@ -369,7 +359,6 @@ const TeacherLeavePortal: React.FC = () => {
                           <td className={`${tableCell} text-center tabular-nums`}>{String(sumHmDays)}</td>
                           <td className={`${tableCell} text-right tabular-nums`}>{sumHmFee.toLocaleString()}</td>
                           <td className={`${tableCell} text-right tabular-nums`}>{sumPayable.toLocaleString()}</td>
-                          <td className={tableCell} colSpan={5} />
                         </tr>
                       </tbody>
                     </table>
