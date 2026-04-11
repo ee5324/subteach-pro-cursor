@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, BookOpen, Filter } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { HOMEROOM_FEE_MONTHLY, LeaveRecord, LeaveType, PayType, SubstituteDetail, Teacher } from '../types';
 import { deduplicateDetails, getDaysInMonth, getExpectedDailyRateNoHomeroom } from '../utils/calculations';
@@ -169,8 +169,14 @@ function buildLedgerLine(record: LeaveRecord, detail: SubstituteDetail, teachers
 
 type LeaveTypeGroup = { leaveType: LeaveType; lines: LedgerLine[] };
 
+const ALL_LEAVE_TYPES = Object.values(LeaveType) as LeaveType[];
+
 const TeacherLeavePortal: React.FC = () => {
   const { records, teachers, loading } = useAppStore();
+
+  const [leaveTypeSelection, setLeaveTypeSelection] = useState<Set<LeaveType>>(
+    () => new Set(ALL_LEAVE_TYPES),
+  );
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -217,6 +223,28 @@ const TeacherLeavePortal: React.FC = () => {
       .filter((g) => g.lines.length > 0);
   }, [recordsInMonth, teachers, selectedMonth]);
 
+  const displayedLeaveTypeGroups = useMemo(
+    () => groupedByLeaveType.filter((g) => leaveTypeSelection.has(g.leaveType)),
+    [groupedByLeaveType, leaveTypeSelection],
+  );
+
+  const toggleLeaveTypeFilter = (lt: LeaveType) => {
+    setLeaveTypeSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(lt)) {
+        if (next.size <= 1) return prev;
+        next.delete(lt);
+      } else {
+        next.add(lt);
+      }
+      return next;
+    });
+  };
+
+  const selectAllLeaveTypes = () => {
+    setLeaveTypeSelection(new Set(ALL_LEAVE_TYPES));
+  };
+
   const handleMonthChange = (dir: 'prev' | 'next') => {
     const [y, m] = selectedMonth.split('-').map(Number);
     const d = new Date(y, m - 1, 1);
@@ -243,7 +271,7 @@ const TeacherLeavePortal: React.FC = () => {
               教師請假／代課查詢
             </h1>
             <p className="text-sm md:text-base text-slate-600 mt-1.5">
-              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（每筆代課明細一列，欄位與產報表清冊一致；不含憑證狀態、公文字號）。
+              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（每筆代課明細一列，欄位與產報表清冊一致；不含憑證狀態、公文字號）。可下方篩選要顯示的假別。
             </p>
           </div>
           <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg shadow-sm shrink-0">
@@ -270,13 +298,51 @@ const TeacherLeavePortal: React.FC = () => {
           </div>
         </div>
 
+        <div className="mb-5 rounded-lg border border-slate-300 bg-white px-3 py-3 shadow-sm print:hidden">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <Filter size={18} className="text-indigo-600 shrink-0" aria-hidden />
+            <span className="text-sm font-bold text-slate-800">假別篩選</span>
+            <button
+              type="button"
+              onClick={selectAllLeaveTypes}
+              className="ml-auto text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline sm:ml-2"
+            >
+              全選
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {ALL_LEAVE_TYPES.map((lt) => {
+              const on = leaveTypeSelection.has(lt);
+              return (
+                <button
+                  key={lt}
+                  type="button"
+                  onClick={() => toggleLeaveTypeFilter(lt)}
+                  title={on ? '點擊取消此假別（至少保留一項）' : '點擊加入此假別'}
+                  className={`rounded-full border px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
+                    on
+                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
+                      : 'border-slate-300 bg-slate-50 text-slate-500 hover:border-slate-400 hover:bg-slate-100'
+                  }`}
+                >
+                  {lt}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {groupedByLeaveType.length === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-white p-12 text-center text-slate-600 text-base shadow-sm">
             {selectedMonth} 月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人之紀錄；與產報表相同）
           </div>
+        ) : displayedLeaveTypeGroups.length === 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-10 text-center text-amber-900 text-base shadow-sm">
+            所選假別於 {selectedMonth} 無代課明細，請調整篩選或按「全選」。
+          </div>
         ) : (
           <div className="space-y-10 print:space-y-6">
-            {groupedByLeaveType.map(({ leaveType, lines }) => {
+            {displayedLeaveTypeGroups.map(({ leaveType, lines }) => {
               const sumDays = lines.reduce((s, x) => s + x.subDays, 0);
               const sumPeriods = lines.reduce((s, x) => s + x.subPeriods, 0);
               const sumSubstitutePay = lines.reduce((s, x) => s + x.substitutePayExclHomeroom, 0);
