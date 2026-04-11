@@ -77,7 +77,7 @@ export interface SubteachAllowedUser {
   enabled: boolean;
   role?: 'admin' | 'user';
   displayName?: string;
-  /** 綁定教師主檔 id：供「教師請假／代課查詢」入口辨識本人（管理員可不填，改於該頁選擇任意教師） */
+  /** 綁定教師主檔 id（選用，供人事辨識帳號與教師之對應） */
   linkedTeacherId?: string;
   updatedAt?: number;
 }
