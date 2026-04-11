@@ -160,12 +160,18 @@ function buildLedgerLine(
 
   const salaryPts = subTeacher?.salaryPoints;
   const salaryPointsText = salaryPts != null && salaryPts > 0 ? String(salaryPts) : '—';
-  const dailyRateText =
-    detail.payType === PayType.HOURLY
-      ? '—'
-      : dailyRateNoHm != null
-        ? String(dailyRateNoHm)
-        : '—';
+  // 日薪欄須與「代課鐘點費」（G 欄，= 應發−導師費）對得上：俸點表日薪與實際入帳拆帳可能差 1 元，
+  // 故日／半日以「本列代課鐘點費 ÷ 代課天數」反推顯示，與 GAS 試算表上 D、G 對照習慣一致。
+  let dailyRateText: string;
+  if (detail.payType === PayType.HOURLY) {
+    dailyRateText = '—';
+  } else if (lineDays > 0) {
+    dailyRateText = String(Math.round(substitutePayExclHm / lineDays));
+  } else if (dailyRateNoHm != null) {
+    dailyRateText = String(dailyRateNoHm);
+  } else {
+    dailyRateText = '—';
+  }
 
   return {
     key: `${record.id}_${detail.id}`,
