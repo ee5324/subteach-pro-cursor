@@ -80,9 +80,21 @@ const SubstituteLookupViewStats: React.FC = () => {
         };
       });
       setEvents(rows);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
-      setLoadError('無法載入統計（需管理員權限或請確認 Firestore 規則已部署）。');
+      const err = e as { code?: string; message?: string };
+      const code = err?.code ?? '';
+      const msg = (err?.message && String(err.message)) || String(e);
+      let hint =
+        '請確認已部署專案內最新 firestore.rules，且您的帳號於 subteach_allowed_users 為 admin（或符合規則中的指定管理員）。';
+      if (code === 'permission-denied') {
+        hint =
+          'Firestore 拒絕讀取（permission-denied）。請部署含 substituteWeeklyLookupViews「僅管理員可讀」的規則，並確認白名單 role 為 admin；若剛改 Gmail 驗證狀態，請重新登入。';
+      } else if (code === 'failed-precondition') {
+        hint =
+          '查詢需建立索引（failed-precondition）。請開啟瀏覽器開發者工具主控台，依 Firebase 錯誤內的網址建立複合索引後再按「重新整理」。';
+      }
+      setLoadError(`無法載入統計。\n【${code || '錯誤'}】${msg}\n\n${hint}`);
       setEvents([]);
     } finally {
       setLoading(false);
@@ -185,7 +197,9 @@ const SubstituteLookupViewStats: React.FC = () => {
         </div>
 
         {loadError && (
-          <div className="mb-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">{loadError}</div>
+          <div className="mb-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3 whitespace-pre-line font-mono leading-relaxed">
+            {loadError}
+          </div>
         )}
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
