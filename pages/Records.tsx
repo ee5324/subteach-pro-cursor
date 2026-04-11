@@ -563,7 +563,7 @@ const Records: React.FC = () => {
 
   // 固定兼課教師為「請假人」、他人代課：該筆應入「固定兼課」印領清冊（固定兼課頁匯出），
   // 不應入一般「代課」清冊／憑證。頁面列表仍完整顯示，僅匯出代課清冊時整筆排除。
-  // 辨識邏輯與 utils/fixedOvertimeLedger、教師請假／代課查詢頁一致。
+  // 辨識邏輯與 utils/fixedOvertimeLedger、薪水幹事查詢頁一致。
   const fixedOvertimeTeacherIdSet = useMemo(
     () => getFixedOvertimeTeacherIdSet(teachers, fixedOvertimeConfig),
     [teachers, fixedOvertimeConfig],
@@ -1036,10 +1036,10 @@ const Records: React.FC = () => {
                 <Link
                     to="/teacher-portal"
                     className="min-h-[44px] flex-1 sm:flex-none px-4 py-2.5 bg-violet-50 text-violet-800 border border-violet-200 rounded-lg hover:bg-violet-100 flex items-center justify-center space-x-2 text-sm font-medium transition-colors"
-                    title="依假別檢視教師請假與代課金額（須 Google 登入且於白名單內）"
+                    title="依假別檢視代課印領清冊格式總表（須 Google 登入且於白名單內）"
                 >
                     <UserSearch size={18} />
-                    <span>教師請假／代課查詢</span>
+                    <span>薪水幹事查詢</span>
                 </Link>
                 <a
                     href={CHC_SALARY_TABLE_114_PDF}

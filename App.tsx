@@ -144,7 +144,7 @@ const App: React.FC = () => {
           <Route
             path="teacher-portal"
             element={
-              <PageErrorBoundary fallbackTitle="教師請假／代課查詢載入錯誤">
+              <PageErrorBoundary fallbackTitle="薪水幹事查詢載入錯誤">
                 <TeacherLeavePortal />
               </PageErrorBoundary>
             }

@@ -373,7 +373,7 @@ const TeacherLeavePortal: React.FC = () => {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
               <BookOpen className="text-indigo-600 shrink-0" size={28} />
-              教師請假／代課查詢
+              薪水幹事查詢
             </h1>
             <p className="text-sm md:text-base text-slate-600 mt-1.5">
               當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（<strong>不含</strong>標示為超鐘點之代課時段，該類另計入超鐘點清冊；<strong>不含</strong>固定兼課身分之請假人及其代課明細，該類另列固定兼課清冊）；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。

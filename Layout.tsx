@@ -9,7 +9,7 @@ const Layout: React.FC = () => {
   const location = useLocation();
   /** 教學組事務為內建側欄，隱藏主站 Sidebar，避免雙層選單 */
   const isEduTrackShell = location.pathname === '/edutrack';
-  /** 教師請假／代課查詢：精簡版面，隱藏主站 Sidebar */
+  /** 薪水幹事查詢（#/teacher-portal）：精簡版面，隱藏主站 Sidebar */
   const isTeacherPortalShell = location.pathname === '/teacher-portal';
   const hideMainSidebar = isEduTrackShell || isTeacherPortalShell;
 

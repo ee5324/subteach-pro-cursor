@@ -152,7 +152,7 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
         <NavLink to="/teacher-portal" className={linkClass} onClick={onClose}>
           <UserSearch size={18} />
-          <span>教師請假／代課查詢</span>
+          <span>薪水幹事查詢</span>
         </NavLink>
 
         {isSubteachAdmin && (
