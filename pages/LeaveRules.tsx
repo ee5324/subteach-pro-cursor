@@ -38,22 +38,22 @@ const LeaveRules: React.FC = () => {
 
       <InstructionPanel title="使用說明" isOpenDefault={false}>
         <p>
-          「注意事項」欄佔表格主要寬度（隨瀏覽器寬度比例調整），長文會自動換行；極窄視窗時可橫向捲動整表。假別欄已依原表合併同類多列（例：流產假、喪假、休假）。
+          「注意事項」欄佔表格主要寬度；「細項」與「給假日數」三欄亦會依比例留寬並可換行（含括號補註），避免文字溢出格線。極窄視窗時可橫向捲動整表。假別欄已依原表合併同類多列（例：流產假、喪假、休假）。
         </p>
         <p>表末備註列載明原表所依據之法規與縣府文件；與本系統代課計算邏輯無自動連動。</p>
       </InstructionPanel>
 
       <div className="rounded-xl border border-indigo-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto min-w-0">
-          <table className="w-full min-w-[min(100%,52rem)] text-sm border-collapse table-fixed">
+          <table className="w-full min-w-[min(100%,56rem)] text-sm border-collapse table-fixed">
             <colgroup>
               <col style={{ width: '7.5%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '7%' }} />
-              {/* 注意事項：主要寬度，隨視窗放大／縮小 */}
-              <col style={{ width: '52.5%' }} />
+              {/* 細項常有長句親屬稱謂，需較寬以免與給假日數欄互擠 */}
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '42.5%' }} />
               <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
@@ -102,16 +102,24 @@ const LeaveRules: React.FC = () => {
                         {row.category}
                       </td>
                     )}
-                    <td className="border border-slate-200 px-2 py-2 text-slate-700 align-top text-xs md:text-sm">
+                    <td className="border border-slate-200 px-2 py-2 text-slate-700 align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
                       {row.detail || '—'}
                     </td>
-                    <td className="border border-slate-200 px-1 py-2 text-center align-top whitespace-nowrap">{row.civil || '—'}</td>
-                    <td className="border border-slate-200 px-1 py-2 text-center align-top text-xs md:text-sm">{row.teacher || '—'}</td>
-                    <td className="border border-slate-200 px-1 py-2 text-center align-top text-xs md:text-sm">{row.agent || '—'}</td>
+                    <td className="border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
+                      {row.civil || '—'}
+                    </td>
+                    <td className="border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
+                      {row.teacher || '—'}
+                    </td>
+                    <td className="border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
+                      {row.agent || '—'}
+                    </td>
                     <td className="border border-slate-200 px-3 py-2.5 text-slate-700 leading-relaxed align-top text-xs sm:text-sm min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
                       {row.notes}
                     </td>
-                    <td className="border border-slate-200 px-2 py-2 text-xs text-slate-700 align-top">{row.duty || '—'}</td>
+                    <td className="border border-slate-200 px-2 py-2 text-xs text-slate-700 align-top min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
+                      {row.duty || '—'}
+                    </td>
                   </tr>
                 );
               })}
