@@ -1,10 +1,10 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
+import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare, UserSearch } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { PayType, SubstituteDetail, LeaveRecord, LeaveType, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS, TeacherType } from '../types';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
@@ -1053,6 +1053,14 @@ const Records: React.FC = () => {
             </div>
             
             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <Link
+                    to="/teacher-portal"
+                    className="min-h-[44px] flex-1 sm:flex-none px-4 py-2.5 bg-violet-50 text-violet-800 border border-violet-200 rounded-lg hover:bg-violet-100 flex items-center justify-center space-x-2 text-sm font-medium transition-colors"
+                    title="依假別檢視教師請假與代課金額（須 Google 登入且於白名單內）"
+                >
+                    <UserSearch size={18} />
+                    <span>教師請假／代課查詢</span>
+                </Link>
                 <a
                     href={CHC_SALARY_TABLE_114_PDF}
                     target="_blank"
