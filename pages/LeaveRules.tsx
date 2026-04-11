@@ -37,28 +37,40 @@ const LeaveRules: React.FC = () => {
       </div>
 
       <InstructionPanel title="使用說明" isOpenDefault={false}>
-        <p>橫向捲動可檢視「注意事項」欄全文。假別欄位已依原表合併同類多列（例：流產假、喪假、休假）。</p>
+        <p>
+          「注意事項」欄佔表格主要寬度（隨瀏覽器寬度比例調整），長文會自動換行；極窄視窗時可橫向捲動整表。假別欄已依原表合併同類多列（例：流產假、喪假、休假）。
+        </p>
         <p>表末備註列載明原表所依據之法規與縣府文件；與本系統代課計算邏輯無自動連動。</p>
       </InstructionPanel>
 
       <div className="rounded-xl border border-indigo-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-[960px] w-full text-sm border-collapse">
+        <div className="overflow-x-auto min-w-0">
+          <table className="w-full min-w-[min(100%,52rem)] text-sm border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: '7.5%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '7%' }} />
+              {/* 注意事項：主要寬度，隨視窗放大／縮小 */}
+              <col style={{ width: '52.5%' }} />
+              <col style={{ width: '8%' }} />
+            </colgroup>
             <thead>
               <tr className="bg-indigo-50 text-indigo-950">
-                <th className="border border-indigo-200 px-2 py-2 text-center align-middle w-[88px]" rowSpan={2}>
+                <th className="border border-indigo-200 px-2 py-2 text-center align-middle" rowSpan={2}>
                   假別
                 </th>
-                <th className="border border-indigo-200 px-2 py-2 text-center align-middle w-[140px]" rowSpan={2}>
+                <th className="border border-indigo-200 px-2 py-2 text-center align-middle" rowSpan={2}>
                   細項
                 </th>
                 <th className="border border-indigo-200 px-2 py-2 text-center" colSpan={3}>
                   給假日數
                 </th>
-                <th className="border border-indigo-200 px-2 py-2 text-center align-middle min-w-[280px]" rowSpan={2}>
+                <th className="border border-indigo-200 px-2 py-2 text-center align-middle" rowSpan={2}>
                   注意事項
                 </th>
-                <th className="border border-indigo-200 px-2 py-2 text-center align-middle w-[120px]" rowSpan={2}>
+                <th className="border border-indigo-200 px-2 py-2 text-center align-middle" rowSpan={2}>
                   課務
                 </th>
               </tr>
@@ -96,7 +108,7 @@ const LeaveRules: React.FC = () => {
                     <td className="border border-slate-200 px-1 py-2 text-center align-top whitespace-nowrap">{row.civil || '—'}</td>
                     <td className="border border-slate-200 px-1 py-2 text-center align-top text-xs md:text-sm">{row.teacher || '—'}</td>
                     <td className="border border-slate-200 px-1 py-2 text-center align-top text-xs md:text-sm">{row.agent || '—'}</td>
-                    <td className="border border-slate-200 px-2 py-2 text-xs text-slate-700 leading-relaxed align-top max-w-prose whitespace-pre-wrap">
+                    <td className="border border-slate-200 px-3 py-2.5 text-slate-700 leading-relaxed align-top text-xs sm:text-sm min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
                       {row.notes}
                     </td>
                     <td className="border border-slate-200 px-2 py-2 text-xs text-slate-700 align-top">{row.duty || '—'}</td>
