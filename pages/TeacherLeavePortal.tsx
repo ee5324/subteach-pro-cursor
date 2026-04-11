@@ -67,6 +67,19 @@ function substituteDisplayName(substituteTeacherId: string, teachers: Teacher[])
   return resolveSubstituteTeacher(substituteTeacherId, teachers)?.name ?? substituteTeacherId;
 }
 
+/** 與 GAS SheetManager.syncRecords 群組鍵一致：代課教師 id，待聘為字串「待聘」 */
+function gasSubstituteGroupKey(detail: SubstituteDetail): string {
+  const id = detail.substituteTeacherId;
+  if (!id || id === 'pending') return '待聘';
+  return String(id).trim();
+}
+
+function dateSortKeyYmd(ymd: string): number {
+  const y = toYMD(ymd);
+  if (!/^\d{4}-\d{2}-\d{2}/.test(y)) return 0;
+  return Number(y.slice(0, 10).replace(/-/g, ''));
+}
+
 function leaveTeacherDisplayName(record: LeaveRecord, teachers: Teacher[]): string {
   const t = teachers.find((x) => x.id === record.originalTeacherId || x.name === record.originalTeacherId);
   return t?.name ?? record.originalTeacherId ?? '—';
@@ -74,6 +87,8 @@ function leaveTeacherDisplayName(record: LeaveRecord, teachers: Teacher[]): stri
 
 type LedgerLine = {
   key: string;
+  /** 與 GAS 印領清冊列群組鍵相同（teacherId 或「待聘」） */
+  substituteKey: string;
   dateYmd: string;
   dateDisplay: string;
   substituteName: string;
@@ -91,7 +106,12 @@ type LedgerLine = {
   payableAmount: number;
 };
 
-function buildLedgerLine(record: LeaveRecord, detail: SubstituteDetail, teachers: Teacher[]): LedgerLine {
+function buildLedgerLine(
+  record: LeaveRecord,
+  detail: SubstituteDetail,
+  teachers: Teacher[],
+  substituteKey: string,
+): LedgerLine {
   const ymd = toYMD(detail.date);
   const daysInMonth = getDaysInMonth(detail.date) || 30;
   const subTeacher = resolveSubstituteTeacher(detail.substituteTeacherId, teachers);
@@ -149,6 +169,7 @@ function buildLedgerLine(record: LeaveRecord, detail: SubstituteDetail, teachers
 
   return {
     key: `${record.id}_${detail.id}`,
+    substituteKey,
     dateYmd: ymd,
     dateDisplay: formatDateReceipt(detail.date),
     substituteName: substituteDisplayName(detail.substituteTeacherId, teachers),
@@ -200,29 +221,29 @@ function uniformOrMultiline(values: string[]): string {
   return values.join('\n');
 }
 
+/**
+ * 同假別內依 GAS 邏輯合併：列順序＝syncRecords 掃描時「代課群組鍵」首次出現序（records 為 createdAt 新→舊 × details 順）；
+ * 同列多行＝buildRowsFromGroups 內 lineItems 排序（dateSortKey 升冪，同日再請假人 localeCompare）。
+ */
 function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): MergedLedgerRow[] {
   const bySub = new Map<string, LedgerLine[]>();
   for (const L of lines) {
-    const k = L.substituteName;
+    const k = L.substituteKey;
     if (!bySub.has(k)) bySub.set(k, []);
     bySub.get(k)!.push(L);
   }
-  const blocks = Array.from(bySub.entries()).map(([substituteName, grp]) => {
+  const blocks = Array.from(bySub.entries()).map(([substituteKey, grp]) => {
     const sorted = grp.slice().sort((a, b) => {
-      if (a.dateYmd !== b.dateYmd) return a.dateYmd.localeCompare(b.dateYmd);
+      const ka = dateSortKeyYmd(a.dateYmd);
+      const kb = dateSortKeyYmd(b.dateYmd);
+      if (ka !== kb) return ka - kb;
       return a.leaveTeacherName.localeCompare(b.leaveTeacherName, 'zh-Hant');
     });
-    return { substituteName, sorted };
+    return { substituteKey, sorted };
   });
-  blocks.sort((a, b) => {
-    const da = a.sorted[0]?.dateYmd ?? '';
-    const db = b.sorted[0]?.dateYmd ?? '';
-    if (da !== db) return da.localeCompare(db);
-    return a.substituteName.localeCompare(b.substituteName, 'zh-Hant');
-  });
-  return blocks.map(({ substituteName, sorted }) => ({
-    key: `merged_${substituteName}_${sorted.map((x) => x.key).join('_')}`,
-    substituteName,
+  return blocks.map(({ substituteKey, sorted }) => ({
+    key: `merged_${substituteKey}_${sorted.map((x) => x.key).join('_')}`,
+    substituteName: sorted[0]?.substituteName ?? substituteKey,
     dateLines: sorted.map((x) => x.dateDisplay).join('\n'),
     salaryPointsLines: uniformOrMultiline(sorted.map((x) => x.salaryPointsText)),
     dailyRateLines: uniformOrMultiline(sorted.map((x) => x.dailyRateText)),
@@ -274,6 +295,7 @@ const TeacherLeavePortal: React.FC = () => {
 
   const groupedByLeaveType = useMemo((): LeaveTypeGroup[] => {
     const map = new Map<LeaveType, LedgerLine[]>();
+    // 與 AppContext／GAS 一致：records 已為 createdAt 新→舊；勿再排序，以還原 syncRecords 掃描順序
     for (const r of recordsInMonth) {
       if (isFixedOvertimeLeaveTeacher(r.originalTeacherId, teachers)) continue;
       const lt = r.leaveType;
@@ -281,15 +303,8 @@ const TeacherLeavePortal: React.FC = () => {
       const deduped = deduplicateDetails(r.details || []);
       for (const d of deduped) {
         if (!d.date || !toYMD(d.date).startsWith(selectedMonth)) continue;
-        map.get(lt)!.push(buildLedgerLine(r, d, teachers));
+        map.get(lt)!.push(buildLedgerLine(r, d, teachers, gasSubstituteGroupKey(d)));
       }
-    }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => {
-        if (a.dateYmd !== b.dateYmd) return a.dateYmd.localeCompare(b.dateYmd);
-        if (a.substituteName !== b.substituteName) return a.substituteName.localeCompare(b.substituteName, 'zh-Hant');
-        return a.leaveTeacherName.localeCompare(b.leaveTeacherName, 'zh-Hant');
-      });
     }
     return (Object.values(LeaveType) as LeaveType[])
       .map((leaveType) => ({ leaveType, lines: map.get(leaveType) || [] }))
@@ -344,7 +359,8 @@ const TeacherLeavePortal: React.FC = () => {
               教師請假／代課查詢
             </h1>
             <p className="text-sm md:text-base text-slate-600 mt-1.5">
-              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。可下方篩選假別。
+              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。
+              <strong>列順序與 GAS 產出清冊一致</strong>（紀錄依建立時間新→舊掃描、代課者以主檔 id 分群；群組內再依日期與請假人排序）。可下方篩選假別。
             </p>
           </div>
           <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg shadow-sm shrink-0">
