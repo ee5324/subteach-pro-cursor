@@ -1,11 +1,38 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Calculator, ChevronDown, GripVertical } from 'lucide-react';
 
-const STORAGE_KEY = 'floatingCalculatorPos';
 const STORAGE_OPEN = 'floatingCalculatorOpen';
 /** 舊版鍵名相容 */
-const LEGACY_POS = 'settingsFloatingCalcPos';
 const LEGACY_OPEN = 'settingsFloatingCalcOpen';
+/** 舊版位置鍵：已不再讀寫，載入時清除以免誤解 */
+const LEGACY_POS_KEYS = ['floatingCalculatorPos', 'settingsFloatingCalcPos'] as const;
+
+const PANEL_W = 220;
+const PANEL_H = 340;
+const FAB_W = 72;
+const FAB_H = 56;
+const CALC_GAP = 4;
+
+function outerSize(isOpen: boolean): { w: number; h: number } {
+  if (!isOpen) return { w: FAB_W, h: FAB_H };
+  return { w: Math.max(PANEL_W, FAB_W), h: PANEL_H + CALC_GAP + FAB_H };
+}
+
+/** 視窗右下角預設（左上是外層容器座標） */
+function defaultBottomRightPos(isOpen: boolean): { left: number; top: number } {
+  const { w, h } = outerSize(isOpen);
+  const iw = window.innerWidth;
+  const ih = window.innerHeight;
+  const margin = 16;
+  const desiredLeft = iw - w - margin;
+  const desiredTop = ih - h - margin;
+  const maxLeft = Math.max(8, iw - w - 8);
+  const maxTop = Math.max(8, ih - h - 8);
+  return {
+    left: clamp(desiredLeft, 8, maxLeft),
+    top: clamp(desiredTop, 8, maxTop),
+  };
+}
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
@@ -48,8 +75,10 @@ const FloatingCalculator: React.FC = () => {
       return false;
     }
   });
+  /** 初次載入時是否展開（僅用於右下角高度計算，避免依賴陣列含 open 導致切換時重設位置） */
+  const openForInitialLayoutRef = useRef(open);
   const [expr, setExpr] = useState('');
-  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 16, top: 120 });
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
   const [mounted, setMounted] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
@@ -68,35 +97,13 @@ const FloatingCalculator: React.FC = () => {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_POS);
-      if (raw) {
-        const p = JSON.parse(raw) as { left?: number; top?: number };
-        if (typeof p.left === 'number' && typeof p.top === 'number') {
-          setPos({
-            left: clamp(p.left, 8, window.innerWidth - 64),
-            top: clamp(p.top, 8, window.innerHeight - 64),
-          });
-        }
-      } else {
-        setPos({
-          left: window.innerWidth - 72,
-          top: window.innerHeight - 96,
-        });
-      }
-    } catch {
-      setPos({ left: window.innerWidth - 72, top: window.innerHeight - 96 });
-    }
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+      for (const k of LEGACY_POS_KEYS) localStorage.removeItem(k);
     } catch {
       /* ignore */
     }
-  }, [pos, mounted]);
+    setPos(defaultBottomRightPos(openForInitialLayoutRef.current));
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     try {
@@ -197,11 +204,12 @@ const FloatingCalculator: React.FC = () => {
       if (!d.active || d.pid !== e.pointerId) return;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
-      const w = open ? 220 : 72;
-      const h = open ? 340 : 56;
+      const { w, h } = outerSize(open);
+      const maxL = Math.max(8, window.innerWidth - w - 8);
+      const maxT = Math.max(8, window.innerHeight - h - 8);
       setPos({
-        left: clamp(d.origLeft + dx, 8, window.innerWidth - w - 8),
-        top: clamp(d.origTop + dy, 8, window.innerHeight - h - 8),
+        left: clamp(d.origLeft + dx, 8, maxL),
+        top: clamp(d.origTop + dy, 8, maxT),
       });
     };
     const onUp = (e: PointerEvent) => {
@@ -218,15 +226,19 @@ const FloatingCalculator: React.FC = () => {
   }, [endDrag, open]);
 
   useEffect(() => {
+    if (!mounted) return;
     const onResize = () => {
+      const { w, h } = outerSize(open);
+      const maxL = Math.max(8, window.innerWidth - w - 8);
+      const maxT = Math.max(8, window.innerHeight - h - 8);
       setPos((p) => ({
-        left: clamp(p.left, 8, window.innerWidth - 72),
-        top: clamp(p.top, 8, window.innerHeight - 72),
+        left: clamp(p.left, 8, maxL),
+        top: clamp(p.top, 8, maxT),
       }));
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [mounted, open]);
 
   const startDrag = (e: React.PointerEvent) => {
     if (e.button !== 0) return;

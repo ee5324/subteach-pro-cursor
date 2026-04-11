@@ -678,9 +678,8 @@ const Settings: React.FC = () => {
                   懸浮計算機
                 </span>
                 <p className="mt-1.5 ml-1 border-l-2 border-indigo-100 pl-3 text-slate-600">
-                  <strong>全站已登入頁面</strong>（含代課各頁與「教學組事務」內計畫專案／計畫代墊等）皆會顯示。圓形按鈕固定在<strong>視窗內</strong>；左側直條可<strong>拖曳</strong>移動；點右側圖示<strong>展開／收合</strong>。展開後算式欄可<strong>鍵盤輸入</strong>數字與 + − * / . ，Enter 計算、Esc
-                  收合；焦點在算式欄或面板內按鈕時亦可用鍵盤。位置與狀態存於本機（鍵名 <code className="bg-slate-100 px-1 rounded text-xs">floatingCalculatorPos</code>／
-                  <code className="bg-slate-100 px-1 rounded text-xs">floatingCalculatorOpen</code>）。
+                  <strong>全站已登入頁面</strong>（含代課各頁與「教學組事務」內計畫專案／計畫代墊等）皆會顯示。預設在<strong>視窗右下角</strong>；左側直條或標題列可<strong>拖曳</strong>暫時改位置，<strong>重新整理頁面後會回到右下角</strong>。點圓形圖示<strong>展開／收合</strong>。展開後算式欄可<strong>鍵盤輸入</strong>數字與 + − * / . ，Enter 計算、Esc
+                  收合；焦點在算式欄或面板內按鈕時亦可用鍵盤。是否展開僅存於本機（鍵名 <code className="bg-slate-100 px-1 rounded text-xs">floatingCalculatorOpen</code>）。
                 </p>
               </li>
             </ul>
