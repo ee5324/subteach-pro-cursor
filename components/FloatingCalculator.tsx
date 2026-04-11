@@ -161,6 +161,11 @@ const FloatingCalculator: React.FC = () => {
         backspace();
         return;
       }
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        clearAll();
+        return;
+      }
       if (/^[0-9]$/.test(e.key)) {
         e.preventDefault();
         append(e.key);
@@ -178,7 +183,7 @@ const FloatingCalculator: React.FC = () => {
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [open, append, backspace, equals]);
+  }, [open, append, backspace, clearAll, equals]);
 
   const endDrag = useCallback(() => {
     const d = dragRef.current;
@@ -293,9 +298,15 @@ const FloatingCalculator: React.FC = () => {
               value={expr}
               onChange={(e) => setExpr(sanitizeExpr(e.target.value))}
               onKeyDown={(e) => {
+                if (e.key === 'Delete') {
+                  e.preventDefault();
+                  clearAll();
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   equals();
+                  return;
                 }
                 if (e.key === 'Escape') {
                   e.preventDefault();
@@ -307,7 +318,7 @@ const FloatingCalculator: React.FC = () => {
               placeholder="輸入算式…"
             />
             <p className="text-[10px] text-slate-500 leading-tight px-0.5">
-              鍵盤：數字與 + − * / . 、Enter 計算、Esc 收合；勿與本頁其他表單同時輸入。
+              鍵盤：數字與 + − * / . 、Enter 計算、Esc 收合、Delete 清空欄位；勿與本頁其他表單同時輸入。
             </p>
           </div>
           <div className="p-2 grid gap-1 select-none">
