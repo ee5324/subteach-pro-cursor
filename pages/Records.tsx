@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { PayType, SubstituteDetail, LeaveRecord, LeaveType, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS } from '../types';
+import { PayType, SubstituteDetail, LeaveRecord, LeaveType, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS, TeacherType } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
@@ -201,12 +201,11 @@ const Records: React.FC = () => {
     return normalized;
   };
 
-  // 1. Filter records by Selected Month (Handle Cross-Month Overlap)
-  const filteredRecords = useMemo(() => {
+  // 1a. 該月 + 假別（不含文字搜尋）：供總計、快速標籤、與後續搜尋篩選共用
+  const recordsInMonthBase = useMemo(() => {
     const filtered = records.filter(r => {
         const details = r.details || [];
         const slots = r.slots || [];
-        // 若 startDate/endDate 缺失或無效，改由 details/slots 推斷
         let start = toYMD(r.startDate || '');
         let end = toYMD(r.endDate || '');
         if (!start || !end) {
@@ -223,34 +222,77 @@ const Records: React.FC = () => {
           }
         }
         const inMonthByRange = start <= monthEndStr && end >= monthStartStr;
-        // 若 details/slots 任一日落在所選月份，也納入（避免漏顯示）
         const hasAnyDateInMonth = [...details.map(d => toYMD(d.date)), ...slots.map(s => toYMD(s.date))]
           .some(date => date >= monthStartStr && date <= monthEndStr);
         const inMonth = inMonthByRange || hasAnyDateInMonth;
         if (!inMonth) return false;
-
         if (leaveTypeFilter !== 'all' && r.leaveType !== leaveTypeFilter) return false;
-
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            const originalTeacher = teachers.find(t => t.id === r.originalTeacherId)?.name || r.originalTeacherId;
-            const subTeachers = (r.details || []).map(d => {
-                 return d.substituteTeacherId === 'pending' ? '待聘' : (teachers.find(t => t.id === d.substituteTeacherId)?.name || d.substituteTeacherId);
-            }).join(' ');
-            
-            return (
-                originalTeacher.toLowerCase().includes(term) ||
-                subTeachers.toLowerCase().includes(term) ||
-                (r.reason || '').toLowerCase().includes(term) ||
-                (r.docId || '').toLowerCase().includes(term)
-            );
-        }
         return true;
     });
-
-    // Sort by createdAt descending (newest first)
     return filtered.sort((a, b) => b.createdAt - a.createdAt);
-  }, [records, monthStartStr, monthEndStr, searchTerm, teachers, leaveTypeFilter]);
+  }, [records, monthStartStr, monthEndStr, leaveTypeFilter]);
+
+  // 1b. 文字搜尋（在 recordsInMonthBase 之上）
+  const filteredRecords = useMemo(() => {
+    if (!searchTerm.trim()) return recordsInMonthBase;
+    const term = searchTerm.toLowerCase();
+    return recordsInMonthBase.filter(r => {
+        const originalTeacher = teachers.find(t => t.id === r.originalTeacherId)?.name || r.originalTeacherId;
+        const subTeachers = (r.details || []).map(d => {
+             return d.substituteTeacherId === 'pending' ? '待聘' : (teachers.find(t => t.id === d.substituteTeacherId)?.name || d.substituteTeacherId);
+        }).join(' ');
+        return (
+            originalTeacher.toLowerCase().includes(term) ||
+            subTeachers.toLowerCase().includes(term) ||
+            (r.reason || '').toLowerCase().includes(term) ||
+            (r.docId || '').toLowerCase().includes(term)
+        );
+    });
+  }, [recordsInMonthBase, searchTerm, teachers]);
+
+  /** 依請假人模式：該月有紀錄且請假者為校內教師者，供快速點選篩選 */
+  const leaveTeacherQuickTags = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const r of recordsInMonthBase) {
+      const t =
+        teachers.find((x) => x.id === r.originalTeacherId) ||
+        teachers.find((x) => x.name === r.originalTeacherId);
+      if (!t || t.type !== TeacherType.INTERNAL) continue;
+      byId.set(t.id, t.name);
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant', { numeric: true }));
+  }, [recordsInMonthBase, teachers]);
+
+  /** 依代課人模式：與清冊「依代課人」列舉邏輯一致（當月 slots + 當月明細），供快速篩選 */
+  const substituteTeacherQuickTags = useMemo(() => {
+    const fromDetails = new Set<string>();
+    const fromSlots = new Set<string>();
+    for (const r of recordsInMonthBase) {
+      if (!r.slots || r.slots.length === 0) continue;
+      const detailsDeduped = deduplicateDetails(r.details || []);
+      detailsDeduped.forEach(d => {
+        if (d.substituteTeacherId && toYMD(d.date).startsWith(selectedMonth)) {
+          fromDetails.add(d.substituteTeacherId);
+        }
+      });
+      r.slots.forEach(s => {
+        if (!s.substituteTeacherId) return;
+        const ymd = toYMD(s.date);
+        if (!ymd || !ymd.startsWith(selectedMonth)) return;
+        if (s.isOvertime === true) return;
+        fromSlots.add(s.substituteTeacherId);
+      });
+    }
+    const ids = Array.from(new Set([...fromDetails, ...fromSlots]));
+    return ids
+      .map((id) => ({
+        id,
+        name: id === 'pending' ? '待聘' : (teachers.find((t) => t.id === id)?.name || id),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant', { numeric: true }));
+  }, [recordsInMonthBase, selectedMonth, teachers]);
 
   // Reset selection when month changes
   useEffect(() => {
@@ -1050,6 +1092,7 @@ const Records: React.FC = () => {
           <CollapsibleItem title="檢視模式切換">
             <p>可切換「依請假人」或「依代課人」檢視。依請假人適合核對假單；依代課人適合核對薪資與發放清冊。</p>
             <p>在「依代課人」模式中，摘要金額會整合顯示代課、超鐘點、固定兼課，並附導師費估算拆分；可搭配右上角圖片按鈕匯出。</p>
+            <p>工具列下方會依檢視模式顯示該月姓名標籤：依請假人時為<strong>校內請假教師</strong>，依代課人時為<strong>當月有代課之代課教師</strong>（與清冊列舉邏輯一致）；可一鍵帶入搜尋，再點同一標籤或「清除搜尋」可還原。標籤名單會隨月份與假別篩選更新。</p>
           </CollapsibleItem>
           <CollapsibleItem title="假別篩選">
             <p>工具列可選「假別」僅顯示該類請假之代課紀錄，與代課單編輯頁之假別選項相同；選「全部」則不篩假別。</p>
@@ -1112,7 +1155,7 @@ const Records: React.FC = () => {
                </div>
                <input
                   type="text"
-                  placeholder="搜尋教師、事由、文號..."
+                  placeholder="搜尋教師、事由、文號…（可點下方標籤快速篩選）"
                   className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   value={searchInput}
                   onChange={(e) => {
@@ -1182,6 +1225,64 @@ const Records: React.FC = () => {
                 </div>
            </div>
       </div>
+
+      {/* 該月姓名快速篩選（依檢視模式切換標籤來源） */}
+      {(() => {
+        const tags = viewMode === 'byLeaveTeacher' ? leaveTeacherQuickTags : substituteTeacherQuickTags;
+        if (tags.length === 0) return null;
+        const q = searchTerm.trim().toLowerCase();
+        const applyTag = (name: string) => {
+          const n = name.trim();
+          if (q === n.toLowerCase()) {
+            setSearchInput('');
+            setSearchTerm('');
+          } else {
+            setSearchInput(n);
+            setSearchTerm(n);
+          }
+        };
+        return (
+          <div className="mb-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600">
+                {viewMode === 'byLeaveTeacher' ? '本月請假（校內）' : '本月代課教師'}
+              </span>
+              <span className="text-xs text-slate-400">點姓名篩選；再點一次取消</span>
+              {searchTerm.trim() ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline decoration-indigo-300"
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearchTerm('');
+                  }}
+                >
+                  清除搜尋
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((row) => {
+                const active = q === row.name.trim().toLowerCase();
+                return (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => applyTag(row.name)}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50'
+                    }`}
+                  >
+                    {row.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 多選：批次變更憑證狀態（依請假人 + 有勾選時顯示） */}
       {viewMode === 'byLeaveTeacher' && selectedRecordIds.size > 0 && (
