@@ -17,6 +17,16 @@
         --sab: env(safe-area-inset-bottom);
         --sal: env(safe-area-inset-left);
       }
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+      }
       body {
         font-family: 'Noto Sans TC', sans-serif;
         /* 全站背景：淡灰到淡紫灰漸層，不搶內容 */

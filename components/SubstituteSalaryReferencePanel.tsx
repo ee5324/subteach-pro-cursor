@@ -50,13 +50,15 @@ function fmtDaily(total: number, days: number): string {
 
 interface SubstituteSalaryReferencePanelProps {
   salaryGrades: SalaryGrade[];
+  /** 外層容器額外 class */
+  className?: string;
 }
 
 /**
  * 代課清冊頁：收合式「代理／代課教師給付參考」。
  * 長期代理列依「系統設定」薪級表試算；鐘點費另列參考與本系統 HOURLY_RATE。
  */
-const SubstituteSalaryReferencePanel: React.FC<SubstituteSalaryReferencePanelProps> = ({ salaryGrades }) => {
+const SubstituteSalaryReferencePanel: React.FC<SubstituteSalaryReferencePanelProps> = ({ salaryGrades, className = '' }) => {
   const [open, setOpen] = useState(false);
 
   const byPoints = useMemo(() => {
@@ -90,11 +92,11 @@ const SubstituteSalaryReferencePanel: React.FC<SubstituteSalaryReferencePanelPro
   }, [byPoints]);
 
   return (
-    <div className="mb-4 md:mb-6 min-w-0 rounded-xl border border-indigo-100 bg-indigo-50/40 overflow-hidden">
+    <div className={`mb-2 md:mb-3 min-w-0 rounded-xl border border-indigo-100 bg-indigo-50/40 overflow-hidden ${className}`.trim()}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left bg-white/80 hover:bg-white border-b border-indigo-100 min-h-[44px]"
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left bg-white/80 hover:bg-white border-b border-indigo-100 min-h-[44px]"
       >
         <div className="flex items-center gap-2 min-w-0">
           <Banknote size={20} className="text-indigo-600 shrink-0" />

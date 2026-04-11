@@ -110,6 +110,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
     <HashRouter>
       <Routes>
         <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <Login />} />
@@ -184,6 +185,7 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
+    </div>
   );
 };
 

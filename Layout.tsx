@@ -72,7 +72,7 @@ const Layout: React.FC = () => {
 
       {/* Main Content */}
       <main
-        className={`flex flex-col flex-1 overflow-hidden w-full relative ${
+        className={`flex flex-col flex-1 min-h-0 overflow-hidden w-full relative ${
           isEduTrackShell || isTeacherPortalShell ? 'pt-12 md:pt-0' : 'pt-16 md:pt-0'
         }`}
       >
@@ -94,7 +94,7 @@ const Layout: React.FC = () => {
             <span className="text-slate-600">教師請假／代課查詢</span>
           </div>
         )}
-        <div className={isEduTrackShell || isTeacherPortalShell ? 'flex-1 min-h-0 overflow-auto' : 'flex-1 overflow-auto w-full'}>
+        <div className="flex-1 min-h-0 overflow-auto w-full">
           <Outlet />
         </div>
       </main>

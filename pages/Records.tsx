@@ -921,7 +921,10 @@ const Records: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 h-full flex flex-col" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}>
+    <div
+      className="flex h-full min-h-0 flex-col p-3 sm:p-4 md:p-6"
+      style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+    >
       <Modal 
         isOpen={modal.isOpen} 
         onClose={closeModal} 
@@ -1044,12 +1047,13 @@ const Records: React.FC = () => {
         </div>
       </Modal>
 
+      <div className="shrink-0 space-y-2 md:space-y-3">
       {/* Header Area */}
-      <header className="mb-4 md:mb-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4">
+      <header>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-3">
             <div className="min-w-0">
-                <h1 className="text-xl md:text-3xl font-bold text-slate-800 truncate">代課清冊與憑證</h1>
-                <p className="text-slate-500 mt-1 md:mt-2 text-sm md:text-base hidden sm:block">查看並匯出每月代課紀錄、清冊與相關憑證</p>
+                <h1 className="text-lg md:text-2xl font-bold text-slate-800 truncate">代課清冊與憑證</h1>
+                <p className="text-slate-500 mt-0.5 text-xs md:text-sm hidden sm:block line-clamp-2">查看並匯出每月代課紀錄、清冊與相關憑證</p>
             </div>
             
             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -1093,9 +1097,9 @@ const Records: React.FC = () => {
         </div>
       </header>
 
-      <SubstituteSalaryReferencePanel salaryGrades={salaryGrades} />
-
-      <InstructionPanel title="使用說明：代課清冊與憑證" shortTitle="使用說明">
+      <div className="grid gap-2 lg:grid-cols-2 lg:items-start lg:gap-3">
+        <SubstituteSalaryReferencePanel salaryGrades={salaryGrades} className="lg:mb-0 min-w-0" />
+        <InstructionPanel title="使用說明：代課清冊與憑證" shortTitle="使用說明" className="lg:mb-0 min-w-0">
         <div className="space-y-1">
           <CollapsibleItem title="檢視模式切換">
             <p>可切換「依請假人」或「依代課人」檢視。依請假人適合核對假單；依代課人適合核對薪資與發放清冊。</p>
@@ -1125,9 +1129,10 @@ const Records: React.FC = () => {
           </CollapsibleItem>
         </div>
       </InstructionPanel>
+      </div>
 
       {/* Toolbar & Filter：橫向緊湊排版 */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col xl:flex-row justify-between items-center gap-4">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-col xl:flex-row justify-between items-center gap-3">
           <div className="flex bg-slate-100 rounded-lg p-1 w-full xl:w-auto justify-center">
                 <button 
                     onClick={() => setViewMode('byLeaveTeacher')}
@@ -1250,16 +1255,16 @@ const Records: React.FC = () => {
           }
         };
         return (
-          <div className="mb-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+            <div className="flex items-center gap-2 mb-1.5 min-w-0">
+              <span className="text-xs font-semibold text-slate-600 shrink-0">
                 {viewMode === 'byLeaveTeacher' ? '本月請假（校內）' : '本月代課教師'}
               </span>
-              <span className="text-xs text-slate-400">點姓名篩選；再點一次取消</span>
+              <span className="text-[11px] text-slate-400 truncate hidden sm:inline">點姓名篩選；再點一次取消</span>
               {searchTerm.trim() ? (
                 <button
                   type="button"
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline decoration-indigo-300"
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline decoration-indigo-300 shrink-0 ml-auto"
                   onClick={() => {
                     setSearchInput('');
                     setSearchTerm('');
@@ -1269,7 +1274,7 @@ const Records: React.FC = () => {
                 </button>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
               {tags.map((row) => {
                 const active = q === row.name.trim().toLowerCase();
                 return (
@@ -1294,7 +1299,7 @@ const Records: React.FC = () => {
 
       {/* 多選：批次變更憑證狀態（依請假人 + 有勾選時顯示） */}
       {viewMode === 'byLeaveTeacher' && selectedRecordIds.size > 0 && (
-        <div className="mb-6 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2.5 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-bold text-indigo-900">
             <CheckSquare size={18} className="text-indigo-600 shrink-0" />
             <span>已選 {selectedRecordIds.size} 筆</span>
@@ -1330,7 +1335,7 @@ const Records: React.FC = () => {
       
       {/* Error Log Section */}
       {errorLog && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 animate-fade-in">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 animate-fade-in">
             <div className="flex items-center text-red-800 font-bold mb-2">
                 <AlertTriangle size={20} className="mr-2"/>
                 同步錯誤報告
@@ -1345,9 +1350,11 @@ const Records: React.FC = () => {
         </div>
       )}
 
-      {/* Main Table Content：表頭不換行、可橫向捲動 */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-        <div className="overflow-x-auto -mx-px">
+      </div>
+
+      {/* Main Table Content：表頭不換行；高度上限讓清冊區可獨立直向捲動，不必整頁捲很遠 */}
+      <div className="flex min-h-0 flex-1 flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-h-[calc(100dvh-15.5rem)] sm:max-h-[calc(100dvh-14rem)] md:max-h-[calc(100dvh-12.5rem)] lg:max-h-[calc(100dvh-11rem)]">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain -mx-px">
           {viewMode === 'byLeaveTeacher' ? (
               <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-slate-50 border-b border-slate-200">

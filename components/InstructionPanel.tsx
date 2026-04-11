@@ -7,6 +7,8 @@ interface InstructionPanelProps {
   shortTitle?: string;
   children: React.ReactNode;
   isOpenDefault?: boolean;
+  /** 外層容器額外 class（例如與他欄並排時去掉下邊距） */
+  className?: string;
 }
 
 export const CollapsibleItem: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
@@ -33,15 +35,16 @@ const InstructionPanel: React.FC<InstructionPanelProps> = ({
   title = "使用說明", 
   shortTitle,
   children, 
-  isOpenDefault = false 
+  isOpenDefault = false,
+  className = '',
 }) => {
   const [isOpen, setIsOpen] = useState(isOpenDefault);
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl mb-4 md:mb-6 overflow-hidden transition-all duration-300 shadow-sm">
+    <div className={`bg-slate-50 border border-slate-200 rounded-xl mb-2 md:mb-3 overflow-hidden transition-all duration-300 shadow-sm ${className}`.trim()}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 md:px-5 py-3 md:py-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-slate-800 font-bold border-b border-slate-200 min-h-[44px]"
+        className="w-full px-4 md:px-5 py-2.5 md:py-3 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors text-slate-800 font-bold border-b border-slate-200 min-h-[44px]"
       >
         <div className="flex items-center min-w-0">
           <HelpCircle size={20} className="mr-2 md:mr-3 text-indigo-500 shrink-0" />
