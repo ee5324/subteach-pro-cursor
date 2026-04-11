@@ -159,19 +159,13 @@ function buildLedgerLine(
   }
 
   const salaryPts = subTeacher?.salaryPoints;
-  const salaryPointsText = salaryPts != null && salaryPts > 0 ? String(salaryPts) : '—';
-  // 日薪欄須與「代課鐘點費」（G 欄，= 應發−導師費）對得上：俸點表日薪與實際入帳拆帳可能差 1 元，
-  // 故日／半日以「本列代課鐘點費 ÷ 代課天數」反推顯示，與 GAS 試算表上 D、G 對照習慣一致。
-  let dailyRateText: string;
-  if (detail.payType === PayType.HOURLY) {
-    dailyRateText = '—';
-  } else if (lineDays > 0) {
-    dailyRateText = String(Math.round(substitutePayExclHm / lineDays));
-  } else if (dailyRateNoHm != null) {
-    dailyRateText = String(dailyRateNoHm);
-  } else {
-    dailyRateText = '—';
-  }
+  // 與 GAS buildRowsFromGroups：C 欄薪級＋(有證)/(無證)
+  const salaryPointsText =
+    salaryPts != null && salaryPts > 0
+      ? `${salaryPts}\n${subTeacher?.hasCertificate ? '(有證)' : '(無證)'}`
+      : '—';
+  // D 欄：與 GAS SheetManagerHelpers.getExpectedDailyRateNoHomeroom 相同（鐘點／日薪／半日皆同一儲存格邏輯）
+  const dailyRateText = dailyRateNoHm != null ? String(dailyRateNoHm) : '—';
 
   return {
     key: `${record.id}_${detail.id}`,
@@ -219,6 +213,11 @@ function fmtLedgerQty(n: number): string {
   return n === 0 ? '0' : Number.isInteger(n) ? String(n) : String(n);
 }
 
+/** 與 GAS 清冊儲存格相同：整數、無千分位 */
+function fmtLedgerInt(n: number): string {
+  return String(Math.round(n));
+}
+
 /** 各筆字串皆相同則單行顯示，否則多行 */
 function uniformOrMultiline(values: string[]): string {
   if (values.length === 0) return '—';
@@ -255,13 +254,13 @@ function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): MergedLedgerR
     dailyRateLines: uniformOrMultiline(sorted.map((x) => x.dailyRateText)),
     subDaysLines: sorted.map((x) => fmtLedgerQty(x.subDays)).join('\n'),
     subPeriodsLines: sorted.map((x) => String(x.subPeriods)).join('\n'),
-    substitutePayLines: sorted.map((x) => x.substitutePayExclHomeroom.toLocaleString()).join('\n'),
+    substitutePayLines: sorted.map((x) => fmtLedgerInt(x.substitutePayExclHomeroom)).join('\n'),
     leaveTeacherLines: sorted.map((x) => x.leaveTeacherName).join('\n'),
     leaveTypeLines: uniformOrMultiline(sorted.map((x) => x.leaveTypeLabel)),
     reasonLines: sorted.map((x) => x.reason).join('\n'),
     noteLines: sorted.map((x) => x.note).join('\n'),
     homeroomDaysLines: sorted.map((x) => fmtLedgerQty(x.homeroomDays)).join('\n'),
-    homeroomFeeLines: sorted.map((x) => x.homeroomFee.toLocaleString()).join('\n'),
+    homeroomFeeLines: sorted.map((x) => fmtLedgerInt(x.homeroomFee)).join('\n'),
     payableTotal: sorted.reduce((s, x) => s + x.payableAmount, 0),
   }));
 }
@@ -519,7 +518,7 @@ const TeacherLeavePortal: React.FC = () => {
                             <td className={`${cellMulti} text-center tabular-nums`}>{row.homeroomDaysLines}</td>
                             <td className={`${cellMulti} text-right tabular-nums`}>{row.homeroomFeeLines}</td>
                             <td className={`${tableCell} text-right font-semibold tabular-nums align-top`}>
-                              {row.payableTotal.toLocaleString()}
+                              {fmtLedgerInt(row.payableTotal)}
                             </td>
                           </tr>
                         ))}
@@ -529,11 +528,11 @@ const TeacherLeavePortal: React.FC = () => {
                           </td>
                           <td className={`${tableCell} text-center tabular-nums`}>{String(sumDays)}</td>
                           <td className={`${tableCell} text-center tabular-nums`}>{sumPeriods}</td>
-                          <td className={`${tableCell} text-right tabular-nums`}>{sumSubstitutePay.toLocaleString()}</td>
+                          <td className={`${tableCell} text-right tabular-nums`}>{fmtLedgerInt(sumSubstitutePay)}</td>
                           <td className={tableCell} colSpan={4} />
                           <td className={`${tableCell} text-center tabular-nums`}>{String(sumHmDays)}</td>
-                          <td className={`${tableCell} text-right tabular-nums`}>{sumHmFee.toLocaleString()}</td>
-                          <td className={`${tableCell} text-right tabular-nums`}>{sumPayable.toLocaleString()}</td>
+                          <td className={`${tableCell} text-right tabular-nums`}>{fmtLedgerInt(sumHmFee)}</td>
+                          <td className={`${tableCell} text-right tabular-nums`}>{fmtLedgerInt(sumPayable)}</td>
                         </tr>
                       </tbody>
                     </table>
