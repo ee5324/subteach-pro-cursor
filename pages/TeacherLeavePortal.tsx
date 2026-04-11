@@ -134,13 +134,13 @@ function buildLedgerLine(
     lineDays = 0.5;
     linePeriods = 0;
     lineHomeroomDays = 0.5;
-    lineHomeroomFee = Math.round((HOMEROOM_FEE_MONTHLY / daysInMonth) * 0.5);
+    lineHomeroomFee = Math.ceil((HOMEROOM_FEE_MONTHLY / daysInMonth) * 0.5);
     substitutePayExclHm = ledgerFull - lineHomeroomFee;
   } else {
     lineDays = Number(detail.periodCount) || 0;
     linePeriods = 0;
     lineHomeroomDays = Number(detail.periodCount) || 0;
-    lineHomeroomFee = Math.round((HOMEROOM_FEE_MONTHLY / daysInMonth) * lineHomeroomDays);
+    lineHomeroomFee = Math.ceil((HOMEROOM_FEE_MONTHLY / daysInMonth) * lineHomeroomDays);
     substitutePayExclHm = ledgerFull - lineHomeroomFee;
   }
 
@@ -168,14 +168,14 @@ function buildLedgerLine(
       : '—';
   // D 欄：與 GAS 試算表相同時用俸點表；若舊合併四捨五入使 G 欄與「表列日薪×天數」差 1 元，改以 G÷天數顯示，清冊內不自相矛盾
   const tableProduct =
-    dailyRateNoHm != null && lineDays > 0 ? Math.round(dailyRateNoHm * lineDays) : null;
+    dailyRateNoHm != null && lineDays > 0 ? Math.ceil(dailyRateNoHm * lineDays) : null;
   let dailyRateText: string;
   if (detail.payType === PayType.HOURLY) {
     dailyRateText = dailyRateNoHm != null ? String(dailyRateNoHm) : '—';
   } else if (lineDays > 0 && dailyRateNoHm != null && tableProduct === substitutePayExclHm) {
     dailyRateText = String(dailyRateNoHm);
   } else if (lineDays > 0) {
-    dailyRateText = String(Math.round(substitutePayExclHm / lineDays));
+    dailyRateText = String(Math.ceil(substitutePayExclHm / lineDays));
   } else {
     dailyRateText = dailyRateNoHm != null ? String(dailyRateNoHm) : '—';
   }
@@ -228,7 +228,7 @@ function fmtLedgerQty(n: number): string {
 
 /** 與 GAS 清冊儲存格相同：整數、無千分位 */
 function fmtLedgerInt(n: number): string {
-  return String(Math.round(n));
+  return String(Math.ceil(Number(n) || 0));
 }
 
 /** 各筆字串皆相同則單行顯示，否則多行 */

@@ -927,7 +927,7 @@ var SheetManager = {
             subDays = 0.5;
             group.totalDays += subDays;
             var hDays = 0.5;
-            var hFee = Math.round((4000 / daysInMonth) * hDays);
+            var hFee = Math.ceil((4000 / daysInMonth) * hDays);
             group.homeroomDays += hDays;
             group.homeroomFee += hFee;
             group.hourlyTotal += (detail.calculatedAmount - hFee);
@@ -935,7 +935,7 @@ var SheetManager = {
             subDays = Number(detail.periodCount) || 0;
             group.totalDays += subDays;
             var hDays = subDays;
-            var hFee = Math.round((4000 / daysInMonth) * hDays);
+            var hFee = Math.ceil((4000 / daysInMonth) * hDays);
             group.homeroomDays += hDays;
             group.homeroomFee += hFee;
             group.hourlyTotal += (detail.calculatedAmount - hFee);
@@ -1007,7 +1007,7 @@ var SheetManager = {
                 lineDaysStr = '0.5';
                 linePeriodsStr = '0';
                 lineHomeroomDaysStr = '0.5';
-                lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+                lineHomeroomFeeStr = String(Math.ceil((4000 / daysInMonth) * 0.5) || 0);
                 // G 欄顯示不含導師費
                 payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
             } else {
@@ -1015,7 +1015,7 @@ var SheetManager = {
                 lineDaysStr = String(Number(detail.periodCount) || 0);
                 linePeriodsStr = '0';
                 lineHomeroomDaysStr = String(Number(detail.periodCount) || 0);
-                lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
+                lineHomeroomFeeStr = String(Math.ceil((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
                 // G 欄顯示不含導師費
                 payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
             }
@@ -1100,14 +1100,14 @@ var SheetManager = {
         } else if (detail.payType === '半日薪') {
             lineDaysStr = '0.5';
             lineHomeroomDaysStr = '0.5';
-            lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+            lineHomeroomFeeStr = String(Math.ceil((4000 / daysInMonth) * 0.5) || 0);
             // 家長會清冊的日薪/半日薪：G 欄顯示不含導師費（與一般清冊一致）
             payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
             noteLine = "半日0節";
         } else {
             lineDaysStr = String(Number(detail.periodCount) || 0);
             lineHomeroomDaysStr = lineDaysStr;
-            lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
+            lineHomeroomFeeStr = String(Math.ceil((4000 / daysInMonth) * (Number(detail.periodCount) || 0)) || 0);
             payAmountStr = String((Number(detail.calculatedAmount) || 0) - (Number(lineHomeroomFeeStr) || 0));
             noteLine = lineDaysStr + "日0節";
         }
@@ -1120,7 +1120,7 @@ var SheetManager = {
             lineDaysStr = '0';
             linePeriodsStr = '0';
             lineHomeroomDaysStr = '0.5';
-            lineHomeroomFeeStr = String(Math.round((4000 / daysInMonth) * 0.5) || 0);
+            lineHomeroomFeeStr = String(Math.ceil((4000 / daysInMonth) * 0.5) || 0);
             payAmountStr = '0';
             noteLine = "半日導師費家長會";
         } else if (isCase2a && !isCase1) {
@@ -1152,7 +1152,7 @@ var SheetManager = {
             } else if (detail.payType === '半日薪') {
                 group.totalDays += 0.5;
                 group.homeroomDays += 0.5;
-                var hFee = Math.round((4000 / daysInMonth) * 0.5);
+                var hFee = Math.ceil((4000 / daysInMonth) * 0.5);
                 group.homeroomFee += hFee;
                 group.hourlyTotal += (detail.calculatedAmount - hFee);
                 group.notes.push("半日0節");
@@ -1160,7 +1160,7 @@ var SheetManager = {
                 subDays = Number(detail.periodCount) || 0;
                 group.totalDays += subDays;
                 group.homeroomDays += subDays;
-                var hFee = Math.round((4000 / daysInMonth) * subDays);
+                var hFee = Math.ceil((4000 / daysInMonth) * subDays);
                 group.homeroomFee += hFee;
                 group.hourlyTotal += (detail.calculatedAmount - hFee);
                 group.notes.push(subDays + "日0節");
@@ -1178,7 +1178,7 @@ var SheetManager = {
             }
             if (group.ptaHalfDaySeenByDate) group.ptaHalfDaySeenByDate[String(ymd || '')] = true;
             group.homeroomDays += 0.5;
-            var feeOnly = Math.round((4000 / daysInMonth) * 0.5);
+            var feeOnly = Math.ceil((4000 / daysInMonth) * 0.5);
             group.homeroomFee += feeOnly;
             group.finalAmount += feeOnly;
             group.notes.push("半日導師費家長會");
@@ -1282,7 +1282,7 @@ var SheetManager = {
                 // 當月每日導師費：同一月份固定（4000/當月天數），取首筆有效日期即可
                 if (dailyFee === '') {
                     var dim = SheetManagerHelpers.getSafeDaysInMonth(li.date);
-                    dailyFee = dim ? Math.round(4000 / dim) : '';
+                    dailyFee = dim ? Math.ceil(4000 / dim) : '';
                 }
 
                 dateLines.push(String(li.dateMD || ''));
@@ -1551,7 +1551,7 @@ var SheetManager = {
         if (!voucherTemplate) return;
         var voucherSheet = voucherTemplate.copyTo(newSS);
         voucherSheet.setName(sheetName || "黏貼憑證");
-        var moneyStr = Math.round(Number(sumTotal) || 0).toString();
+        var moneyStr = Math.ceil(Number(sumTotal) || 0).toString();
         var len = moneyStr.length;
         voucherSheet.getRange("J6:O6").clearContent();
         for (var i = 0; i < 6; i++) {
@@ -1564,7 +1564,7 @@ var SheetManager = {
         voucherSheet.getRange("P6").setValue(title);
         voucherSheet.getRange("A22").setValue(title);
         voucherSheet.getRange("P22").setValue(title);
-        voucherSheet.getRange("M22").setValue(Number(sumTotal) || 0);
+        voucherSheet.getRange("M22").setValue(Math.ceil(Number(sumTotal) || 0));
         voucherSheet.getRange("H19").setValue(rocYear);
         voucherSheet.getRange("J19").setValue(month);
         var lastDay = new Date(year, month, 0).getDate();
@@ -1624,7 +1624,7 @@ var SheetManager = {
                 newSheet.setName(item.typeStr);
                 if (item.isPta) {
                     var ptaDaysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
-                    var ptaFeePerDay = Math.round(4000 / ptaDaysInMonth);
+                    var ptaFeePerDay = Math.ceil(4000 / ptaDaysInMonth);
                     newSheet.getRange("D2").setValue("日薪\n(" + ptaDaysInMonth + "日)");
                     var m2Text = "導師費(" + parseInt(month) + "月" + ptaFeePerDay + "元/日)";
                     var m2Rich = SpreadsheetApp.newRichTextValue().setText(m2Text)
@@ -1714,7 +1714,7 @@ var SheetManager = {
     if (!voucherTemplate) return;
     var voucherSheet = voucherTemplate.copyTo(newSS);
     voucherSheet.setName("黏貼憑證");
-    var moneyStr = Math.round(Number(sumTotal) || 0).toString();
+    var moneyStr = Math.ceil(Number(sumTotal) || 0).toString();
     var len = moneyStr.length;
     voucherSheet.getRange("J6:O6").clearContent();
     for (var i = 0; i < 6; i++) {
@@ -1727,7 +1727,7 @@ var SheetManager = {
     voucherSheet.getRange("P6").setValue(title);
     voucherSheet.getRange("A22").setValue(title);
     voucherSheet.getRange("P22").setValue(title);
-    voucherSheet.getRange("M22").setValue(Number(sumTotal) || 0);
+    voucherSheet.getRange("M22").setValue(Math.ceil(Number(sumTotal) || 0));
     voucherSheet.getRange("H19").setValue(rocYear);
     voucherSheet.getRange("J19").setValue(month);
     var lastDay = new Date(year, month, 0).getDate();

@@ -174,7 +174,7 @@ export const calculatePay = (
   if (!subTeacher) return 0;
 
   if (payType === PayType.HOURLY) {
-    return periods * HOURLY_RATE;
+    return Math.ceil(periods * HOURLY_RATE);
   }
 
   const daysInMonth = getDaysInMonth(date) || 30;
@@ -188,22 +188,22 @@ export const calculatePay = (
   const tableDaily = getExpectedDailyRateNoHomeroom(subTeacher, daysInMonth);
 
   if (payType === PayType.DAILY || payType === PayType.HALF_DAY) {
-    // 與 GAS 清冊拆帳一致：本薪日額與導師費「分開四捨五入再加總」，避免 round((x+h)×n) 與 round(x×n)+round(h×n) 差 1 元
+    // 與 GAS 清冊拆帳一致：本薪日額與導師費分項「無條件進位」後再加總（與 SheetManager 4000/當月天數×日數 之 Math.ceil 對齊）
     let basePart: number;
     if (payType === PayType.DAILY) {
       basePart =
         tableDaily != null
-          ? Math.round(tableDaily * periods)
-          : Math.round(baseDailyFloat * periods);
+          ? Math.ceil(tableDaily * periods)
+          : Math.ceil(baseDailyFloat * periods);
     } else {
       basePart =
         tableDaily != null
-          ? Math.round(tableDaily * 0.5 * periods)
-          : Math.round(baseDailyFloat * 0.5 * periods);
+          ? Math.ceil(tableDaily * 0.5 * periods)
+          : Math.ceil(baseDailyFloat * 0.5 * periods);
     }
     if (isHomeroomSubstitute) {
       const hmDays = payType === PayType.DAILY ? periods : 0.5 * periods;
-      const hmPart = Math.round((HOMEROOM_FEE_MONTHLY / daysInMonth) * hmDays);
+      const hmPart = Math.ceil((HOMEROOM_FEE_MONTHLY / daysInMonth) * hmDays);
       return basePart + hmPart;
     }
     return basePart;
@@ -303,7 +303,7 @@ export const convertSlotsToDetails = (
     const isHomeroomSub = (g.payType === PayType.DAILY || g.payType === PayType.HALF_DAY) ? true : (teacher?.isHomeroom || false);
 
     const amount = calculatePay(g.payType, teacher, g.date, count, salaryGrades, isHomeroomSub);
-    const unitRate = count > 0 ? Math.round((amount / count) * 100) / 100 : 0;
+    const unitRate = count > 0 ? Math.ceil((amount / count) * 100) / 100 : 0;
 
     return {
       id: crypto.randomUUID(),

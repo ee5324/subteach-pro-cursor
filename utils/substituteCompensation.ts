@@ -60,14 +60,14 @@ const estimateHomeroomFeeFromDetail = (date: string, payType: PayType, periodCou
   if (payType !== PayType.DAILY && payType !== PayType.HALF_DAY) return 0;
   const daysInMonth = getDaysInMonth(date);
   const dailyHomeroom = HOMEROOM_FEE_MONTHLY / daysInMonth;
-  if (payType === PayType.HALF_DAY) return Math.round(dailyHomeroom * 0.5 * (periodCount || 1));
-  return Math.round(dailyHomeroom * (periodCount || 1));
+  if (payType === PayType.HALF_DAY) return Math.ceil(dailyHomeroom * 0.5 * (periodCount || 1));
+  return Math.ceil(dailyHomeroom * (periodCount || 1));
 };
 
 const estimateHalfDayHomeroomFee = (date: string) => {
   const daysInMonth = getDaysInMonth(date);
   const dailyHomeroom = HOMEROOM_FEE_MONTHLY / daysInMonth;
-  return Math.round(dailyHomeroom * 0.5);
+  return Math.ceil(dailyHomeroom * 0.5);
 };
 
 export function calculateSubstituteMonthlyBreakdown(args: {

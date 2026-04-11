@@ -858,7 +858,7 @@ export default function TeacherManagement() {
                           日薪 {Math.round(((teacher.baseSalary || 0) + (teacher.researchFee || 0)) / currentMonthInfo.daysInMonth)}
                         </span>
                         <span className="text-xs text-slate-500">
-                          導師費 {Math.round(HOMEROOM_FEE_MONTHLY / currentMonthInfo.daysInMonth)}/日
+                          導師費 {Math.ceil(HOMEROOM_FEE_MONTHLY / currentMonthInfo.daysInMonth)}/日
                         </span>
                       </div>
                     ) : (
