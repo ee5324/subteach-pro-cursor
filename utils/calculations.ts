@@ -184,18 +184,29 @@ export const calculatePay = (
     if (grade) baseSalary = Number(grade.salary) || 0;
   }
   const researchFee = Number(subTeacher.researchFee) || 0;
-  let dailyRate = (baseSalary + researchFee) / daysInMonth;
-  if (isHomeroomSubstitute) {
-    dailyRate += HOMEROOM_FEE_MONTHLY / daysInMonth;
-  }
+  const baseDailyFloat = (baseSalary + researchFee) / daysInMonth;
+  const tableDaily = getExpectedDailyRateNoHomeroom(subTeacher, daysInMonth);
 
-  if (payType === PayType.DAILY) {
-    return Math.round(dailyRate * periods);
-  }
-
-  // 半日薪：代課支出為一半的日薪（每「單位」為 0.5 日）
-  if (payType === PayType.HALF_DAY) {
-    return Math.round(dailyRate * 0.5 * periods);
+  if (payType === PayType.DAILY || payType === PayType.HALF_DAY) {
+    // 與 GAS 清冊拆帳一致：本薪日額與導師費「分開四捨五入再加總」，避免 round((x+h)×n) 與 round(x×n)+round(h×n) 差 1 元
+    let basePart: number;
+    if (payType === PayType.DAILY) {
+      basePart =
+        tableDaily != null
+          ? Math.round(tableDaily * periods)
+          : Math.round(baseDailyFloat * periods);
+    } else {
+      basePart =
+        tableDaily != null
+          ? Math.round(tableDaily * 0.5 * periods)
+          : Math.round(baseDailyFloat * 0.5 * periods);
+    }
+    if (isHomeroomSubstitute) {
+      const hmDays = payType === PayType.DAILY ? periods : 0.5 * periods;
+      const hmPart = Math.round((HOMEROOM_FEE_MONTHLY / daysInMonth) * hmDays);
+      return basePart + hmPart;
+    }
+    return basePart;
   }
 
   return 0;

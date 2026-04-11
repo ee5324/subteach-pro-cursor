@@ -116,30 +116,32 @@ function buildLedgerLine(
   const daysInMonth = getDaysInMonth(detail.date) || 30;
   const subTeacher = resolveSubstituteTeacher(detail.substituteTeacherId, teachers);
   const dailyRateNoHm = getExpectedDailyRateNoHomeroom(subTeacher, daysInMonth);
+  const ledgerFull = Number(detail.calculatedAmount) || 0;
 
   let lineDays = 0;
   let linePeriods = 0;
   let lineHomeroomDays = 0;
   let lineHomeroomFee = 0;
-  let substitutePayExclHm = Number(detail.calculatedAmount) || 0;
+  let substitutePayExclHm = 0;
 
   if (detail.payType === PayType.HOURLY) {
     lineDays = 0;
     linePeriods = Number(detail.periodCount) || 0;
     lineHomeroomDays = 0;
     lineHomeroomFee = 0;
+    substitutePayExclHm = ledgerFull;
   } else if (detail.payType === PayType.HALF_DAY) {
     lineDays = 0.5;
     linePeriods = 0;
     lineHomeroomDays = 0.5;
     lineHomeroomFee = Math.round((HOMEROOM_FEE_MONTHLY / daysInMonth) * 0.5);
-    substitutePayExclHm = (Number(detail.calculatedAmount) || 0) - lineHomeroomFee;
+    substitutePayExclHm = ledgerFull - lineHomeroomFee;
   } else {
     lineDays = Number(detail.periodCount) || 0;
     linePeriods = 0;
     lineHomeroomDays = Number(detail.periodCount) || 0;
     lineHomeroomFee = Math.round((HOMEROOM_FEE_MONTHLY / daysInMonth) * lineHomeroomDays);
-    substitutePayExclHm = (Number(detail.calculatedAmount) || 0) - lineHomeroomFee;
+    substitutePayExclHm = ledgerFull - lineHomeroomFee;
   }
 
   let note = '';
@@ -164,8 +166,19 @@ function buildLedgerLine(
     salaryPts != null && salaryPts > 0
       ? `${salaryPts}\n${subTeacher?.hasCertificate ? '(有證)' : '(無證)'}`
       : '—';
-  // D 欄：與 GAS SheetManagerHelpers.getExpectedDailyRateNoHomeroom 相同（鐘點／日薪／半日皆同一儲存格邏輯）
-  const dailyRateText = dailyRateNoHm != null ? String(dailyRateNoHm) : '—';
+  // D 欄：與 GAS 試算表相同時用俸點表；若舊合併四捨五入使 G 欄與「表列日薪×天數」差 1 元，改以 G÷天數顯示，清冊內不自相矛盾
+  const tableProduct =
+    dailyRateNoHm != null && lineDays > 0 ? Math.round(dailyRateNoHm * lineDays) : null;
+  let dailyRateText: string;
+  if (detail.payType === PayType.HOURLY) {
+    dailyRateText = dailyRateNoHm != null ? String(dailyRateNoHm) : '—';
+  } else if (lineDays > 0 && dailyRateNoHm != null && tableProduct === substitutePayExclHm) {
+    dailyRateText = String(dailyRateNoHm);
+  } else if (lineDays > 0) {
+    dailyRateText = String(Math.round(substitutePayExclHm / lineDays));
+  } else {
+    dailyRateText = dailyRateNoHm != null ? String(dailyRateNoHm) : '—';
+  }
 
   return {
     key: `${record.id}_${detail.id}`,
@@ -184,7 +197,7 @@ function buildLedgerLine(
     note,
     homeroomDays: lineHomeroomDays,
     homeroomFee: lineHomeroomFee,
-    payableAmount: Number(detail.calculatedAmount) || 0,
+    payableAmount: ledgerFull,
   };
 }
 
