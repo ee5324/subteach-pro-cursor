@@ -6,9 +6,10 @@ import {
   signInAnonymously,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../src/lib/firebase';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { LogIn, UserPlus, Mail, Lock, Loader2, KeyRound } from 'lucide-react';
 import { isQuickLoginActive, verifyQuickLoginPin, setQuickLoginConfig } from '../utils/quickLoginStorage';
+import { safePathAfterLogin } from '../utils/postLoginRedirect';
 
 const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -19,6 +20,8 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [quickPin, setQuickPin] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
+  const afterLoginPath = safePathAfterLogin(location.state);
 
   // 測試模式：網址帶 ?testPin=5012 時啟用 PIN、預填，並自動以該 PIN 匿名登入
   useEffect(() => {
@@ -34,7 +37,7 @@ const Login: React.FC = () => {
     }
     setLoading(true);
     signInAnonymously(auth)
-      .then(() => navigate('/'))
+      .then(() => navigate(afterLoginPath, { replace: true }))
       .catch((err: any) => {
         console.error('Anonymous auth failed', err);
         let msg = err?.message || '匿名登入失敗';
@@ -44,7 +47,7 @@ const Login: React.FC = () => {
         setError(msg);
       })
       .finally(() => setLoading(false));
-  }, [searchParams]);
+  }, [searchParams, afterLoginPath, navigate]);
 
   const handleQuickAnonymousLogin = async (pinOverride?: string) => {
     const pinToUse = pinOverride ?? quickPin;
@@ -62,7 +65,7 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       await signInAnonymously(auth);
-      navigate('/');
+      navigate(afterLoginPath, { replace: true });
     } catch (err: any) {
       console.error('Anonymous auth failed', err);
       let msg = err.message || '匿名登入失敗';
@@ -92,7 +95,7 @@ const Login: React.FC = () => {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-      navigate('/'); // Redirect to dashboard after login
+      navigate(afterLoginPath, { replace: true });
     } catch (err: any) {
       console.error("Auth failed", err);
       let msg = err.message;
@@ -119,7 +122,7 @@ const Login: React.FC = () => {
 
     try {
       await signInWithPopup(auth, googleProvider);
-      navigate('/');
+      navigate(afterLoginPath, { replace: true });
     } catch (err: any) {
       console.error("Google auth failed", err);
       let msg = err.message;

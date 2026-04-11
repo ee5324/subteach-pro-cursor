@@ -1,7 +1,7 @@
 
 import React, { ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Layout from './Layout';
 import EntryForm from './pages/EntryForm';
 import TeacherManagement from './pages/TeacherManagement';
@@ -69,11 +69,12 @@ function PageErrorBoundary({ children, fallbackTitle }: { children: ReactNode; f
 
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   const { currentUser, loading, notAllowed } = useAppStore();
-  
+  const location = useLocation();
+
   if (loading) return <div className="h-screen flex items-center justify-center bg-slate-100 text-slate-400">載入中...</div>;
-  
+
   if (!currentUser) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (notAllowed) {
