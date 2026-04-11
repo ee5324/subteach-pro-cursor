@@ -151,7 +151,7 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
         <NavLink to="/leave-rules" className={linkClass} onClick={onClose}>
           <BookOpenText size={18} />
-          <span>請假規則</span>
+          <span>差假排代簡表</span>
         </NavLink>
 
         {/* Group 1: 日常作業 */}

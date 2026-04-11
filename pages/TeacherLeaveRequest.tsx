@@ -377,7 +377,7 @@ export default function TeacherLeaveRequest() {
             {LEAVE_TYPE_GUIDE.map((g) => (
               <p key={g.type} className="break-words"><strong className="text-slate-800">{g.type}</strong>：{g.text}</p>
             ))}
-            <p className="text-slate-500 text-xs mt-2">詳細日數與條件請參照校內「請假規則」或人事相關規定。</p>
+            <p className="text-slate-500 text-xs mt-2">詳細日數與條件請參照校內「差假排代簡表」或人事相關規定。</p>
           </div>
         )}
       </section>

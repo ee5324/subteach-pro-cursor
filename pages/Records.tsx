@@ -10,6 +10,7 @@ import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicat
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
+import SubstituteSalaryReferencePanel, { CHC_SALARY_TABLE_114_PDF } from '../components/SubstituteSalaryReferencePanel';
 
 type ViewMode = 'byLeaveTeacher' | 'bySubstituteTeacher';
 
@@ -1009,7 +1010,17 @@ const Records: React.FC = () => {
                 <p className="text-slate-500 mt-1 md:mt-2 text-sm md:text-base hidden sm:block">查看並匯出每月代課紀錄、清冊與相關憑證</p>
             </div>
             
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <a
+                    href={CHC_SALARY_TABLE_114_PDF}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[44px] flex-1 sm:flex-none px-4 py-2.5 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center justify-center space-x-2 text-sm font-medium transition-colors"
+                    title="彰化縣 114 學年度學校公教待遇一覽表（PDF）"
+                >
+                    <FileText size={18} />
+                    <span>114教師薪水表</span>
+                </a>
                 <button 
                     onClick={handleOpenSpreadsheet}
                     className="min-h-[44px] flex-1 sm:flex-none px-4 py-2.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center justify-center space-x-2 text-sm font-medium transition-colors"
@@ -1031,6 +1042,8 @@ const Records: React.FC = () => {
             </div>
         </div>
       </header>
+
+      <SubstituteSalaryReferencePanel salaryGrades={salaryGrades} />
 
       <InstructionPanel title="使用說明：代課清冊與憑證" shortTitle="使用說明">
         <div className="space-y-1">
