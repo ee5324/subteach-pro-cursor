@@ -4,6 +4,54 @@ import leaveRows from '../data/leaveRulesMurakami.json';
 
 type LeaveRow = (typeof leaveRows)[number];
 
+type TailCellMerge = { show: boolean; rowSpan: number };
+type TailMerges = {
+  teacher: TailCellMerge;
+  agent: TailCellMerge;
+  notes: TailCellMerge;
+  duty: TailCellMerge;
+};
+
+/** 連續列、同假別且欄位字串完全相同時合併（專任教師／代理聘僱／注意事項／課務），減少重複 */
+function computeTailMerges(rows: LeaveRow[]): TailMerges[] {
+  const n = rows.length;
+  const init = (): TailMerges => ({
+    teacher: { show: true, rowSpan: 1 },
+    agent: { show: true, rowSpan: 1 },
+    notes: { show: true, rowSpan: 1 },
+    duty: { show: true, rowSpan: 1 },
+  });
+  const out: TailMerges[] = rows.map(() => init());
+
+  const keys = ['teacher', 'agent', 'notes', 'duty'] as const;
+
+  for (const key of keys) {
+    let i = 0;
+    while (i < n) {
+      if (rows[i].category === '備註') {
+        i += 1;
+        continue;
+      }
+      const base = rows[i];
+      let j = i;
+      while (j + 1 < n) {
+        const next = rows[j + 1];
+        if (next.category === '備註') break;
+        if (next.category !== base.category) break;
+        if (next[key] !== base[key]) break;
+        j += 1;
+      }
+      const span = j - i + 1;
+      out[i][key] = { show: true, rowSpan: span };
+      for (let k = i + 1; k <= j; k++) {
+        out[k][key] = { show: false, rowSpan: 1 };
+      }
+      i = j + 1;
+    }
+  }
+  return out;
+}
+
 function computeCategorySpans(rows: LeaveRow[]): { rowSpan: number; show: boolean }[] {
   const spans: { rowSpan: number; show: boolean }[] = rows.map(() => ({ rowSpan: 1, show: true }));
   let i = 0;
@@ -24,7 +72,9 @@ function computeCategorySpans(rows: LeaveRow[]): { rowSpan: number; show: boolea
 }
 
 const LeaveRules: React.FC = () => {
-  const spans = useMemo(() => computeCategorySpans(leaveRows as LeaveRow[]), []);
+  const rows = leaveRows as LeaveRow[];
+  const spans = useMemo(() => computeCategorySpans(rows), []);
+  const tailMerges = useMemo(() => computeTailMerges(rows), []);
 
   return (
     <div className="p-6 md:p-8 max-w-[100rem] mx-auto">
@@ -38,7 +88,7 @@ const LeaveRules: React.FC = () => {
 
       <InstructionPanel title="使用說明" isOpenDefault={false}>
         <p>
-          「注意事項」欄佔表格主要寬度；「細項」與「給假日數」三欄亦會依比例留寬並可換行（含括號補註），避免文字溢出格線。極窄視窗時可橫向捲動整表。假別欄已依原表合併同類多列（例：流產假、喪假、休假）。
+          「注意事項」欄佔表格主要寬度；「細項」與「給假日數」三欄亦會依比例留寬並可換行（含括號補註），避免文字溢出格線。連續列若「專任教師／代理聘僱／注意事項／課務」內文完全相同，會自動合併儲存格。極窄視窗時可橫向捲動整表。假別欄已依原表合併同類多列（例：流產假、喪假、休假）。
         </p>
         <p>表末備註列載明原表所依據之法規與縣府文件；與本系統代課計算邏輯無自動連動。</p>
       </InstructionPanel>
@@ -81,7 +131,7 @@ const LeaveRules: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {(leaveRows as LeaveRow[]).map((row, idx) => {
+              {rows.map((row, idx) => {
                 if (row.category === '備註') {
                   return (
                     <tr key={`row-${idx}`} className="bg-slate-50">
@@ -92,6 +142,10 @@ const LeaveRules: React.FC = () => {
                   );
                 }
                 const s = spans[idx];
+                const m = tailMerges[idx];
+                const cellClass =
+                  'border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug';
+
                 return (
                   <tr key={`row-${idx}`} className="hover:bg-slate-50/80">
                     {s.show && (
@@ -105,21 +159,33 @@ const LeaveRules: React.FC = () => {
                     <td className="border border-slate-200 px-2 py-2 text-slate-700 align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
                       {row.detail || '—'}
                     </td>
-                    <td className="border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
-                      {row.civil || '—'}
-                    </td>
-                    <td className="border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
-                      {row.teacher || '—'}
-                    </td>
-                    <td className="border border-slate-200 px-1.5 py-2 text-center align-top text-xs md:text-sm min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
-                      {row.agent || '—'}
-                    </td>
-                    <td className="border border-slate-200 px-3 py-2.5 text-slate-700 leading-relaxed align-top text-xs sm:text-sm min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
-                      {row.notes}
-                    </td>
-                    <td className="border border-slate-200 px-2 py-2 text-xs text-slate-700 align-top min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
-                      {row.duty || '—'}
-                    </td>
+                    <td className={cellClass}>{row.civil || '—'}</td>
+                    {m.teacher.show && (
+                      <td className={cellClass} rowSpan={m.teacher.rowSpan}>
+                        {row.teacher || '—'}
+                      </td>
+                    )}
+                    {m.agent.show && (
+                      <td className={cellClass} rowSpan={m.agent.rowSpan}>
+                        {row.agent || '—'}
+                      </td>
+                    )}
+                    {m.notes.show && (
+                      <td
+                        className="border border-slate-200 px-3 py-2.5 text-slate-700 leading-relaxed align-top text-xs sm:text-sm min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap"
+                        rowSpan={m.notes.rowSpan}
+                      >
+                        {row.notes}
+                      </td>
+                    )}
+                    {m.duty.show && (
+                      <td
+                        className="border border-slate-200 px-2 py-2 text-xs text-slate-700 align-top min-w-0 break-words [overflow-wrap:anywhere] leading-snug"
+                        rowSpan={m.duty.rowSpan}
+                      >
+                        {row.duty || '—'}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
