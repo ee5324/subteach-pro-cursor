@@ -5,7 +5,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
-import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer, ChevronDown, ChevronUp, Layers, Edit2, CheckCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer, ChevronDown, ChevronUp, Layers, Edit2, CheckCircle, CloudDownload, Calculator } from 'lucide-react';
+import SettingsFloatingCalculator from '../components/SettingsFloatingCalculator';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 import { TeacherType, SalaryGrade, SemesterDefinition } from '../types';
@@ -534,6 +535,155 @@ const Settings: React.FC = () => {
 
       <InstructionPanel title="使用說明：系統設定">
         <div className="space-y-1">
+          <CollapsibleItem title="本頁各區塊與按鈕（圖示總覽）">
+            <ul className="text-sm text-slate-700 space-y-3 list-none">
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-emerald-600 shrink-0" aria-hidden />
+                  白名單管理
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1 text-slate-600 border-l-2 border-emerald-100 pl-3">
+                  <li className="flex items-start gap-2">
+                    <UserPlus size={15} className="text-emerald-600 shrink-0 mt-0.5" aria-hidden />
+                    <span>加入白名單：輸入 Email、選擇角色（一般／管理員）後送出。</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Trash2 size={15} className="text-slate-400 shrink-0 mt-0.5" aria-hidden />
+                    <span>列表「操作」欄：垃圾桶為從白名單移除；列上可切換啟用與編輯角色。</span>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <BookOpen size={16} className="text-indigo-500 shrink-0" aria-hidden />
+                  學期與重要日期設定
+                </span>
+                <p className="mt-1.5 ml-1 border-l-2 border-indigo-100 pl-3 text-slate-600">僅日期欄位，變更即寫入設定；影響固定兼課週數與畢業班超鐘點扣除等邏輯。</p>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Layers size={16} className="text-violet-600 shrink-0" aria-hidden />
+                  學期清冊（預設課表綁定哪一學期）
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1 text-slate-600 border-l-2 border-violet-100 pl-3">
+                  <li><strong>改為綁定此學期</strong>：全站預設週課表改讀寫該學期版本。</li>
+                  <li className="inline-flex items-center gap-2"><Edit2 size={14} className="text-slate-500" aria-hidden /> <strong>編輯</strong>：修改學期名稱與起迄日。</li>
+                  <li className="inline-flex items-center gap-2"><Trash2 size={14} className="text-red-500" aria-hidden /> <strong>刪除</strong>：自清冊移除該學期（教師曾存過的課表資料仍可能在文件中）。</li>
+                  <li className="inline-flex items-center gap-2"><Plus size={14} className="text-violet-600" aria-hidden /> <strong>新增並設為綁定學期</strong>：建立新學期並設為目前綁定。</li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Database size={16} className="text-cyan-600 shrink-0" aria-hidden />
+                  俸點級距表（可編輯）
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1.5 text-slate-600 border-l-2 border-cyan-100 pl-3">
+                  <li className="flex items-start gap-2">
+                    <CloudDownload size={15} className="text-cyan-600 shrink-0 mt-0.5" aria-hidden />
+                    <span>
+                      <strong>第一次匯入既有俸點資料</strong>：將系統內建的預設俸點（目前為 150、190、200 三筆，含本俸與各類學術研究費欄位）<strong>只補上尚未存在</strong>的俸點列至 Firebase；已存在的俸點<strong>不會被覆寫</strong>。適用新站或表格空白時快速建立底稿，之後仍請以「儲存俸點表」維護完整級距。
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Plus size={15} className="text-slate-600 shrink-0 mt-0.5" aria-hidden />
+                    <span>
+                      <strong>新增俸點</strong>：在表末新增一列空白，可手動輸入俸點與金額。
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Save size={15} className="text-indigo-600 shrink-0 mt-0.5" aria-hidden />
+                    <span>
+                      <strong>儲存俸點表</strong>：將目前畫面上的級距寫入雲端；教師編輯頁、代課金額試算與「重算」功能皆依此表對照。
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Trash2 size={15} className="text-slate-400 shrink-0 mt-0.5" aria-hidden />
+                    <span>每列右側垃圾桶：刪除該俸點列（儲存後才生效於資料庫）。</span>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Calendar size={16} className="text-rose-500 shrink-0" aria-hidden />
+                  國定假日與補假設定
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1 text-slate-600 border-l-2 border-rose-100 pl-3">
+                  <li className="flex items-start gap-2">
+                    <Plus size={15} className="text-rose-500 shrink-0 mt-0.5" aria-hidden />
+                    <span>選日期後按「加入清單」。</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Trash2 size={15} className="text-slate-400 shrink-0 mt-0.5" aria-hidden />
+                    <span>列表中垃圾桶：移除該假日。</span>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Users size={16} className="text-slate-600 shrink-0" aria-hidden />
+                  匯出學校教師名單
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1 text-slate-600 border-l-2 border-slate-200 pl-3">
+                  <li className="flex items-start gap-2">
+                    <FileDown size={15} className="text-slate-700 shrink-0 mt-0.5" aria-hidden />
+                    <span><strong>下載 CSV</strong>：匯出目前教師管理名單。</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Printer size={15} className="text-slate-600 shrink-0 mt-0.5" aria-hidden />
+                    <span><strong>列印此表</strong>：開新視窗供列印。</span>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <KeyRound size={16} className="text-amber-600 shrink-0" aria-hidden />
+                  PIN 測試登入
+                </span>
+                <p className="mt-1.5 ml-1 border-l-2 border-amber-100 pl-3 text-slate-600">勾選啟用、設定 PIN 後按「儲存 PIN」；設定僅存本機瀏覽器。</p>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Wifi size={16} className="text-slate-500 shrink-0" aria-hidden />
+                  連線設定（GAS）
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1 text-slate-600 border-l-2 border-slate-200 pl-3">
+                  <li className="flex items-start gap-2">
+                    <Save size={15} className="text-slate-700 shrink-0 mt-0.5" aria-hidden />
+                    <span>儲存 Web App URL。</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Copy size={15} className="text-indigo-600 shrink-0 mt-0.5" aria-hidden />
+                    <span>複製目前使用的 GAS 網址或本頁網址。</span>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Database size={16} className="text-emerald-600 shrink-0" aria-hidden />
+                  資料庫遷移（Firebase）
+                </span>
+                <ul className="mt-1.5 ml-1 space-y-1 text-slate-600 border-l-2 border-emerald-100 pl-3">
+                  <li className="flex items-start gap-2">
+                    <Download size={15} className="text-slate-600 shrink-0 mt-0.5" aria-hidden />
+                    <span><strong>從 GAS 載入舊資料</strong>：自試算表預覽載入。</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CloudUpload size={15} className="text-emerald-600 shrink-0 mt-0.5" aria-hidden />
+                    <span><strong>遷移至 Firebase</strong>：寫入雲端。</span>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-2">
+                  <Calculator size={16} className="text-indigo-600 shrink-0" aria-hidden />
+                  懸浮計算機
+                </span>
+                <p className="mt-1.5 ml-1 border-l-2 border-indigo-100 pl-3 text-slate-600">
+                  畫面右下角（預設）會出現圓形計算機按鈕，固定在<strong>視窗內</strong>（捲動頁面時仍看得見）。左側直條為<strong>拖曳握把</strong>，按住可移動位置以免遮住內容；點右側圖示可<strong>展開／收合</strong>計算機面板。位置與展開狀態會記在瀏覽器本機。
+                </p>
+              </li>
+            </ul>
+          </CollapsibleItem>
           <CollapsibleItem title="學期與畢業日期設定">
             <p>設定學期開始與結束日期，這會影響「固定兼課」與「超鐘點」的計算週數。畢業典禮日期則用於自動扣除六年級導師畢業後的超鐘點節數。</p>
           </CollapsibleItem>
@@ -899,26 +1049,27 @@ const Settings: React.FC = () => {
                     type="button"
                     onClick={handleSeedSalaryGrades}
                     disabled={salarySaving}
-                    className="px-3 py-2 rounded-lg border border-cyan-300 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-sm font-bold disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-cyan-300 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 text-sm font-bold disabled:opacity-60"
                   >
+                    <CloudDownload size={16} className="shrink-0" aria-hidden />
                     第一次匯入既有俸點資料
                   </button>
                   <button
                     type="button"
                     onClick={handleAddSalaryRow}
                     disabled={salarySaving}
-                    className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-sm font-bold"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-sm font-bold disabled:opacity-60"
                   >
-                    <Plus size={14} className="inline mr-1" />
+                    <Plus size={16} className="shrink-0 text-slate-600" aria-hidden />
                     新增俸點
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveSalaryGrades}
                     disabled={salarySaving}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold disabled:opacity-60 flex items-center gap-1"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold disabled:opacity-60"
                   >
-                    {salarySaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    {salarySaving ? <Loader2 size={16} className="animate-spin shrink-0" aria-hidden /> : <Save size={16} className="shrink-0" aria-hidden />}
                     儲存俸點表
                   </button>
                 </div>
@@ -954,7 +1105,14 @@ const Settings: React.FC = () => {
                       ))}
                       {salaryRows.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-slate-400">尚無俸點資料，請先點「第一次匯入既有俸點資料」。</td>
+                          <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                            尚無俸點資料，請先點上方「
+                            <span className="inline-flex items-center gap-0.5 align-middle text-cyan-700 font-medium">
+                              <CloudDownload size={14} className="inline shrink-0" aria-hidden />
+                              第一次匯入既有俸點資料
+                            </span>
+                            」。
+                          </td>
                         </tr>
                       )}
                     </tbody>
@@ -1273,6 +1431,7 @@ const Settings: React.FC = () => {
         </section>
 
       </div>
+      <SettingsFloatingCalculator />
     </div>
   );
 };
