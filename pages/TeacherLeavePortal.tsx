@@ -262,8 +262,12 @@ function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): MergedLedgerR
 
 const ALL_LEAVE_TYPES = Object.values(LeaveType) as LeaveType[];
 
-/** 頁面數字（含表格內文）以 Times New Roman 呈現 */
+/** 頁面表格外之數字以 Times New Roman 呈現 */
 const NUM_FONT = "tabular-nums font-['Times_New_Roman',Times,serif]";
+
+/** 清冊表格：英數 Times New Roman；中文標楷體（macOS DFKai-SB／Windows 標楷體等 fallback） */
+const LEDGER_TABLE_FONT_FAMILY =
+  '"Times New Roman", Times, "標楷體", "DFKai-SB", "BiauKai ST", "BiauKai", "KaiTi", "Kaiti SC", serif';
 
 const TeacherLeavePortal: React.FC = () => {
   const { records, teachers, loading } = useAppStore();
@@ -470,8 +474,11 @@ const TeacherLeavePortal: React.FC = () => {
                     </p>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-base md:text-lg font-serif">
-                      <thead className="[font-family:ui-sans-serif,system-ui,sans-serif]">
+                    <table
+                      className="w-full border-collapse text-base md:text-lg tabular-nums"
+                      style={{ fontFamily: LEDGER_TABLE_FONT_FAMILY }}
+                    >
+                      <thead>
                         <tr>
                           <th className={tableHead}>代課日期</th>
                           <th className={tableHead}>代課教師</th>
@@ -489,7 +496,7 @@ const TeacherLeavePortal: React.FC = () => {
                           <th className={tableHead}>應發金額</th>
                         </tr>
                       </thead>
-                      <tbody className={NUM_FONT}>
+                      <tbody>
                         {mergedRows.map((row) => (
                           <tr key={row.key}>
                             <td className={`${cellMulti} text-center`}>{row.dateLines}</td>
