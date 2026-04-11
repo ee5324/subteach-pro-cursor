@@ -18,20 +18,9 @@ function outerSize(isOpen: boolean): { w: number; h: number } {
   return { w: Math.max(PANEL_W, FAB_W), h: PANEL_H + CALC_GAP + FAB_H };
 }
 
-/** 視窗右下角預設（左上是外層容器座標） */
-function defaultBottomRightPos(isOpen: boolean): { left: number; top: number } {
-  const { w, h } = outerSize(isOpen);
-  const iw = window.innerWidth;
-  const ih = window.innerHeight;
-  const margin = 16;
-  const desiredLeft = iw - w - margin;
-  const desiredTop = ih - h - margin;
-  const maxLeft = Math.max(8, iw - w - 8);
-  const maxTop = Math.max(8, ih - h - 8);
-  return {
-    left: clamp(desiredLeft, 8, maxLeft),
-    top: clamp(desiredTop, 8, maxTop),
-  };
+/** 視窗右下角預設：以距離右、下邊緣的像素錨定（收合／展開僅改高度，角點不漂移） */
+function defaultCorner(): { right: number; bottom: number } {
+  return { right: 16, bottom: 16 };
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -75,25 +64,24 @@ const FloatingCalculator: React.FC = () => {
       return false;
     }
   });
-  /** 初次載入時是否展開（僅用於右下角高度計算，避免依賴陣列含 open 導致切換時重設位置） */
-  const openForInitialLayoutRef = useRef(open);
   const [expr, setExpr] = useState('');
-  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  /** 固定以右下角為錨（CSS right／bottom），避免展開時用 top+大高度、收合後僅剩 FAB 造成視覺位移 */
+  const [corner, setCorner] = useState<{ right: number; bottom: number }>({ right: 16, bottom: 16 });
   const [mounted, setMounted] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const exprInputRef = useRef<HTMLInputElement>(null);
-  const posRef = useRef(pos);
-  posRef.current = pos;
+  const cornerRef = useRef(corner);
+  cornerRef.current = corner;
 
   const dragRef = useRef<{
     active: boolean;
     pid: number | null;
     startX: number;
     startY: number;
-    origLeft: number;
-    origTop: number;
-  }>({ active: false, pid: null, startX: 0, startY: 0, origLeft: 0, origTop: 0 });
+    origRight: number;
+    origBottom: number;
+  }>({ active: false, pid: null, startX: 0, startY: 0, origRight: 16, origBottom: 16 });
 
   useEffect(() => {
     try {
@@ -101,7 +89,7 @@ const FloatingCalculator: React.FC = () => {
     } catch {
       /* ignore */
     }
-    setPos(defaultBottomRightPos(openForInitialLayoutRef.current));
+    setCorner(defaultCorner());
     setMounted(true);
   }, []);
 
@@ -202,14 +190,19 @@ const FloatingCalculator: React.FC = () => {
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d.active || d.pid !== e.pointerId) return;
-      const dx = e.clientX - d.startX;
-      const dy = e.clientY - d.startY;
       const { w, h } = outerSize(open);
-      const maxL = Math.max(8, window.innerWidth - w - 8);
-      const maxT = Math.max(8, window.innerHeight - h - 8);
-      setPos({
-        left: clamp(d.origLeft + dx, 8, maxL),
-        top: clamp(d.origTop + dy, 8, maxT),
+      const iw = window.innerWidth;
+      const ih = window.innerHeight;
+      const minR = 8;
+      const minB = 8;
+      const maxR = Math.max(minR, iw - w - 8);
+      const maxB = Math.max(minB, ih - h - 8);
+      // 游標往右移 → 元件往右跟 → right 變小
+      const newRight = d.origRight - (e.clientX - d.startX);
+      const newBottom = d.origBottom - (e.clientY - d.startY);
+      setCorner({
+        right: clamp(newRight, minR, maxR),
+        bottom: clamp(newBottom, minB, maxB),
       });
     };
     const onUp = (e: PointerEvent) => {
@@ -229,11 +222,15 @@ const FloatingCalculator: React.FC = () => {
     if (!mounted) return;
     const onResize = () => {
       const { w, h } = outerSize(open);
-      const maxL = Math.max(8, window.innerWidth - w - 8);
-      const maxT = Math.max(8, window.innerHeight - h - 8);
-      setPos((p) => ({
-        left: clamp(p.left, 8, maxL),
-        top: clamp(p.top, 8, maxT),
+      const iw = window.innerWidth;
+      const ih = window.innerHeight;
+      const minR = 8;
+      const minB = 8;
+      const maxR = Math.max(minR, iw - w - 8);
+      const maxB = Math.max(minB, ih - h - 8);
+      setCorner((c) => ({
+        right: clamp(c.right, minR, maxR),
+        bottom: clamp(c.bottom, minB, maxB),
       }));
     };
     window.addEventListener('resize', onResize);
@@ -248,8 +245,8 @@ const FloatingCalculator: React.FC = () => {
       pid: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      origLeft: posRef.current.left,
-      origTop: posRef.current.top,
+      origRight: cornerRef.current.right,
+      origBottom: cornerRef.current.bottom,
     };
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -270,7 +267,7 @@ const FloatingCalculator: React.FC = () => {
   return (
     <div
       className="fixed z-[9980] flex flex-col items-end gap-1 pointer-events-none [&>*]:pointer-events-auto"
-      style={{ left: pos.left, top: pos.top }}
+      style={{ right: corner.right, bottom: corner.bottom, left: 'auto', top: 'auto' }}
       aria-live="polite"
     >
       {open && (

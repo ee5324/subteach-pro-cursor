@@ -6,7 +6,15 @@ import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
 
+function formatLastCommitLabel(iso: string): string | null {
+  if (!iso?.trim()) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return `版本 ${iso.trim()}`;
+  return `版本 ${d.toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' })}`;
+}
+
 const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
+  const commitLabel = formatLastCommitLabel(__LAST_COMMIT_ISO__);
   const { settings, checkGasConnection, records, loading, currentUser, publicBoardApplications, teacherLeaveRequests, isSubteachAdmin } = useAppStore();
   const hasGasUrl = Boolean(settings?.gasWebAppUrl?.trim());
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'online' | 'offline' | 'unset'>(hasGasUrl ? 'checking' : 'unset');
@@ -79,6 +87,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             SubTeach Pro
           </h1>
           <p className="text-xs text-slate-500 mt-1">代課薪資管理系統</p>
+          {commitLabel && (
+            <p className="text-[10px] text-slate-600 mt-1 font-mono tabular-nums leading-tight" title="以本機最後一筆 git commit 時間注入（dev／build 啟動時更新）">
+              {commitLabel}
+            </p>
+          )}
         </div>
         <button onClick={onClose} className="md:hidden text-slate-400 hover:text-white">
             <X size={20} />
