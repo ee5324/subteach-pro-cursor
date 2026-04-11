@@ -138,6 +138,28 @@ export const getExpectedDailyRate = (teacher: Teacher, daysInMonth: number, isHo
 };
 
 /**
+ * 俸點日薪（與 GAS SheetManagerHelpers.getExpectedDailyRateNoHomeroom 一致）：僅 DAILY_RATE_TABLE，不含導師費每日加計。
+ * 用於印領清冊「日薪」欄；鐘點明細不適用時由呼叫端顯示空白或「—」。
+ */
+export const getExpectedDailyRateNoHomeroom = (teacher: Teacher | undefined, daysInMonth: number): number | null => {
+  if (!teacher?.salaryPoints || !daysInMonth) return null;
+  let key = `${teacher.salaryPoints}`;
+  if (
+    teacher.salaryPoints === 150 ||
+    teacher.salaryPoints === 180 ||
+    teacher.salaryPoints === 245 ||
+    teacher.salaryPoints === 625 ||
+    teacher.salaryPoints === 650
+  ) {
+    key += teacher.hasCertificate ? '有教證' : '無教證';
+  }
+  const rates = DAILY_RATE_TABLE[key];
+  if (!rates) return null;
+  const rate = rates[daysInMonth];
+  return rate != null ? rate : null;
+};
+
+/**
  * Calculates the pay for a single substitution entry
  * Updated: Supports Salary Grade Table lookup
  */
