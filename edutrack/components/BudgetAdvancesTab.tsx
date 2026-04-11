@@ -39,6 +39,7 @@ const STATUS_LABEL: Record<BudgetAdvanceStatus, string> = {
   outstanding: '進行中',
   purchase_not_submitted: '尚未送請購',
   purchase_submitted: '已經送出請購',
+  purchase_vendor_prepaid: '請購中，已先付廠商',
   settled: '已結清',
   cancelled: '作廢',
 };
@@ -88,6 +89,7 @@ function mergeAdvanceStatusOnSave(
     if (patch.status !== undefined) return patch.status;
     if (row.status === 'purchase_submitted') return 'purchase_submitted';
     if (row.status === 'purchase_not_submitted') return 'purchase_not_submitted';
+    if (row.status === 'purchase_vendor_prepaid') return 'purchase_vendor_prepaid';
     return row.status === 'settled' ? 'outstanding' : row.status;
   }
   if (patch.status !== undefined) return patch.status;
@@ -391,7 +393,9 @@ const BudgetAdvancesTab: React.FC = () => {
             status:
               sd && pd
                 ? 'settled'
-                : row.status === 'purchase_submitted' || row.status === 'purchase_not_submitted'
+                : row.status === 'purchase_submitted' ||
+                    row.status === 'purchase_not_submitted' ||
+                    row.status === 'purchase_vendor_prepaid'
                   ? row.status
                   : 'outstanding',
             settledDate: d,

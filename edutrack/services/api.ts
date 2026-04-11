@@ -840,7 +840,8 @@ function parseAdvanceStatus(v: unknown): BudgetAdvanceStatus {
     v === 'cancelled' ||
     v === 'outstanding' ||
     v === 'purchase_not_submitted' ||
-    v === 'purchase_submitted'
+    v === 'purchase_submitted' ||
+    v === 'purchase_vendor_prepaid'
   ) {
     return v;
   }

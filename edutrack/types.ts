@@ -248,6 +248,7 @@ export type BudgetAdvanceStatus =
   | 'outstanding'
   | 'purchase_not_submitted'
   | 'purchase_submitted'
+  | 'purchase_vendor_prepaid'
   | 'settled'
   | 'cancelled';
 
