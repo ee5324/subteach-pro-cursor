@@ -26,6 +26,7 @@ import {
   updateDoc,
   getDoc,
   getDocs,
+  deleteField,
   type DocumentData,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -122,7 +123,7 @@ interface AppContextType {
   /** 是否為代課系統管理員（可管理白名單） */
   isSubteachAdmin: boolean;
   addSubteachAllowedUser: (email: string, role: 'admin' | 'user', displayName?: string) => Promise<void>;
-  updateSubteachAllowedUser: (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName'>>) => Promise<void>;
+  updateSubteachAllowedUser: (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName' | 'linkedTeacherId'>>) => Promise<void>;
   removeSubteachAllowedUser: (email: string) => Promise<void>;
 
   updateTeacherLeaveRequestStatus: (id: string, status: 'pending' | 'imported' | 'archived') => Promise<void>;
@@ -1323,11 +1324,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }));
   };
 
-  const updateSubteachAllowedUser = async (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName'>>) => {
+  const updateSubteachAllowedUser = async (
+    email: string,
+    data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName' | 'linkedTeacherId'>>,
+  ) => {
     if (!db) throw new Error('Firebase 未初始化');
     const normalizedEmail = email.trim().toLowerCase();
     const ref = doc(db, 'subteach_allowed_users', normalizedEmail);
-    await updateDoc(ref, sanitizeForFirestore({ ...data, updatedAt: Date.now() }) as any);
+    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    if (data.enabled !== undefined) patch.enabled = data.enabled;
+    if (data.role !== undefined) patch.role = data.role;
+    if (data.displayName !== undefined) patch.displayName = data.displayName;
+    if (data.linkedTeacherId !== undefined) {
+      const v = String(data.linkedTeacherId || '').trim();
+      patch.linkedTeacherId = v ? v : deleteField();
+    }
+    // 不可經 sanitizeForFirestore：linkedTeacherId 清除時為 deleteField()
+    await updateDoc(ref, patch as DocumentData);
   };
 
   const removeSubteachAllowedUser = async (email: string) => {

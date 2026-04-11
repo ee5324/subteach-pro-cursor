@@ -29,6 +29,7 @@ import SubstituteContactExchange from './pages/SubstituteContactExchange';
 import SubstituteWeeklyLookup from './pages/SubstituteWeeklyLookup';
 import SubstituteLookupViewStats from './pages/SubstituteLookupViewStats';
 import MobileQueryHub from './pages/MobileQueryHub';
+import TeacherLeavePortal from './pages/TeacherLeavePortal';
 import EduTrackPage from './pages/EduTrackPage';
 import SystemDashboard from './pages/SystemDashboard';
 import ExamSubmitPublicPage from './edutrack/components/ExamSubmitPublicPage';
@@ -136,6 +137,14 @@ const App: React.FC = () => {
             element={
               <PageErrorBoundary fallbackTitle="手機查詢中心載入錯誤">
                 <MobileQueryHub />
+              </PageErrorBoundary>
+            }
+          />
+          <Route
+            path="teacher-portal"
+            element={
+              <PageErrorBoundary fallbackTitle="教師請假／代課查詢載入錯誤">
+                <TeacherLeavePortal />
               </PageErrorBoundary>
             }
           />

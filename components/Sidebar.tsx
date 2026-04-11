@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2, Smartphone, ClipboardList, LayoutDashboard, Eye } from 'lucide-react';
+import { Users, FilePlus, FileText, Settings, Loader2, AlertCircle, Coins, Briefcase, Inbox, Clock, UserCheck, UserPlus, CalendarDays, X, Languages, FileOutput, LogOut, BookOpenText, Globe, MessageSquare, Ban, Mic2, Smartphone, ClipboardList, LayoutDashboard, Eye, UserSearch } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/lib/firebase';
@@ -148,6 +148,11 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <NavLink to="/mobile-query" className={linkClass} onClick={onClose}>
           <Smartphone size={18} />
           <span>手機查詢中心</span>
+        </NavLink>
+
+        <NavLink to="/teacher-portal" className={linkClass} onClick={onClose}>
+          <UserSearch size={18} />
+          <span>教師請假／代課查詢</span>
         </NavLink>
 
         {isSubteachAdmin && (

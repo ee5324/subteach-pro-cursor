@@ -716,6 +716,7 @@ const Settings: React.FC = () => {
           </CollapsibleItem>
           <CollapsibleItem title="白名單（僅允許名單內帳號使用）">
             <p>僅加入白名單且已驗證 Email 的帳號可登入使用主系統。第一位管理員需在 Firebase Console 手動建立 <code>subteach_allowed_users/您的Email</code> 文件，欄位 <code>enabled: true</code>、<code>role: &quot;admin&quot;</code>；之後管理員可在「系統設定」的「白名單管理」區塊新增／編輯／移除其他帳號。</p>
+            <p>「綁定教師」欄位可對應教師主檔：綁定後，該帳號可於側欄「教師請假／代課查詢」檢視本人依假別之請假與代課金額（管理員可不綁定，於該頁改選任意教師）。</p>
           </CollapsibleItem>
         </div>
       </InstructionPanel>
@@ -766,6 +767,7 @@ const Settings: React.FC = () => {
                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                   <tr>
                     <th className="px-4 py-3 font-semibold text-slate-600">Email</th>
+                    <th className="px-4 py-3 font-semibold text-slate-600 min-w-[10rem]">綁定教師</th>
                     <th className="px-4 py-3 font-semibold text-slate-600">角色</th>
                     <th className="px-4 py-3 font-semibold text-slate-600">啟用</th>
                     <th className="px-4 py-3 font-semibold text-slate-600 text-right">操作</th>
@@ -775,6 +777,24 @@ const Settings: React.FC = () => {
                   {subteachAllowedUsers.map((u) => (
                     <tr key={u.email} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-mono text-slate-700">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <select
+                          className="w-full max-w-[14rem] px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white text-xs"
+                          value={u.linkedTeacherId || ''}
+                          onChange={(e) => updateSubteachAllowedUser(u.email, { linkedTeacherId: e.target.value })}
+                          title="供「教師請假／代課查詢」頁辨識本人；管理員可不綁定"
+                        >
+                          <option value="">（未綁定）</option>
+                          {teachers
+                            .slice()
+                            .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant', { numeric: true }))
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                        </select>
+                      </td>
                       <td className="px-4 py-3">
                         <select
                           className="px-2 py-1 border border-slate-200 rounded text-slate-700 bg-white"
@@ -810,7 +830,7 @@ const Settings: React.FC = () => {
                   ))}
                   {subteachAllowedUsers.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-slate-400">尚無白名單成員（請於 Firebase 手動建立第一位 admin）</td>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">尚無白名單成員（請於 Firebase 手動建立第一位 admin）</td>
                     </tr>
                   )}
                 </tbody>
