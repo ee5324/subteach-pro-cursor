@@ -37,6 +37,7 @@ const fmtMoney = (n: number) =>
 
 const STATUS_LABEL: Record<BudgetAdvanceStatus, string> = {
   outstanding: '進行中',
+  purchase_not_submitted: '尚未送請購',
   purchase_submitted: '已經送出請購',
   settled: '已結清',
   cancelled: '作廢',
@@ -86,6 +87,7 @@ function mergeAdvanceStatusOnSave(
     if (sd && pd) return 'settled';
     if (patch.status !== undefined) return patch.status;
     if (row.status === 'purchase_submitted') return 'purchase_submitted';
+    if (row.status === 'purchase_not_submitted') return 'purchase_not_submitted';
     return row.status === 'settled' ? 'outstanding' : row.status;
   }
   if (patch.status !== undefined) return patch.status;
@@ -386,7 +388,12 @@ const BudgetAdvancesTab: React.FC = () => {
             advanceDate: row.advanceDate,
             title: row.title,
             paidBy: row.paidBy,
-            status: sd && pd ? 'settled' : row.status === 'purchase_submitted' ? 'purchase_submitted' : 'outstanding',
+            status:
+              sd && pd
+                ? 'settled'
+                : row.status === 'purchase_submitted' || row.status === 'purchase_not_submitted'
+                  ? row.status
+                  : 'outstanding',
             settledDate: d,
             paidToPayeeDate: row.paidToPayeeDate,
             memo: row.memo,
