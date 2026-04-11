@@ -7,25 +7,31 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    // 白名單文件 ID 與 App 寫入一致為小寫；Auth token 的 email 可能含大寫，路徑一律用 .lower() 對齊
+    function subteachWhitelistEmailKey() {
+      return request.auth.token.email == null
+        ? ''
+        : request.auth.token.email.lower();
+    }
     // 代課系統白名單：須為 Email 登入且已驗證，且列於 subteach_allowed_users 且 enabled
     function isWhitelisted() {
       return request.auth != null
         && request.auth.token.email != null
         && request.auth.token.email_verified == true
-        && exists(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email))
-        && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.enabled == true;
+        && exists(/databases/$(database)/documents/subteach_allowed_users/$(subteachWhitelistEmailKey()))
+        && get(/databases/$(database)/documents/subteach_allowed_users/$(subteachWhitelistEmailKey())).data.enabled == true;
     }
     function isSubteachAdmin() {
       return isWhitelisted()
-        && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.role == 'admin';
+        && get(/databases/$(database)/documents/subteach_allowed_users/$(subteachWhitelistEmailKey())).data.role == 'admin';
     }
     // 僅依白名單文件判斷是否為 admin（不要求 email_verified），用於允許新增/編輯白名單，避免 token 延遲導致加入失敗
     function isSubteachAdminByDoc() {
       return request.auth != null
         && request.auth.token.email != null
-        && exists(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email))
-        && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.enabled == true
-        && get(/databases/$(database)/documents/subteach_allowed_users/$(request.auth.token.email)).data.role == 'admin';
+        && exists(/databases/$(database)/documents/subteach_allowed_users/$(subteachWhitelistEmailKey()))
+        && get(/databases/$(database)/documents/subteach_allowed_users/$(subteachWhitelistEmailKey())).data.enabled == true
+        && get(/databases/$(database)/documents/subteach_allowed_users/$(subteachWhitelistEmailKey())).data.role == 'admin';
     }
     // 首次登入：尚未建立白名單 init 時，任一有 Email 的登入者暫可存取，由 App 寫入白名單（不要求 email_verified，避免 Google 登入後 token 延遲）
     function isFirstLoginBootstrap() {
@@ -35,7 +41,9 @@ service cloud.firestore {
     }
     // 指定管理員 Email，無條件通過（白名單遺失或 init 已存在時仍可登入）
     function isDesignatedSubteachAdmin() {
-      return request.auth != null && request.auth.token.email == 'y.chengju@gmail.com';
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'y.chengju@gmail.com';
     }
     function canAccessSubteach() {
       return isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin();
@@ -152,8 +160,8 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /subteach_allowed_users/{email} {
-      allow read: if (isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin()) && (request.auth.token.email == email || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin());
-      allow create: if (isFirstLoginBootstrap() && request.auth.token.email == email) || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
+      allow read: if (isWhitelisted() || isFirstLoginBootstrap() || isDesignatedSubteachAdmin()) && (request.auth.token.email.lower() == email.lower() || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin());
+      allow create: if (isFirstLoginBootstrap() && request.auth.token.email.lower() == email.lower()) || isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
       allow update, delete: if isSubteachAdmin() || isSubteachAdminByDoc() || isDesignatedSubteachAdmin();
     }
 
