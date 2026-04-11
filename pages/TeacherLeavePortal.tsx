@@ -301,18 +301,18 @@ const TeacherLeavePortal: React.FC = () => {
   const toggleLeaveTypeFilter = (lt: LeaveType) => {
     setLeaveTypeSelection((prev) => {
       const next = new Set(prev);
-      if (next.has(lt)) {
-        if (next.size <= 1) return prev;
-        next.delete(lt);
-      } else {
-        next.add(lt);
-      }
+      if (next.has(lt)) next.delete(lt);
+      else next.add(lt);
       return next;
     });
   };
 
   const selectAllLeaveTypes = () => {
     setLeaveTypeSelection(new Set(ALL_LEAVE_TYPES));
+  };
+
+  const clearLeaveTypeSelection = () => {
+    setLeaveTypeSelection(new Set());
   };
 
   const handleMonthChange = (dir: 'prev' | 'next') => {
@@ -372,13 +372,22 @@ const TeacherLeavePortal: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <Filter size={18} className="text-indigo-600 shrink-0" aria-hidden />
             <span className="text-sm font-bold text-slate-800">假別篩選</span>
-            <button
-              type="button"
-              onClick={selectAllLeaveTypes}
-              className="ml-auto text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline sm:ml-2"
-            >
-              全選
-            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={clearLeaveTypeSelection}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
+              >
+                全不選
+              </button>
+              <button
+                type="button"
+                onClick={selectAllLeaveTypes}
+                className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline"
+              >
+                全選
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {ALL_LEAVE_TYPES.map((lt) => {
@@ -388,7 +397,7 @@ const TeacherLeavePortal: React.FC = () => {
                   key={lt}
                   type="button"
                   onClick={() => toggleLeaveTypeFilter(lt)}
-                  title={on ? '點擊取消此假別（至少保留一項）' : '點擊加入此假別'}
+                  title={on ? '點擊取消此假別' : '點擊加入此假別'}
                   className={`rounded-full border px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
                     on
                       ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
@@ -405,6 +414,10 @@ const TeacherLeavePortal: React.FC = () => {
         {groupedByLeaveType.length === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-white p-12 text-center text-slate-600 text-base shadow-sm">
             {selectedMonth} 月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人之紀錄；與產報表相同）
+          </div>
+        ) : leaveTypeSelection.size === 0 ? (
+          <div className="rounded-lg border border-slate-300 bg-slate-50 p-10 text-center text-slate-700 text-base shadow-sm">
+            已<strong>全不選</strong>假別，不顯示任何清冊。請點選假別或按「全選」以顯示資料。
           </div>
         ) : displayedLeaveTypeGroups.length === 0 ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-10 text-center text-amber-900 text-base shadow-sm">
