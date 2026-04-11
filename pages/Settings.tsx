@@ -6,7 +6,6 @@ import { useAppStore } from '../store/useAppStore';
 import { GAS_WEB_APP_URL } from '../config';
 import { getQuickLoginConfig, setQuickLoginConfig } from '../utils/quickLoginStorage';
 import { Settings as SettingsIcon, Calendar, Trash2, Plus, Wifi, Save, AlertCircle, CloudUpload, Loader2, BookOpen, Database, Download, Link2, Copy, KeyRound, ShieldCheck, UserPlus, Users, FileDown, Printer, ChevronDown, ChevronUp, Layers, Edit2, CheckCircle, CloudDownload, Calculator } from 'lucide-react';
-import SettingsFloatingCalculator from '../components/SettingsFloatingCalculator';
 import Modal, { ModalType, ModalMode } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 import { TeacherType, SalaryGrade, SemesterDefinition } from '../types';
@@ -679,7 +678,9 @@ const Settings: React.FC = () => {
                   懸浮計算機
                 </span>
                 <p className="mt-1.5 ml-1 border-l-2 border-indigo-100 pl-3 text-slate-600">
-                  畫面右下角（預設）會出現圓形計算機按鈕，固定在<strong>視窗內</strong>（捲動頁面時仍看得見）。左側直條為<strong>拖曳握把</strong>，按住可移動位置以免遮住內容；點右側圖示可<strong>展開／收合</strong>計算機面板。位置與展開狀態會記在瀏覽器本機。
+                  <strong>全站已登入頁面</strong>（含代課各頁與「教學組事務」內計畫專案／計畫代墊等）皆會顯示。圓形按鈕固定在<strong>視窗內</strong>；左側直條可<strong>拖曳</strong>移動；點右側圖示<strong>展開／收合</strong>。展開後算式欄可<strong>鍵盤輸入</strong>數字與 + − * / . ，Enter 計算、Esc
+                  收合；焦點在算式欄或面板內按鈕時亦可用鍵盤。位置與狀態存於本機（鍵名 <code className="bg-slate-100 px-1 rounded text-xs">floatingCalculatorPos</code>／
+                  <code className="bg-slate-100 px-1 rounded text-xs">floatingCalculatorOpen</code>）。
                 </p>
               </li>
             </ul>
@@ -1431,7 +1432,6 @@ const Settings: React.FC = () => {
         </section>
 
       </div>
-      <SettingsFloatingCalculator />
     </div>
   );
 };

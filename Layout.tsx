@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
+import FloatingCalculator from './components/FloatingCalculator';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 
@@ -77,6 +78,7 @@ const Layout: React.FC = () => {
           <Outlet />
         </div>
       </main>
+      <FloatingCalculator />
     </div>
   );
 };
