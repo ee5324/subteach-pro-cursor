@@ -169,6 +169,76 @@ function buildLedgerLine(record: LeaveRecord, detail: SubstituteDetail, teachers
 
 type LeaveTypeGroup = { leaveType: LeaveType; lines: LedgerLine[] };
 
+/** 同假別內「同一代課教師」合併一列：多欄以換行對齊各筆明細，應發金額為合計（與印領清冊 GAS 列格式一致） */
+type MergedLedgerRow = {
+  key: string;
+  substituteName: string;
+  dateLines: string;
+  salaryPointsLines: string;
+  dailyRateLines: string;
+  subDaysLines: string;
+  subPeriodsLines: string;
+  substitutePayLines: string;
+  leaveTeacherLines: string;
+  leaveTypeLines: string;
+  reasonLines: string;
+  noteLines: string;
+  homeroomDaysLines: string;
+  homeroomFeeLines: string;
+  payableTotal: number;
+};
+
+function fmtLedgerQty(n: number): string {
+  return n === 0 ? '0' : Number.isInteger(n) ? String(n) : String(n);
+}
+
+/** 各筆字串皆相同則單行顯示，否則多行 */
+function uniformOrMultiline(values: string[]): string {
+  if (values.length === 0) return '—';
+  const first = values[0];
+  if (values.every((v) => v === first)) return first;
+  return values.join('\n');
+}
+
+function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): MergedLedgerRow[] {
+  const bySub = new Map<string, LedgerLine[]>();
+  for (const L of lines) {
+    const k = L.substituteName;
+    if (!bySub.has(k)) bySub.set(k, []);
+    bySub.get(k)!.push(L);
+  }
+  const blocks = Array.from(bySub.entries()).map(([substituteName, grp]) => {
+    const sorted = grp.slice().sort((a, b) => {
+      if (a.dateYmd !== b.dateYmd) return a.dateYmd.localeCompare(b.dateYmd);
+      return a.leaveTeacherName.localeCompare(b.leaveTeacherName, 'zh-Hant');
+    });
+    return { substituteName, sorted };
+  });
+  blocks.sort((a, b) => {
+    const da = a.sorted[0]?.dateYmd ?? '';
+    const db = b.sorted[0]?.dateYmd ?? '';
+    if (da !== db) return da.localeCompare(db);
+    return a.substituteName.localeCompare(b.substituteName, 'zh-Hant');
+  });
+  return blocks.map(({ substituteName, sorted }) => ({
+    key: `merged_${substituteName}_${sorted.map((x) => x.key).join('_')}`,
+    substituteName,
+    dateLines: sorted.map((x) => x.dateDisplay).join('\n'),
+    salaryPointsLines: uniformOrMultiline(sorted.map((x) => x.salaryPointsText)),
+    dailyRateLines: uniformOrMultiline(sorted.map((x) => x.dailyRateText)),
+    subDaysLines: sorted.map((x) => fmtLedgerQty(x.subDays)).join('\n'),
+    subPeriodsLines: sorted.map((x) => String(x.subPeriods)).join('\n'),
+    substitutePayLines: sorted.map((x) => x.substitutePayExclHomeroom.toLocaleString()).join('\n'),
+    leaveTeacherLines: sorted.map((x) => x.leaveTeacherName).join('\n'),
+    leaveTypeLines: uniformOrMultiline(sorted.map((x) => x.leaveTypeLabel)),
+    reasonLines: sorted.map((x) => x.reason).join('\n'),
+    noteLines: sorted.map((x) => x.note).join('\n'),
+    homeroomDaysLines: sorted.map((x) => fmtLedgerQty(x.homeroomDays)).join('\n'),
+    homeroomFeeLines: sorted.map((x) => x.homeroomFee.toLocaleString()).join('\n'),
+    payableTotal: sorted.reduce((s, x) => s + x.payableAmount, 0),
+  }));
+}
+
 const ALL_LEAVE_TYPES = Object.values(LeaveType) as LeaveType[];
 
 const TeacherLeavePortal: React.FC = () => {
@@ -271,7 +341,7 @@ const TeacherLeavePortal: React.FC = () => {
               教師請假／代課查詢
             </h1>
             <p className="text-sm md:text-base text-slate-600 mt-1.5">
-              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（每筆代課明細一列，欄位與產報表清冊一致；不含憑證狀態、公文字號）。可下方篩選要顯示的假別。
+              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。可下方篩選假別。
             </p>
           </div>
           <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg shadow-sm shrink-0">
@@ -343,12 +413,15 @@ const TeacherLeavePortal: React.FC = () => {
         ) : (
           <div className="space-y-10 print:space-y-6">
             {displayedLeaveTypeGroups.map(({ leaveType, lines }) => {
+              const mergedRows = mergeLedgerLinesBySubstituteTeacher(lines);
               const sumDays = lines.reduce((s, x) => s + x.subDays, 0);
               const sumPeriods = lines.reduce((s, x) => s + x.subPeriods, 0);
               const sumSubstitutePay = lines.reduce((s, x) => s + x.substitutePayExclHomeroom, 0);
               const sumHmDays = lines.reduce((s, x) => s + x.homeroomDays, 0);
               const sumHmFee = lines.reduce((s, x) => s + x.homeroomFee, 0);
               const sumPayable = lines.reduce((s, x) => s + x.payableAmount, 0);
+
+              const cellMulti = `${tableCell} align-top whitespace-pre-line leading-snug`;
 
               return (
                 <section
@@ -360,7 +433,7 @@ const TeacherLeavePortal: React.FC = () => {
                       代課教師印領清冊　{rocYear}年{monthNumPadded}月　【{leaveType}】
                     </h2>
                     <p className="text-center text-sm text-slate-600 mt-1 print:text-slate-800">
-                      共 {lines.length} 筆明細（唯讀）
+                      共 {lines.length} 筆明細，合併為 {mergedRows.length} 列（同代課教師合併；唯讀）
                     </p>
                   </div>
                   <div className="overflow-x-auto">
@@ -384,37 +457,23 @@ const TeacherLeavePortal: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {lines.map((row) => (
+                        {mergedRows.map((row) => (
                           <tr key={row.key}>
-                            <td className={`${tableCell} text-center font-mono tabular-nums whitespace-nowrap`}>
-                              {row.dateDisplay}
-                            </td>
-                            <td className={`${tableCell} text-center`}>{row.substituteName}</td>
-                            <td className={`${tableCell} text-center tabular-nums`}>{row.salaryPointsText}</td>
-                            <td className={`${tableCell} text-center tabular-nums`}>{row.dailyRateText}</td>
-                            <td className={`${tableCell} text-center tabular-nums`}>
-                              {row.subDays === 0 ? '0' : row.subDays % 1 === 0 ? String(row.subDays) : String(row.subDays)}
-                            </td>
-                            <td className={`${tableCell} text-center tabular-nums`}>{row.subPeriods}</td>
-                            <td className={`${tableCell} text-right tabular-nums`}>
-                              {row.substitutePayExclHomeroom.toLocaleString()}
-                            </td>
-                            <td
-                              className={`${tableCell} text-center whitespace-nowrap min-w-[7rem]`}
-                            >
-                              {row.leaveTeacherName}
-                            </td>
-                            <td className={`${tableCell} text-center text-sm md:text-base leading-snug`}>
-                              {row.leaveTypeLabel}
-                            </td>
-                            <td className={`${tableCell} text-sm md:text-base leading-snug`}>{row.reason}</td>
-                            <td className={`${tableCell} text-sm md:text-base`}>{row.note}</td>
-                            <td className={`${tableCell} text-center tabular-nums`}>
-                              {row.homeroomDays === 0 ? '0' : row.homeroomDays % 1 === 0 ? String(row.homeroomDays) : String(row.homeroomDays)}
-                            </td>
-                            <td className={`${tableCell} text-right tabular-nums`}>{row.homeroomFee.toLocaleString()}</td>
-                            <td className={`${tableCell} text-right font-semibold tabular-nums`}>
-                              {row.payableAmount.toLocaleString()}
+                            <td className={`${cellMulti} text-center font-mono tabular-nums`}>{row.dateLines}</td>
+                            <td className={`${tableCell} text-center whitespace-nowrap align-top`}>{row.substituteName}</td>
+                            <td className={`${cellMulti} text-center tabular-nums`}>{row.salaryPointsLines}</td>
+                            <td className={`${cellMulti} text-center tabular-nums`}>{row.dailyRateLines}</td>
+                            <td className={`${cellMulti} text-center tabular-nums`}>{row.subDaysLines}</td>
+                            <td className={`${cellMulti} text-center tabular-nums`}>{row.subPeriodsLines}</td>
+                            <td className={`${cellMulti} text-right tabular-nums`}>{row.substitutePayLines}</td>
+                            <td className={`${cellMulti} text-center min-w-[7rem]`}>{row.leaveTeacherLines}</td>
+                            <td className={`${cellMulti} text-center text-sm md:text-base`}>{row.leaveTypeLines}</td>
+                            <td className={`${cellMulti} text-sm md:text-base`}>{row.reasonLines}</td>
+                            <td className={`${cellMulti} text-sm md:text-base`}>{row.noteLines}</td>
+                            <td className={`${cellMulti} text-center tabular-nums`}>{row.homeroomDaysLines}</td>
+                            <td className={`${cellMulti} text-right tabular-nums`}>{row.homeroomFeeLines}</td>
+                            <td className={`${tableCell} text-right font-semibold tabular-nums align-top`}>
+                              {row.payableTotal.toLocaleString()}
                             </td>
                           </tr>
                         ))}
