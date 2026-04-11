@@ -634,6 +634,7 @@ export function sandboxSaveBudgetPlanAdvance(
   if (payload.status === 'cancelled') st = 'cancelled';
   else if (sd && pd) st = 'settled';
   else if (payload.status === 'settled') st = 'settled';
+  else if (payload.status === 'purchase_submitted') st = 'purchase_submitted';
   else st = 'outstanding';
   const shouldArchive = sd && pd && st !== 'cancelled';
   const prevArchived =

@@ -244,7 +244,7 @@ export interface MonthlyRecurringTodoRule {
 }
 
 /** 代墊紀錄狀態 */
-export type BudgetAdvanceStatus = 'outstanding' | 'settled' | 'cancelled';
+export type BudgetAdvanceStatus = 'outstanding' | 'purchase_submitted' | 'settled' | 'cancelled';
 
 /**
  * 代墊金額紀錄（可日後再綁計畫；有綁計畫時可連結支用明細）

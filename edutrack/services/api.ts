@@ -835,7 +835,7 @@ export async function updateBudgetPlanFinancialRollups(
 }
 
 function parseAdvanceStatus(v: unknown): BudgetAdvanceStatus {
-  if (v === 'settled' || v === 'cancelled' || v === 'outstanding') return v;
+  if (v === 'settled' || v === 'cancelled' || v === 'outstanding' || v === 'purchase_submitted') return v;
   return 'outstanding';
 }
 

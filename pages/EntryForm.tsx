@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { LeaveType, PayType, TimetableSlot, LeaveRecord, TeacherType, Teacher, COMMON_SUBJECTS } from '../types';
+import { LeaveType, PayType, TimetableSlot, LeaveRecord, TeacherType, Teacher, COMMON_SUBJECTS, SubstituteDetail } from '../types';
 import { convertSlotsToDetails, getDaysInMonth, parseLocalDate, normalizeDateString } from '../utils/calculations';
 import { resolveTeacherDefaultSchedule } from '../utils/teacherSchedule';
 import { Save, Calculator, ArrowLeft, ChevronLeft, ChevronRight, AlertCircle, UserX, BookOpen, Users, FileText, Info, Edit3, Trash2, X, Loader2, Repeat, Copy, Calendar as CalendarIcon, Ban, Download } from 'lucide-react';
@@ -354,6 +354,28 @@ const EntryForm: React.FC = () => {
     });
   };
 
+  const handleDeleteDayClick = (e: React.MouseEvent, dayStr: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const daySlots = slots.filter((s) => s.date === dayStr);
+    if (daySlots.length === 0 || deleteSlotConfirmLockRef.current) return;
+    deleteSlotConfirmLockRef.current = true;
+    const n = daySlots.length;
+    showModal({
+      title: '確認刪除整日排課',
+      message: `確定要刪除 ${dayStr} 當天全部 ${n} 節課程嗎？\n\n仍可透過編輯視窗逐節刪除其他日期；此動作無法復原。`,
+      type: 'warning',
+      mode: 'confirm',
+      confirmText: '刪除整日',
+      cancelText: '取消',
+      onConfirm: () => {
+        setSlots((prev) => prev.filter((s) => s.date !== dayStr));
+        setEditingSlot((cur) => (cur && cur.date === dayStr ? null : cur));
+        closeModal();
+      },
+    });
+  };
+
   const getSlotInfo = (date: string, period: string) => slots.find(s => s.date === date && s.period === period);
 
   // Import Default Schedule Logic
@@ -506,7 +528,7 @@ const EntryForm: React.FC = () => {
       const key = `${d.date}_${d.substituteTeacherId}_${d.payType}_${d.isOvertime ? 1 : 0}_${periodsKey}_${d.periodCount}`;
       oldMap.set(key, d);
     });
-    const stabilizedDetails = details.map((d) => {
+    const stabilizedDetails: SubstituteDetail[] = details.map((d) => {
       const periodsKey = (d.selectedPeriods || []).slice().sort().join(',');
       const key = `${d.date}_${d.substituteTeacherId}_${d.payType}_${d.isOvertime ? 1 : 0}_${periodsKey}_${d.periodCount}`;
       const old = oldMap.get(key);
@@ -660,7 +682,8 @@ const EntryForm: React.FC = () => {
             <p>設定代課的起訖日期範圍。若該教師在「教師管理」中有設定預設課表，可點擊「載入課表」按鈕，系統會自動在該日期範圍內填入對應的課程。</p>
           </CollapsibleItem>
           <CollapsibleItem title="排課與代課人指定">
-            <p><strong>單節操作：</strong>在下方課表點擊空格可新增單節課程，或點擊已存在的課程進行編輯/刪除。</p>
+            <p><strong>單節操作：</strong>在下方課表點擊空格可新增單節課程，或點擊已存在的課程進行編輯／逐節刪除。</p>
+            <p><strong>整日刪除：</strong>當日欄位標題下若有「刪整日」按鈕，可一次移除該日所有節次（仍保留其他日與逐節編輯）。</p>
             <p><strong>批次操作：</strong>使用上方工具列可快速設定「指定代課教師」、「科目」與「班級」，設定後點擊課表格子即可套用。</p>
             <p><strong>支薪方式：</strong>預設為「鐘點」，若為全日代課請切換為「日薪」；半日代課請切換為「半日薪」（代課支出為一半日薪，導師費可另列家長會清冊）。</p>
           </CollapsibleItem>
@@ -799,12 +822,22 @@ const EntryForm: React.FC = () => {
                      const date = new Date(dayStr);
                      const weekDayName = ['日','一','二','三','四','五','六'][date.getDay()];
                      const isHoliday = holidays.includes(dayStr);
+                     const daySlotCount = slots.filter((s) => s.date === dayStr).length;
                      return (
                        <div key={dayStr} className="col-span-2 text-center px-1">
                           <div className={`py-2 rounded-lg border text-sm font-bold ${isHoliday ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
                              {weekDayName} <span className="text-xs font-normal ml-1">{date.getMonth()+1}/{date.getDate()}</span>
                              {isHoliday && <span className="block text-[10px] font-normal">🏖️ 放假</span>}
                           </div>
+                          {daySlotCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={(ev) => handleDeleteDayClick(ev, dayStr)}
+                              className="mt-1 w-full text-[11px] font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md py-1 border border-transparent hover:border-red-200 transition-colors"
+                            >
+                              刪整日（{daySlotCount} 節）
+                            </button>
+                          )}
                        </div>
                      );
                    })}
