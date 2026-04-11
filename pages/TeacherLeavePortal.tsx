@@ -241,6 +241,9 @@ function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): MergedLedgerR
 
 const ALL_LEAVE_TYPES = Object.values(LeaveType) as LeaveType[];
 
+/** 頁面數字（含表格內文）以 Times New Roman 呈現 */
+const NUM_FONT = "tabular-nums font-['Times_New_Roman',Times,serif]";
+
 const TeacherLeavePortal: React.FC = () => {
   const { records, teachers, loading } = useAppStore();
 
@@ -353,9 +356,9 @@ const TeacherLeavePortal: React.FC = () => {
             >
               <ChevronLeft size={20} />
             </button>
-            <div className="px-4 py-2.5 flex items-center gap-2 font-semibold text-slate-800 tabular-nums text-base">
+            <div className="px-4 py-2.5 flex items-center gap-2 font-semibold text-slate-800 text-base">
               <Calendar size={18} className="text-slate-500" />
-              {selectedMonth}
+              <span className={NUM_FONT}>{selectedMonth}</span>
             </div>
             <button
               type="button"
@@ -369,25 +372,23 @@ const TeacherLeavePortal: React.FC = () => {
         </div>
 
         <div className="mb-5 rounded-lg border border-slate-300 bg-white px-3 py-3 shadow-sm print:hidden">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mb-2">
             <Filter size={18} className="text-indigo-600 shrink-0" aria-hidden />
             <span className="text-sm font-bold text-slate-800">假別篩選</span>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={clearLeaveTypeSelection}
-                className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
-              >
-                全不選
-              </button>
-              <button
-                type="button"
-                onClick={selectAllLeaveTypes}
-                className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline"
-              >
-                全選
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={clearLeaveTypeSelection}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
+            >
+              全不選
+            </button>
+            <button
+              type="button"
+              onClick={selectAllLeaveTypes}
+              className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline-offset-2 hover:underline"
+            >
+              全選
+            </button>
           </div>
           <div className="flex flex-wrap gap-2">
             {ALL_LEAVE_TYPES.map((lt) => {
@@ -413,7 +414,8 @@ const TeacherLeavePortal: React.FC = () => {
 
         {groupedByLeaveType.length === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-white p-12 text-center text-slate-600 text-base shadow-sm">
-            {selectedMonth} 月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人之紀錄；與產報表相同）
+            <span className={NUM_FONT}>{selectedMonth}</span>
+            月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人之紀錄；與產報表相同）
           </div>
         ) : leaveTypeSelection.size === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-slate-50 p-10 text-center text-slate-700 text-base shadow-sm">
@@ -421,7 +423,7 @@ const TeacherLeavePortal: React.FC = () => {
           </div>
         ) : displayedLeaveTypeGroups.length === 0 ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-10 text-center text-amber-900 text-base shadow-sm">
-            所選假別於 {selectedMonth} 無代課明細，請調整篩選或按「全選」。
+            所選假別於 <span className={NUM_FONT}>{selectedMonth}</span> 無代課明細，請調整篩選或按「全選」。
           </div>
         ) : (
           <div className="space-y-10 print:space-y-6">
@@ -443,15 +445,17 @@ const TeacherLeavePortal: React.FC = () => {
                 >
                   <div className="px-3 py-3 border-b border-slate-400 print:border-black">
                     <h2 className="text-lg md:text-xl font-bold text-center leading-snug">
-                      代課教師印領清冊　{rocYear}年{monthNumPadded}月　【{leaveType}】
+                      代課教師印領清冊　<span className={NUM_FONT}>{rocYear}</span>年
+                      <span className={NUM_FONT}>{monthNumPadded}</span>月　【{leaveType}】
                     </h2>
                     <p className="text-center text-sm text-slate-600 mt-1 print:text-slate-800">
-                      共 {lines.length} 筆明細，合併為 {mergedRows.length} 列（同代課教師合併；唯讀）
+                      共 <span className={NUM_FONT}>{lines.length}</span> 筆明細，合併為{' '}
+                      <span className={NUM_FONT}>{mergedRows.length}</span> 列（同代課教師合併；唯讀）
                     </p>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-base md:text-lg font-serif">
-                      <thead>
+                      <thead className="[font-family:ui-sans-serif,system-ui,sans-serif]">
                         <tr>
                           <th className={tableHead}>代課日期</th>
                           <th className={tableHead}>代課教師</th>
@@ -469,10 +473,10 @@ const TeacherLeavePortal: React.FC = () => {
                           <th className={tableHead}>應發金額</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className={NUM_FONT}>
                         {mergedRows.map((row) => (
                           <tr key={row.key}>
-                            <td className={`${cellMulti} text-center font-mono tabular-nums`}>{row.dateLines}</td>
+                            <td className={`${cellMulti} text-center`}>{row.dateLines}</td>
                             <td className={`${tableCell} text-center whitespace-nowrap align-top`}>{row.substituteName}</td>
                             <td className={`${cellMulti} text-center tabular-nums`}>{row.salaryPointsLines}</td>
                             <td className={`${cellMulti} text-center tabular-nums`}>{row.dailyRateLines}</td>
