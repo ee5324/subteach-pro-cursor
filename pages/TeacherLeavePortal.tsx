@@ -3,6 +3,7 @@ import { Calendar, ChevronLeft, ChevronRight, BookOpen, Filter } from 'lucide-re
 import { useAppStore } from '../store/useAppStore';
 import { HOMEROOM_FEE_MONTHLY, LeaveRecord, LeaveType, PayType, SubstituteDetail, Teacher } from '../types';
 import { deduplicateDetails, getDaysInMonth, getExpectedDailyRateNoHomeroom } from '../utils/calculations';
+import { shouldExcludeLeaveRecordFromSubteachLedger } from '../utils/fixedOvertimeLedger';
 
 const toYMD = (d: string | number | undefined | null): string => {
   if (d == null) return '';
@@ -37,14 +38,6 @@ function recordTouchesMonth(r: LeaveRecord, monthStartStr: string, monthEndStr: 
     (date) => date >= monthStartStr && date <= monthEndStr,
   );
   return inMonthByRange || hasAnyDateInMonth;
-}
-
-/** 與印領清冊 GAS 邏輯一致：固定兼課身分之請假人不入一般清冊列 */
-function isFixedOvertimeLeaveTeacher(leaveTeacherId: string, teachers: Teacher[]): boolean {
-  const key = String(leaveTeacherId || '').trim();
-  if (!key) return false;
-  const t = teachers.find((x) => x.id === key || x.name === key);
-  return t?.isFixedOvertimeTeacher === true;
 }
 
 function formatDateReceipt(ymd: string): string {
@@ -288,7 +281,7 @@ const LEDGER_TABLE_FONT_FAMILY =
   '"Times New Roman", Times, "標楷體", "DFKai-SB", "BiauKai ST", "BiauKai", "KaiTi", "Kaiti SC", serif';
 
 const TeacherLeavePortal: React.FC = () => {
-  const { records, teachers, loading } = useAppStore();
+  const { records, teachers, fixedOvertimeConfig, loading } = useAppStore();
 
   const [leaveTypeSelection, setLeaveTypeSelection] = useState<Set<LeaveType>>(
     () => new Set(ALL_LEAVE_TYPES),
@@ -319,7 +312,7 @@ const TeacherLeavePortal: React.FC = () => {
     const map = new Map<LeaveType, LedgerLine[]>();
     // 與 AppContext／GAS 一致：records 已為 createdAt 新→舊；勿再排序，以還原 syncRecords 掃描順序
     for (const r of recordsInMonth) {
-      if (isFixedOvertimeLeaveTeacher(r.originalTeacherId, teachers)) continue;
+      if (shouldExcludeLeaveRecordFromSubteachLedger(r, teachers, fixedOvertimeConfig)) continue;
       const lt = r.leaveType;
       if (!map.has(lt)) map.set(lt, []);
       const deduped = deduplicateDetails(r.details || []);
@@ -333,7 +326,7 @@ const TeacherLeavePortal: React.FC = () => {
     return (Object.values(LeaveType) as LeaveType[])
       .map((leaveType) => ({ leaveType, lines: map.get(leaveType) || [] }))
       .filter((g) => g.lines.length > 0);
-  }, [recordsInMonth, teachers, selectedMonth]);
+  }, [recordsInMonth, teachers, fixedOvertimeConfig, selectedMonth]);
 
   const displayedLeaveTypeGroups = useMemo(
     () => groupedByLeaveType.filter((g) => leaveTypeSelection.has(g.leaveType)),
@@ -383,7 +376,7 @@ const TeacherLeavePortal: React.FC = () => {
               教師請假／代課查詢
             </h1>
             <p className="text-sm md:text-base text-slate-600 mt-1.5">
-              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（<strong>不含</strong>標示為超鐘點之代課時段，該類另計入超鐘點清冊）；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。
+              當月依假別分區，以<strong>代課教師印領清冊</strong>格式呈現（<strong>不含</strong>標示為超鐘點之代課時段，該類另計入超鐘點清冊；<strong>不含</strong>固定兼課身分之請假人及其代課明細，該類另列固定兼課清冊）；同假別、同代課教師合併一列（欄位內多行對齊各筆，應發金額為合計）。
               <strong>列順序與 GAS 產出清冊一致</strong>（紀錄依建立時間新→舊掃描、代課者以主檔 id 分群；群組內再依日期與請假人排序）。可下方篩選假別。
             </p>
           </div>
@@ -455,7 +448,7 @@ const TeacherLeavePortal: React.FC = () => {
         {groupedByLeaveType.length === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-white p-12 text-center text-slate-600 text-base shadow-sm">
             <span className={NUM_FONT}>{selectedMonth}</span>
-            月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人與超鐘點時段）
+            月份沒有可列入印領清冊格式之代課明細（已排除固定兼課請假人—含僅列於固定兼課設定者—與超鐘點時段）
           </div>
         ) : leaveTypeSelection.size === 0 ? (
           <div className="rounded-lg border border-slate-300 bg-slate-50 p-10 text-center text-slate-700 text-base shadow-sm">
