@@ -308,7 +308,7 @@ const TeacherLeavePortal: React.FC = () => {
                           <th className={tableHead}>代課天數</th>
                           <th className={tableHead}>代課節數</th>
                           <th className={tableHead}>代課鐘點費</th>
-                          <th className={tableHead}>請假人</th>
+                          <th className={`${tableHead} whitespace-nowrap min-w-[7rem]`}>請假人</th>
                           <th className={tableHead}>假別</th>
                           <th className={`${tableHead} min-w-[6rem]`}>請假事由</th>
                           <th className={`${tableHead} min-w-[7rem]`}>備註</th>
@@ -333,7 +333,11 @@ const TeacherLeavePortal: React.FC = () => {
                             <td className={`${tableCell} text-right tabular-nums`}>
                               {row.substitutePayExclHomeroom.toLocaleString()}
                             </td>
-                            <td className={`${tableCell} text-center`}>{row.leaveTeacherName}</td>
+                            <td
+                              className={`${tableCell} text-center whitespace-nowrap min-w-[7rem]`}
+                            >
+                              {row.leaveTeacherName}
+                            </td>
                             <td className={`${tableCell} text-center text-sm md:text-base leading-snug`}>
                               {row.leaveTypeLabel}
                             </td>
