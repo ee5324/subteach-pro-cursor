@@ -122,6 +122,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   const tp = titlePrefixRoc(rocYear, monthNum);
 
   const buckets = collectLedgerLinesByExportKey(records, teachers, fixedOvertimeConfig, selectedMonth);
+  const daysInMonth = new Date(year, Number(monthNum), 0).getDate();
 
   const ledgerSections: string[] = [];
 
@@ -140,7 +141,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
         ledgerSections.push(`<section class="ledger-block"><p class="muted">【${escHtml(typeStr)}】本月無資料</p></section>`);
       } else {
         const sums = sumLines(lines);
-        ledgerSections.push(renderLedgerTable(fullTitle, typeStr, mergedFiltered, sums, hideHm));
+        ledgerSections.push(renderLedgerTable(fullTitle, typeStr, mergedFiltered, sums, hideHm, daysInMonth));
       }
     }
   }
@@ -169,7 +170,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     .ledger-block:last-of-type { page-break-after: auto; }
     .ledger-h1 { text-align: center; font-size: 18px; font-weight: bold; margin: 8px 0 12px 0; line-height: 1.35; }
     .ledger-meta { text-align: center; font-size: 13px; margin-bottom: 10px; color: #334155; }
-    table.ledger { width: 100%; border-collapse: collapse; font-size: 11pt; table-layout: fixed; }
+    table.ledger { width: 100%; border-collapse: collapse; font-size: 14pt; table-layout: fixed; }
     table.ledger th, table.ledger td { border: 1px solid #000; padding: 3px 4px; vertical-align: middle; text-align: center; word-break: break-word; }
     table.ledger th { background: #e2e8f0; font-weight: bold; }
     /* 連續日期區間不換行（如 04/14-04/17） */
@@ -182,10 +183,11 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       max-width: 2.2em;
       min-width: 0;
       padding: 2px 1px;
-      font-size: 9pt;
+      font-size: 14pt;
       line-height: 1.2;
       white-space: pre-wrap;
       word-break: break-all;
+      text-align: center;
     }
     table.ledger th.col-leave-person,
     table.ledger td.col-leave-person {
@@ -193,11 +195,12 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       max-width: 4.5em;
       min-width: 0;
       padding: 2px 3px;
-      font-size: 9.5pt;
+      font-size: 14pt;
       line-height: 1.25;
     }
     table.ledger .tl { text-align: left; }
-    table.ledger .tr { text-align: right; font-variant-numeric: tabular-nums; }
+    /* 數字欄位置中（與 GAS 清冊常用 14 號字一致） */
+    table.ledger .tr { text-align: center; font-variant-numeric: tabular-nums; }
     table.ledger .nw { white-space: pre-wrap; }
     /* 列印時盡量維持整列在同一頁（瀏覽器仍可能對極高列忽略） */
     table.ledger thead tr,
@@ -265,13 +268,15 @@ function renderLedgerTable(
   rows: MergedLedgerRow[],
   sums: ReturnType<typeof sumLines>,
   hideHomeroomCols: boolean,
+  daysInMonth: number,
 ): string {
   const hmClass = hideHomeroomCols ? ' hm-hide' : '';
+  const dim = Math.max(1, Math.min(31, Math.floor(Number(daysInMonth)) || 30));
   const head = `<thead><tr>
     <th class="col-date" style="width:6%">代課日期</th>
     <th style="width:6%">代課教師</th>
     <th style="width:4%">薪級</th>
-    <th style="width:4%">日薪</th>
+    <th style="width:4%">日薪<br/>(${dim}天)</th>
     <th class="col-narrow-num">代課<br/>天數</th>
     <th class="col-narrow-num">代課<br/>節數</th>
     <th class="col-narrow-num">代課<br/>鐘點費</th>
