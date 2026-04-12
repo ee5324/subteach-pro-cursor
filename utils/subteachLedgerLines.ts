@@ -45,6 +45,8 @@ export function leaveTeacherDisplayName(record: LeaveRecord, teachers: Teacher[]
 export type LedgerLine = {
   key: string;
   substituteKey: string;
+  /** 明細支薪方式（合併連續日薪列時使用） */
+  payType: PayType;
   dateYmd: string;
   dateDisplay: string;
   substituteName: string;
@@ -144,6 +146,7 @@ export function buildLedgerLine(
   return {
     key: `${record.id}_${detail.id}`,
     substituteKey,
+    payType: detail.payType,
     dateYmd: ymd,
     dateDisplay: formatDateReceipt(detail.date),
     substituteName: substituteDisplayName(detail.substituteTeacherId, teachers),
@@ -195,6 +198,99 @@ function uniformOrMultiline(values: string[]): string {
   return values.join('\n');
 }
 
+/** 日曆上「隔天」之 YYYY-MM-DD（本地正午加一日，減少邊界） */
+function addOneCalendarDayYmd(ymd: string): string {
+  const y = toYMD(ymd);
+  const m = y.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isNextCalendarDay(prevYmd: string, nextYmd: string): boolean {
+  return toYMD(nextYmd) === addOneCalendarDayYmd(prevYmd);
+}
+
+/** 合併後備註：總日數 + 原「日0節」後方管理備註 */
+function mergedDailyNote(totalDays: number, firstNote: string): string {
+  const tail = firstNote.replace(/^\d+(?:\.\d+)?日0節/, '').replace(/^；/, '');
+  const base = `${fmtLedgerQty(totalDays)}日0節`;
+  return tail ? `${base}；${tail}` : base;
+}
+
+function formatDateRangeDisplay(startYmd: string, endYmd: string): string {
+  const a = formatDateReceipt(startYmd);
+  const b = formatDateReceipt(endYmd);
+  if (a === b) return a;
+  return `${a}-${b}`;
+}
+
+function combineConsecutiveDailyRun(run: LedgerLine[]): LedgerLine {
+  const first = run[0];
+  const last = run[run.length - 1];
+  const totalDays = run.reduce((s, x) => s + x.subDays, 0);
+  const totalPay = run.reduce((s, x) => s + x.substitutePayExclHomeroom, 0);
+  const totalHmDays = run.reduce((s, x) => s + x.homeroomDays, 0);
+  const totalHmFee = run.reduce((s, x) => s + x.homeroomFee, 0);
+  const totalPayable = run.reduce((s, x) => s + x.payableAmount, 0);
+  return {
+    ...first,
+    key: run.map((x) => x.key).join('__'),
+    payType: PayType.DAILY,
+    dateYmd: first.dateYmd,
+    dateDisplay: formatDateRangeDisplay(first.dateYmd, last.dateYmd),
+    subDays: totalDays,
+    subPeriods: 0,
+    substitutePayExclHomeroom: totalPay,
+    homeroomDays: totalHmDays,
+    homeroomFee: totalHmFee,
+    payableAmount: totalPayable,
+    note: mergedDailyNote(totalDays, first.note),
+  };
+}
+
+function canChainDailyConsecutive(prev: LedgerLine, next: LedgerLine): boolean {
+  if (prev.payType !== PayType.DAILY || next.payType !== PayType.DAILY) return false;
+  if (prev.subPeriods !== 0 || next.subPeriods !== 0) return false;
+  if (prev.leaveTeacherName !== next.leaveTeacherName) return false;
+  if (prev.leaveTypeLabel !== next.leaveTypeLabel) return false;
+  if (prev.reason !== next.reason) return false;
+  if (prev.note !== next.note) return false;
+  if (prev.dailyRateText !== next.dailyRateText) return false;
+  if (prev.salaryPointsText !== next.salaryPointsText) return false;
+  return isNextCalendarDay(prev.dateYmd, next.dateYmd);
+}
+
+/**
+ * 同一代課群組內：連續日曆日、皆日薪、同請假人與同表頭欄位者併成一筆（日期顯示 M/D-M/D，天數與金額加總）。
+ * 與 GAS 逐筆列印不同，僅優化網站清冊／列印預覽閱讀。
+ */
+function mergeConsecutiveDailyLedgerLines(sorted: LedgerLine[]): LedgerLine[] {
+  const out: LedgerLine[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const cur = sorted[i];
+    if (cur.payType !== PayType.DAILY || cur.subPeriods !== 0) {
+      out.push(cur);
+      i += 1;
+      continue;
+    }
+    const run: LedgerLine[] = [cur];
+    let j = i + 1;
+    while (j < sorted.length) {
+      const prev = run[run.length - 1];
+      const next = sorted[j];
+      if (!canChainDailyConsecutive(prev, next)) break;
+      run.push(next);
+      j += 1;
+    }
+    out.push(run.length === 1 ? cur : combineConsecutiveDailyRun(run));
+    i = j;
+  }
+  return out;
+}
+
 export function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): MergedLedgerRow[] {
   const bySub = new Map<string, LedgerLine[]>();
   for (const L of lines) {
@@ -209,7 +305,8 @@ export function mergeLedgerLinesBySubstituteTeacher(lines: LedgerLine[]): Merged
       if (ka !== kb) return ka - kb;
       return a.leaveTeacherName.localeCompare(b.leaveTeacherName, 'zh-Hant');
     });
-    return { substituteKey, sorted };
+    const sortedCollapsed = mergeConsecutiveDailyLedgerLines(sorted);
+    return { substituteKey, sorted: sortedCollapsed };
   });
   return blocks.map(({ substituteKey, sorted }) => ({
     key: `merged_${substituteKey}_${sorted.map((x) => x.key).join('_')}`,
