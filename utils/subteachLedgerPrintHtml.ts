@@ -175,7 +175,9 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger .tl { text-align: left; }
     table.ledger .tr { text-align: right; font-variant-numeric: tabular-nums; }
     table.ledger .nw { white-space: pre-wrap; }
-    table.ledger tfoot td { font-weight: bold; background: #f1f5f9; }
+    /* 合計列置於 tbody 末尾，列印跨頁時不會像 tfoot 在每頁重複，僅出現於資料末頁 */
+    table.ledger tbody tr.ledger-total-row td { font-weight: bold; background: #f1f5f9; }
+    tr.ledger-total-row { break-inside: avoid; page-break-inside: avoid; }
     table.ledger td.ledger-fill { min-height: 2.2em; }
     .ledger-footer-sign { margin-top: 16px; width: 100%; }
     table.sign-table { width: 100%; border-collapse: collapse; font-size: 10.5pt; font-weight: bold; table-layout: fixed; }
@@ -258,7 +260,7 @@ function renderLedgerTable(
     )
     .join('');
 
-  const foot = `<tfoot><tr>
+  const totalRow = `<tr class="ledger-total-row">
     <td colspan="4">合計</td>
     <td class="tr">${escHtml(String(sums.sumDays))}</td>
     <td class="tr">${escHtml(String(sums.sumPeriods))}</td>
@@ -272,7 +274,7 @@ function renderLedgerTable(
     <td></td>
     <td class="tr">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
     <td></td>
-  </tr></tfoot>`;
+  </tr>`;
 
   const ziLiNote = hideHomeroomCols
     ? '<p class="ledger-meta" style="margin-top:6px">課務自理「代導師日數／導師費」欄與 GAS 相同不列入本表；另「課務自理導師費」專表請以試算表匯出為準。</p>'
@@ -281,7 +283,7 @@ function renderLedgerTable(
   return `<section class="ledger-block${hmClass}">
   <h2 class="ledger-h1">${escHtml(fullTitle)}</h2>
   ${ziLiNote}
-  <table class="ledger">${head}<tbody>${body}</tbody>${foot}</table>
+  <table class="ledger">${head}<tbody>${body}${totalRow}</tbody></table>
   <div class="ledger-footer-sign">
     <table class="sign-table">
       <tr>
