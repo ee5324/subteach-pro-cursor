@@ -88,11 +88,36 @@ function homeroomFeeSingleLineHtml(s: string): string {
   return escHtml(one || '—');
 }
 
+/** 備註：每一筆摘要（如 0日2節(午,5)）維持同一行，不從括號處被拆成兩行 */
+function noteCellHtml(s: string): string {
+  const lines = String(s).split('\n').filter((ln) => ln.length > 0);
+  if (lines.length === 0) return escHtml('—');
+  return lines.map((ln) => `<span class="note-line-block">${escHtml(ln)}</span>`).join('<br/>');
+}
+
 /** A4 橫向印領清冊：19 欄寬度加總 100%，避免 table-layout:fixed 時未設寬欄被壓成極窄而數字直排 */
 function ledgerTableColgroup(): string {
+  /* 加寬代課天數／節數／費用、事由備註略縮，總和 100% */
   const widths = [
-    '6%', '6%', '5%', '3.5%', '5.5%', '5.5%', '9%', '5%', '5%', '10%', '6%', '4%', '4.5%', '5.5%', '3.5%',
-    '3.5%', '4%', '4%', '5%',
+    '5.8%',
+    '6.5%',
+    '5%',
+    '3.5%',
+    '6.5%',
+    '6.5%',
+    '10.7%',
+    '5%',
+    '4.8%',
+    '7%',
+    '5.5%',
+    '4%',
+    '4.5%',
+    '5.5%',
+    '3.3%',
+    '3.3%',
+    '4%',
+    '4%',
+    '4.6%',
   ];
   return `<colgroup>${widths.map((w) => `<col style="width:${w}" />`).join('')}</colgroup>`;
 }
@@ -240,13 +265,16 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     /* 各欄左右各加約 2pt；數字欄勿用 break-all 以免逐字直排 */
     table.ledger th, table.ledger td {
       border: 1px solid #000;
-      padding: 3px calc(4px + 2pt);
+      padding: 2px 3px;
       vertical-align: middle;
       text-align: center;
       word-break: normal;
       overflow-wrap: break-word;
     }
-    table.ledger th { background: #e2e8f0; font-weight: bold; }
+    table.ledger th { background: #e2e8f0; font-weight: bold; line-height: 1.2; }
+    table.ledger th.th-1l { white-space: nowrap; }
+    table.ledger th .th-brk { display: block; }
+    table.ledger th .th-nobr { white-space: nowrap; }
     /* 連續日期區間不換行（如 04/14-04/17） */
     table.ledger th.col-date,
     table.ledger td.col-date { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
@@ -274,10 +302,14 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     }
     table.ledger th.col-leave-person,
     table.ledger td.col-leave-person {
-      padding: 3px calc(4px + 2pt);
+      padding: 2px 3px;
       font-size: 14pt;
       line-height: 1.25;
       text-align: center;
+    }
+    table.ledger td.col-note .note-line-block {
+      display: block;
+      white-space: nowrap;
     }
     table.ledger td .col-leave-type { font-size: 12pt; line-height: 1.25; }
     table.ledger .hm-days-grid {
@@ -374,25 +406,25 @@ function renderLedgerTable(
   const hmClass = hideHomeroomCols ? ' hm-hide' : '';
   const dim = Math.max(1, Math.min(31, Math.floor(Number(daysInMonth)) || 30));
   const head = `<thead><tr>
-    <th class="col-date">代課日期</th>
-    <th>代課教師</th>
-    <th class="col-salary-grade">薪級</th>
-    <th>日薪<br/>(${dim}天)</th>
-    <th class="col-ledger-qty">代課<br/>天數</th>
-    <th class="col-ledger-qty">代課<br/>節數</th>
-    <th class="col-ledger-qty col-substitute-fee">代課<br/>費用</th>
-    <th class="col-leave-person">請假人</th>
-    <th>假別</th>
-    <th>請假事由</th>
-    <th>備註</th>
-    <th class="col-hm">代導師<br/>日數</th>
-    <th class="col-hm col-hm-fee">導師費</th>
-    <th>應發金額</th>
-    <th>勞保</th>
-    <th>健保</th>
-    <th>代扣補充保費</th>
-    <th>實領金額</th>
-    <th>代課教師簽名</th>
+    <th class="col-date th-1l">代課日期</th>
+    <th class="th-1l">代課教師</th>
+    <th class="col-salary-grade th-1l">薪級</th>
+    <th><span class="th-nobr">日薪</span><span class="th-brk">(${dim}天)</span></th>
+    <th class="col-ledger-qty th-1l">代課天數</th>
+    <th class="col-ledger-qty th-1l">代課節數</th>
+    <th class="col-ledger-qty col-substitute-fee th-1l">代課費用</th>
+    <th class="col-leave-person th-1l">請假人</th>
+    <th class="th-1l">假別</th>
+    <th><span class="th-nobr">請假</span><span class="th-brk">事由</span></th>
+    <th class="th-1l">備註</th>
+    <th class="col-hm"><span class="th-nobr">代導師</span><span class="th-brk">日數</span></th>
+    <th class="col-hm col-hm-fee th-1l">導師費</th>
+    <th><span class="th-nobr">應發</span><span class="th-brk">金額</span></th>
+    <th class="th-1l">勞保</th>
+    <th class="th-1l">健保</th>
+    <th><span class="th-nobr">代扣補充</span><span class="th-brk">保費</span></th>
+    <th><span class="th-nobr">實領</span><span class="th-brk">金額</span></th>
+    <th><span class="th-nobr">代課教師</span><span class="th-brk">簽名</span></th>
   </tr></thead>`;
 
   const body = rows
@@ -408,7 +440,7 @@ function renderLedgerTable(
     <td class="nw col-leave-person">${multilineCell(row.leaveTeacherLines)}</td>
     <td class="nw">${leaveTypeCellHtml(row.leaveTypeLines)}</td>
     <td class="nw tl">${multilineCell(row.reasonLines)}</td>
-    <td class="nw tl">${multilineCell(row.noteLines)}</td>
+    <td class="nw tl col-note">${noteCellHtml(row.noteLines)}</td>
     <td class="col-hm nw tr">${homeroomDaysCellHtml(row.homeroomDaysLines)}</td>
     <td class="col-hm nw tr col-hm-fee">${homeroomFeeSingleLineHtml(row.homeroomFeeLines)}</td>
     <td class="tr col-payable">${escHtml(fmtLedgerInt(row.payableTotal))}</td>
