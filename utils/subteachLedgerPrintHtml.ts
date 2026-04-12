@@ -468,6 +468,24 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     }
     .sign-line span { white-space: nowrap; min-width: 0; }
     .muted { color: #64748b; font-size: 13px; }
+    .snap-status { font-size: 12px; color: #166534; min-height: 1.2em; flex: 1 1 100%; }
+    .snap-status.snap-err { color: #b91c1c; }
+    /* 螢幕上不顯示截圖層（僅列印時在 .print-use-snapshot 下顯示） */
+    #ledgerPrintSnap {
+      display: none;
+    }
+    .ledger-snap-page {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      page-break-after: always;
+      break-after: page;
+    }
+    .ledger-snap-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
     .hm-hide .col-hm { visibility: hidden; }
     table.ledger td[contenteditable="true"],
     table.ledger th[contenteditable="true"],
@@ -481,6 +499,13 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
         padding: 0;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+      }
+      /* 以截圖列印：只印圖片，與螢幕所見一致 */
+      body.print-use-snapshot .ledger-shell {
+        display: none !important;
+      }
+      body.print-use-snapshot #ledgerPrintSnap {
+        display: block !important;
       }
       /* 列印引擎對 transform:scale 常與畫面不一致，改以 100% 寬列印；請用「表格字級／寬度」微調列印大小 */
       .ledger-scale-inner {
@@ -530,14 +555,19 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   <div class="toolbar no-print">
     <div class="toolbar-row">
       <button type="button" onclick="window.print()">列印</button>
+      <button type="button" id="btnPrintFromScreenshot" title="將目前畫面（含整表縮放與欄寬列高）轉成圖片後列印，與預覽最一致">以畫面列印（截圖）</button>
+      <button type="button" class="secondary" id="btnClearPrintSnap" title="清除截圖列印，改回一般表格列印">改回一般列印</button>
       <button type="button" class="secondary" id="btnResetLayout">重設版面</button>
       <label><input type="checkbox" id="chkEditable" /> 可編輯內容（表內儲存格與核章列文字）</label>
+    </div>
+    <div class="toolbar-row no-print">
+      <span id="snapStatus" class="snap-status" role="status"></span>
     </div>
     <div class="toolbar-row">
       <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
       <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
-      <span class="hint">紙張請選 A4 橫向；列印對話框<strong>縮放請用 100%</strong>（勿用「適合頁面大小」以免與預覽不符）。<strong>整表縮放</strong>僅影響螢幕預覽，列印時請改<strong>表格字級／寬度</strong>。合計上有四列空白可補登；表頭右緣調欄寬、列底橫線調列高。「重設」還原字級／寬度／縮放／欄寬／列高。</span>
+      <span class="hint">若一般列印仍跑版，請按<strong>「以畫面列印（截圖）」</strong>（需短暫連線載入函式庫），再按列印——即與目前預覽相同。紙張選 A4 橫向；列印對話框縮放建議 100%。一般列印時整表縮放不套用，請改表格字級／寬度。合計上有四列空白；表頭右緣調欄寬、列底橫線調列高。</span>
     </div>
     <div class="toolbar-row is-disabled" id="ledgerFormatRow">
       <span style="font-size:12px;color:#475569;font-weight:600">選取表內文字後套用（須勾選可編輯）：</span>
@@ -562,6 +592,8 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       ${bodyInner}
     </div>
   </div>
+  <div id="ledgerPrintSnap" aria-hidden="true"></div>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
   <script>
 (function () {
   var root = document.documentElement;
@@ -575,6 +607,91 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   var lblWidth = document.getElementById('lblWidth');
   var lblScale = document.getElementById('lblScale');
   var btnReset = document.getElementById('btnResetLayout');
+  var btnPrintFromScreenshot = document.getElementById('btnPrintFromScreenshot');
+  var btnClearPrintSnap = document.getElementById('btnClearPrintSnap');
+  var ledgerPrintSnap = document.getElementById('ledgerPrintSnap');
+  var snapStatus = document.getElementById('snapStatus');
+  function setSnapStatus(msg, isErr) {
+    if (!snapStatus) return;
+    snapStatus.textContent = msg || '';
+    snapStatus.classList.toggle('snap-err', !!isErr);
+  }
+  function clearPrintSnapshot() {
+    document.body.classList.remove('print-use-snapshot');
+    if (ledgerPrintSnap) ledgerPrintSnap.innerHTML = '';
+    setSnapStatus('');
+  }
+  if (btnClearPrintSnap) {
+    btnClearPrintSnap.addEventListener('click', function () {
+      clearPrintSnapshot();
+      setSnapStatus('已改回一般表格列印。');
+    });
+  }
+  if (btnPrintFromScreenshot) {
+    btnPrintFromScreenshot.addEventListener('click', function () {
+      if (typeof html2canvas !== 'function') {
+        setSnapStatus('無法載入截圖程式庫，請確認網路後重新開啟本頁。', true);
+        return;
+      }
+      if (!scaleInner || !ledgerPrintSnap) return;
+      var blocks = Array.from(scaleInner.querySelectorAll('.ledger-block'));
+      if (blocks.length === 0) {
+        setSnapStatus('沒有可截圖的清冊區塊。', true);
+        return;
+      }
+      clearPrintSnapshot();
+      btnPrintFromScreenshot.disabled = true;
+      if (btnClearPrintSnap) btnClearPrintSnap.disabled = true;
+      setSnapStatus('正在產生截圖…（資料多時請稍候）');
+      var baseOpts = {
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        ignoreElements: function (node) {
+          if (!node || !node.classList) return false;
+          return (
+            node.classList.contains('ledger-resize-handle') ||
+            node.classList.contains('ledger-row-resize-handle')
+          );
+        },
+      };
+      function captureOne(block, scaleVal) {
+        return html2canvas(block, Object.assign({}, baseOpts, { scale: scaleVal }));
+      }
+      var p = Promise.resolve();
+      blocks.forEach(function (block, idx) {
+        p = p
+          .then(function () {
+            setSnapStatus('正在截圖 ' + (idx + 1) + ' / ' + blocks.length + '…');
+            return captureOne(block, 2).catch(function () {
+              return captureOne(block, 1);
+            });
+          })
+          .then(function (canvas) {
+            var img = document.createElement('img');
+            img.className = 'ledger-snap-page';
+            img.alt = '印領清冊';
+            img.src = canvas.toDataURL('image/png');
+            ledgerPrintSnap.appendChild(img);
+          });
+      });
+      var done = function () {
+        btnPrintFromScreenshot.disabled = false;
+        if (btnClearPrintSnap) btnClearPrintSnap.disabled = false;
+      };
+      p.then(function () {
+          document.body.classList.add('print-use-snapshot');
+          setSnapStatus(
+            '截圖完成。請按「列印」；版面請以畫面上為準。若要改回一般表格列印請按「改回一般列印」。',
+          );
+        })
+        .catch(function () {
+          setSnapStatus('截圖失敗（內容過大或瀏覽器限制），請略縮小整表縮放或字級後再試。', true);
+          clearPrintSnapshot();
+        })
+        .then(done, done);
+    });
+  }
   function applyFont() {
     var v = rngFont.value;
     root.style.setProperty('--ledger-table-font', v + 'pt');
@@ -800,6 +917,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     initLedgerRowResize();
   }
   btnReset.addEventListener('click', function () {
+    clearPrintSnapshot();
     rngFont.value = '14';
     rngWidth.value = '100';
     rngScale.value = '100';
