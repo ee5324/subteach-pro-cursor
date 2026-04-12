@@ -198,8 +198,12 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger .tr { text-align: right; font-variant-numeric: tabular-nums; }
     table.ledger .nw { white-space: pre-wrap; }
     table.ledger tfoot td { font-weight: bold; background: #f1f5f9; }
-    .ledger-footer-sign { margin-top: 14px; font-size: 10.5pt; font-weight: bold; line-height: 1.9; }
-    .ledger-footer-sign .row { display: flex; flex-wrap: wrap; gap: 12px 48px; }
+    table.ledger td.ledger-fill { min-height: 2.2em; }
+    .ledger-footer-sign { margin-top: 16px; width: 100%; }
+    table.sign-table { width: 100%; border-collapse: collapse; font-size: 10.5pt; font-weight: bold; table-layout: fixed; }
+    table.sign-table td { width: 33.33%; padding: 8px 12px 10px 4px; vertical-align: bottom; border: none; text-align: left; }
+    table.sign-table td:nth-child(2) { text-align: center; }
+    table.sign-table td:nth-child(3) { text-align: right; }
     .muted { color: #64748b; font-size: 13px; }
     .voucher-wrap { page-break-after: always; margin-bottom: 20px; border: 2px solid #000; padding: 16px 20px; max-width: 100%; }
     .voucher-wrap:last-child { page-break-after: auto; }
@@ -236,20 +240,25 @@ function renderLedgerTable(
 ): string {
   const hmClass = hideHomeroomCols ? ' hm-hide' : '';
   const head = `<thead><tr>
-    <th style="width:6%">代課日期</th>
-    <th style="width:7%">代課教師</th>
-    <th style="width:5%">薪級</th>
-    <th style="width:5%">日薪</th>
-    <th style="width:5%">代課天數</th>
-    <th style="width:5%">代課節數</th>
-    <th style="width:6%">代課鐘點費</th>
-    <th style="width:7%">請假人</th>
-    <th style="width:6%">假別</th>
-    <th style="width:10%">請假事由</th>
-    <th style="width:9%">備註</th>
-    <th class="col-hm" style="width:5%">代導師日數</th>
-    <th class="col-hm" style="width:5%">導師費</th>
-    <th style="width:6%">應發金額</th>
+    <th style="width:5.5%">代課日期</th>
+    <th style="width:6%">代課教師</th>
+    <th style="width:4.5%">薪級</th>
+    <th style="width:4.5%">日薪</th>
+    <th style="width:4.5%">代課天數</th>
+    <th style="width:4.5%">代課節數</th>
+    <th style="width:5%">代課鐘點費</th>
+    <th style="width:6%">請假人</th>
+    <th style="width:5%">假別</th>
+    <th style="width:8%">請假事由</th>
+    <th style="width:7%">備註</th>
+    <th class="col-hm" style="width:4.5%">代導師日數</th>
+    <th class="col-hm" style="width:4.5%">導師費</th>
+    <th style="width:5%">應發金額</th>
+    <th style="width:4.5%">勞保</th>
+    <th style="width:4.5%">健保</th>
+    <th style="width:5%">代扣補充保費</th>
+    <th style="width:5%">實領金額</th>
+    <th style="width:6%">代課教師簽名</th>
   </tr></thead>`;
 
   const body = rows
@@ -269,6 +278,11 @@ function renderLedgerTable(
     <td class="col-hm nw tr">${multilineCell(row.homeroomDaysLines)}</td>
     <td class="col-hm nw tr">${multilineCell(row.homeroomFeeLines)}</td>
     <td class="tr">${escHtml(fmtLedgerInt(row.payableTotal))}</td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
   </tr>`,
     )
     .join('');
@@ -282,6 +296,11 @@ function renderLedgerTable(
     <td class="col-hm tr">${escHtml(String(sums.sumHmDays))}</td>
     <td class="col-hm tr">${escHtml(fmtLedgerInt(sums.sumHmFee))}</td>
     <td class="tr">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td class="tr">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
+    <td></td>
   </tr></tfoot>`;
 
   const ziLiNote = hideHomeroomCols
@@ -290,13 +309,26 @@ function renderLedgerTable(
 
   return `<section class="ledger-block${hmClass}">
   <h2 class="ledger-h1">${escHtml(fullTitle)}</h2>
-  <p class="ledger-meta">共 <strong>${rows.length}</strong> 列（同代課教師合併；與網站薪水幹事查詢／GAS 逐筆換行格式一致）</p>
   ${ziLiNote}
   <table class="ledger">${head}<tbody>${body}</tbody>${foot}</table>
   <div class="ledger-footer-sign">
-    <div class="row"><span>製表人：</span><span>勞保承辦：</span><span>校長：</span></div>
-    <div class="row"><span>教務主任：</span><span>人事主任：</span></div>
-    <div class="row"><span>會計主任：</span></div>
+    <table class="sign-table">
+      <tr>
+        <td>製表人：</td>
+        <td>勞保承辦：</td>
+        <td>校長：</td>
+      </tr>
+      <tr>
+        <td>教務主任：</td>
+        <td>人事主任：</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td>會計主任：</td>
+        <td></td>
+      </tr>
+    </table>
   </div>
 </section>`;
 }
