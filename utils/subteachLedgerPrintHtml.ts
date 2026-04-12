@@ -172,6 +172,30 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger { width: 100%; border-collapse: collapse; font-size: 11pt; table-layout: fixed; }
     table.ledger th, table.ledger td { border: 1px solid #000; padding: 3px 4px; vertical-align: middle; text-align: center; word-break: break-word; }
     table.ledger th { background: #e2e8f0; font-weight: bold; }
+    /* 連續日期區間不換行（如 04/14-04/17） */
+    table.ledger th.col-date,
+    table.ledger td.col-date { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+    /* 代課天數／節數／鐘點費：縮欄、略小字，多筆數字易直向斷行 */
+    table.ledger th.col-narrow-num,
+    table.ledger td.col-narrow-num {
+      width: 2.6%;
+      max-width: 2.2em;
+      min-width: 0;
+      padding: 2px 1px;
+      font-size: 9pt;
+      line-height: 1.2;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    table.ledger th.col-leave-person,
+    table.ledger td.col-leave-person {
+      width: 4.8%;
+      max-width: 4.5em;
+      min-width: 0;
+      padding: 2px 3px;
+      font-size: 9.5pt;
+      line-height: 1.25;
+    }
     table.ledger .tl { text-align: left; }
     table.ledger .tr { text-align: right; font-variant-numeric: tabular-nums; }
     table.ledger .nw { white-space: pre-wrap; }
@@ -190,18 +214,18 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       break-inside: avoid;
       page-break-inside: avoid;
     }
-    /* 核章同一橫列、靠左緊湊排列，避免三欄表格把末欄推到頁緣 */
+    /* 核章六欄均分；最後一格固定為校長 */
     .sign-line {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       align-items: baseline;
-      justify-content: flex-start;
-      gap: 0.35rem 1.75rem;
+      gap: 0.2rem 0.35rem;
       font-size: 10.5pt;
       font-weight: bold;
-      line-height: 1.6;
+      line-height: 1.45;
+      text-align: center;
     }
-    .sign-line span { white-space: nowrap; text-align: left; }
+    .sign-line span { white-space: nowrap; min-width: 0; }
     .muted { color: #64748b; font-size: 13px; }
     .hm-hide .col-hm { visibility: hidden; }
     @media print {
@@ -244,38 +268,38 @@ function renderLedgerTable(
 ): string {
   const hmClass = hideHomeroomCols ? ' hm-hide' : '';
   const head = `<thead><tr>
-    <th style="width:5.5%">代課日期</th>
+    <th class="col-date" style="width:6%">代課日期</th>
     <th style="width:6%">代課教師</th>
-    <th style="width:4.5%">薪級</th>
-    <th style="width:4.5%">日薪</th>
-    <th style="width:4.5%">代課天數</th>
-    <th style="width:4.5%">代課節數</th>
-    <th style="width:5%">代課鐘點費</th>
-    <th style="width:6%">請假人</th>
+    <th style="width:4%">薪級</th>
+    <th style="width:4%">日薪</th>
+    <th class="col-narrow-num">代課<br/>天數</th>
+    <th class="col-narrow-num">代課<br/>節數</th>
+    <th class="col-narrow-num">代課<br/>鐘點費</th>
+    <th class="col-leave-person">請假人</th>
     <th style="width:5%">假別</th>
-    <th style="width:8%">請假事由</th>
-    <th style="width:7%">備註</th>
-    <th class="col-hm" style="width:4.5%">代導師日數</th>
-    <th class="col-hm" style="width:4.5%">導師費</th>
+    <th style="width:9%">請假事由</th>
+    <th style="width:8%">備註</th>
+    <th class="col-hm" style="width:4%">代導師日數</th>
+    <th class="col-hm" style="width:4%">導師費</th>
     <th style="width:5%">應發金額</th>
-    <th style="width:4.5%">勞保</th>
-    <th style="width:4.5%">健保</th>
-    <th style="width:5%">代扣補充保費</th>
-    <th style="width:5%">實領金額</th>
-    <th style="width:6%">代課教師簽名</th>
+    <th style="width:4%">勞保</th>
+    <th style="width:4%">健保</th>
+    <th style="width:4.5%">代扣補充保費</th>
+    <th style="width:4.5%">實領金額</th>
+    <th style="width:5.5%">代課教師簽名</th>
   </tr></thead>`;
 
   const body = rows
     .map(
       (row) => `<tr>
-    <td class="nw">${multilineCell(row.dateLines)}</td>
+    <td class="nw col-date">${multilineCell(row.dateLines)}</td>
     <td class="nw">${escHtml(row.substituteName)}</td>
     <td class="nw">${multilineCell(row.salaryPointsLines)}</td>
     <td class="nw tr">${multilineCell(row.dailyRateLines)}</td>
-    <td class="nw tr">${multilineCell(row.subDaysLines)}</td>
-    <td class="nw tr">${multilineCell(row.subPeriodsLines)}</td>
-    <td class="nw tr">${multilineCell(row.substitutePayLines)}</td>
-    <td class="nw tl">${multilineCell(row.leaveTeacherLines)}</td>
+    <td class="nw tr col-narrow-num">${multilineCell(row.subDaysLines)}</td>
+    <td class="nw tr col-narrow-num">${multilineCell(row.subPeriodsLines)}</td>
+    <td class="nw tr col-narrow-num">${multilineCell(row.substitutePayLines)}</td>
+    <td class="nw tl col-leave-person">${multilineCell(row.leaveTeacherLines)}</td>
     <td class="nw">${multilineCell(row.leaveTypeLines)}</td>
     <td class="nw tl">${multilineCell(row.reasonLines)}</td>
     <td class="nw tl">${multilineCell(row.noteLines)}</td>
@@ -293,9 +317,9 @@ function renderLedgerTable(
 
   const totalRow = `<tr class="ledger-total-row">
     <td colspan="4">合計</td>
-    <td class="tr">${escHtml(String(sums.sumDays))}</td>
-    <td class="tr">${escHtml(String(sums.sumPeriods))}</td>
-    <td class="tr">${escHtml(fmtLedgerInt(sums.sumHourly))}</td>
+    <td class="tr col-narrow-num">${escHtml(String(sums.sumDays))}</td>
+    <td class="tr col-narrow-num">${escHtml(String(sums.sumPeriods))}</td>
+    <td class="tr col-narrow-num">${escHtml(fmtLedgerInt(sums.sumHourly))}</td>
     <td colspan="4"></td>
     <td class="col-hm tr">${escHtml(String(sums.sumHmDays))}</td>
     <td class="col-hm tr">${escHtml(fmtLedgerInt(sums.sumHmFee))}</td>
@@ -319,10 +343,10 @@ function renderLedgerTable(
     <div class="sign-line">
       <span>製表人：</span>
       <span>勞保承辦：</span>
-      <span>校長：</span>
       <span>教務主任：</span>
       <span>人事主任：</span>
       <span>會計主任：</span>
+      <span>校長：</span>
     </div>
   </div>
 </section>`;
