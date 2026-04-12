@@ -411,6 +411,10 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       page-break-inside: avoid;
     }
     /* 合計列置於 tbody 末尾，列印跨頁時不會像 tfoot 在每頁重複，僅出現於資料末頁 */
+    table.ledger tbody tr.ledger-manual-row td {
+      min-height: 1.65em;
+      vertical-align: middle;
+    }
     table.ledger tbody tr.ledger-total-row td { font-weight: bold; background: #f1f5f9; }
     table.ledger tbody tr.ledger-total-row td.ledger-total-tail {
       min-height: 0;
@@ -484,7 +488,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
       <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
-      <span class="hint">紙張請選 A4 橫向。表頭<strong>右側邊線</strong>可拖曳調欄寬（類似 Excel）。「重設」還原字級／表格寬度／縮放與欄寬（無法還原已改儲存格文字）。</span>
+      <span class="hint">紙張請選 A4 橫向。合計列上方有<strong>四列空白</strong>可手動補登；表頭右緣可拖曳調欄寬。「重設」還原字級／寬度／縮放與欄寬（不還原儲存格文字）。</span>
     </div>
     <div class="toolbar-row is-disabled" id="ledgerFormatRow">
       <span style="font-size:12px;color:#475569;font-weight:600">選取表內文字後套用（須勾選可編輯）：</span>
@@ -719,6 +723,31 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
 </html>`;
 }
 
+/** 合計列上方：供列印預覽手動補登之空白列（與資料列同欄位 class，便於勾選可編輯後填寫） */
+const LEDGER_MANUAL_BLANK_ROW = `<tr class="ledger-manual-row">
+    <td class="nw col-date"></td>
+    <td class="nw"></td>
+    <td class="col-salary-grade"></td>
+    <td class="nw tr"></td>
+    <td class="tr col-ledger-qty"></td>
+    <td class="tr col-ledger-qty"></td>
+    <td class="tr col-ledger-qty col-substitute-fee"></td>
+    <td class="nw col-leave-person"></td>
+    <td class="nw"></td>
+    <td class="nw tl"></td>
+    <td class="nw tl col-note"></td>
+    <td class="col-hm nw tr"></td>
+    <td class="col-hm nw tr col-hm-fee"></td>
+    <td class="tr col-payable"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+  </tr>`;
+
+const LEDGER_MANUAL_BLANK_ROWS = Array.from({ length: 4 }, () => LEDGER_MANUAL_BLANK_ROW).join('\n');
+
 function renderLedgerTable(
   fullTitle: string,
   typeStr: string,
@@ -796,7 +825,7 @@ function renderLedgerTable(
   return `<section class="ledger-block${hmClass}">
   <h2 class="ledger-h1">${escHtml(fullTitle)}</h2>
   ${ziLiNote}
-  <table class="ledger">${ledgerTableColgroup()}${head}<tbody>${body}${totalRow}</tbody></table>
+  <table class="ledger">${ledgerTableColgroup()}${head}<tbody>${body}${LEDGER_MANUAL_BLANK_ROWS}${totalRow}</tbody></table>
   <div class="ledger-footer-sign">
     <div class="sign-line">
       <span>製表人：</span>
