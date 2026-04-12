@@ -175,15 +175,33 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger .tl { text-align: left; }
     table.ledger .tr { text-align: right; font-variant-numeric: tabular-nums; }
     table.ledger .nw { white-space: pre-wrap; }
+    /* 列印時盡量維持整列在同一頁（瀏覽器仍可能對極高列忽略） */
+    table.ledger thead tr,
+    table.ledger tbody tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
     /* 合計列置於 tbody 末尾，列印跨頁時不會像 tfoot 在每頁重複，僅出現於資料末頁 */
     table.ledger tbody tr.ledger-total-row td { font-weight: bold; background: #f1f5f9; }
-    tr.ledger-total-row { break-inside: avoid; page-break-inside: avoid; }
     table.ledger td.ledger-fill { min-height: 2.2em; }
-    .ledger-footer-sign { margin-top: 16px; width: 100%; }
-    table.sign-table { width: 100%; border-collapse: collapse; font-size: 10.5pt; font-weight: bold; table-layout: fixed; }
-    table.sign-table td { width: 33.33%; padding: 8px 12px 10px 4px; vertical-align: bottom; border: none; text-align: left; }
-    table.sign-table td:nth-child(2) { text-align: center; }
-    table.sign-table td:nth-child(3) { text-align: right; }
+    .ledger-footer-sign {
+      margin-top: 16px;
+      width: 100%;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    /* 核章同一橫列、靠左緊湊排列，避免三欄表格把末欄推到頁緣 */
+    .sign-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: flex-start;
+      gap: 0.35rem 1.75rem;
+      font-size: 10.5pt;
+      font-weight: bold;
+      line-height: 1.6;
+    }
+    .sign-line span { white-space: nowrap; text-align: left; }
     .muted { color: #64748b; font-size: 13px; }
     .hm-hide .col-hm { visibility: hidden; }
     @media print {
@@ -191,6 +209,19 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       body { padding: 0; }
       .ledger-block { page-break-after: always; }
       .ledger-block:last-child { page-break-after: auto; }
+      table.ledger thead tr,
+      table.ledger tbody tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+      .ledger-footer-sign {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+      .sign-line {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
     }
   </style>
 </head>
@@ -285,23 +316,14 @@ function renderLedgerTable(
   ${ziLiNote}
   <table class="ledger">${head}<tbody>${body}${totalRow}</tbody></table>
   <div class="ledger-footer-sign">
-    <table class="sign-table">
-      <tr>
-        <td>製表人：</td>
-        <td>勞保承辦：</td>
-        <td>校長：</td>
-      </tr>
-      <tr>
-        <td>教務主任：</td>
-        <td>人事主任：</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td></td>
-        <td>會計主任：</td>
-        <td></td>
-      </tr>
-    </table>
+    <div class="sign-line">
+      <span>製表人：</span>
+      <span>勞保承辦：</span>
+      <span>校長：</span>
+      <span>教務主任：</span>
+      <span>人事主任：</span>
+      <span>會計主任：</span>
+    </div>
   </div>
 </section>`;
 }
