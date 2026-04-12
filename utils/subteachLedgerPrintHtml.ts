@@ -72,14 +72,14 @@ function leaveTypeCellHtml(s: string): string {
   return `<span class="col-leave-type">${blocks.join('<br/>')}</span>`;
 }
 
-/** 代導師日數：數字依 3 欄排列（多筆時自動換列） */
+/** 代導師日數：多筆數字逐行直向排列（與換行一致，避免橫向擠成一排） */
 function homeroomDaysCellHtml(s: string): string {
   const raw = String(s).trim();
-  if (!raw) return '<div class="hm-days-grid"><span>—</span></div>';
+  if (!raw) return '<div class="hm-days-stack"><span class="hm-days-item">—</span></div>';
   const tokens = raw.split(/\n/).map((t) => t.trim()).filter((t) => t.length > 0);
-  if (tokens.length === 0) return '<div class="hm-days-grid"><span>—</span></div>';
-  const spans = tokens.map((t) => `<span>${escHtml(t)}</span>`).join('');
-  return `<div class="hm-days-grid">${spans}</div>`;
+  if (tokens.length === 0) return '<div class="hm-days-stack"><span class="hm-days-item">—</span></div>';
+  const spans = tokens.map((t) => `<span class="hm-days-item">${escHtml(t)}</span>`).join('');
+  return `<div class="hm-days-stack">${spans}</div>`;
 }
 
 /** 導師費：不換行（多筆以空白銜接） */
@@ -393,15 +393,20 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       white-space: nowrap;
     }
     table.ledger td .col-leave-type { font-size: 0.86em; line-height: 1.25; }
-    table.ledger .hm-days-grid {
-      display: grid;
-      grid-template-columns: repeat(3, auto);
-      gap: 2px 4px;
-      justify-content: center;
+    table.ledger .hm-days-stack {
+      display: flex;
+      flex-direction: column;
       align-items: center;
+      justify-content: center;
+      gap: 0;
+      line-height: 1.12;
       font-variant-numeric: tabular-nums;
     }
-    table.ledger .hm-days-grid span { white-space: nowrap; }
+    table.ledger .hm-days-stack .hm-days-item {
+      display: block;
+      white-space: nowrap;
+      line-height: 1.12;
+    }
     table.ledger th.col-hm-fee,
     table.ledger td.col-hm-fee {
       white-space: nowrap;
@@ -424,9 +429,13 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       page-break-inside: avoid;
     }
     /* 合計列置於 tbody 末尾，列印跨頁時不會像 tfoot 在每頁重複，僅出現於資料末頁 */
+    /* 手動補登空白列：單格至少約 14 號一行＋上下餘裕，方便點選與手寫對位 */
     table.ledger tbody tr.ledger-manual-row td {
-      min-height: 1.65em;
+      min-height: 22pt;
+      padding-top: 3pt;
+      padding-bottom: 3pt;
       vertical-align: middle;
+      box-sizing: border-box;
     }
     table.ledger tbody tr.ledger-total-row td { font-weight: bold; background: #f1f5f9; }
     table.ledger tbody tr.ledger-total-row td.ledger-total-tail {
