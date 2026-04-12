@@ -31,6 +31,30 @@ function multilineCell(s: string): string {
   return escHtml(s).replace(/\n/g, '<br/>');
 }
 
+/**
+ * 薪級欄：固定兩行（數字／(有證)(無證)）；括號內不斷行；多組薪級仍以 <br/> 分隔。
+ */
+function salaryGradeCellHtml(s: string): string {
+  const lines = String(s).split('\n');
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const cur = lines[i] ?? '';
+    const nextRaw = lines[i + 1];
+    const nextTrim = nextRaw != null ? nextRaw.trim() : '';
+    if (nextTrim && /^\([^)]+\)$/.test(nextTrim)) {
+      chunks.push(
+        `<span class="sg-num">${escHtml(cur.trim())}</span><br/><span class="sg-cert">${escHtml(nextTrim)}</span>`,
+      );
+      i += 2;
+    } else {
+      chunks.push(escHtml(cur));
+      i += 1;
+    }
+  }
+  return chunks.join('<br/>');
+}
+
 /** 假別欄：12 號字，並於半形／全形括號前斷行 */
 function leaveTypeCellHtml(s: string): string {
   const lines = String(s).split('\n');
@@ -67,7 +91,7 @@ function homeroomFeeSingleLineHtml(s: string): string {
 /** A4 橫向印領清冊：19 欄寬度加總 100%，避免 table-layout:fixed 時未設寬欄被壓成極窄而數字直排 */
 function ledgerTableColgroup(): string {
   const widths = [
-    '6%', '6%', '4%', '4%', '5.5%', '5.5%', '9%', '5%', '5%', '10%', '6%', '4%', '4.5%', '5.5%', '3.5%',
+    '6%', '6%', '5%', '3.5%', '5.5%', '5.5%', '9%', '5%', '5%', '10%', '6%', '4%', '4.5%', '5.5%', '3.5%',
     '3.5%', '4%', '4%', '5%',
   ];
   return `<colgroup>${widths.map((w) => `<col style="width:${w}" />`).join('')}</colgroup>`;
@@ -226,6 +250,17 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     /* 連續日期區間不換行（如 04/14-04/17） */
     table.ledger th.col-date,
     table.ledger td.col-date { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+    table.ledger th.col-salary-grade,
+    table.ledger td.col-salary-grade {
+      word-break: normal;
+      overflow-wrap: normal;
+      line-height: 1.3;
+    }
+    table.ledger td.col-salary-grade .sg-num { display: block; }
+    table.ledger td.col-salary-grade .sg-cert {
+      display: inline-block;
+      white-space: nowrap;
+    }
     /* 代課天數、節數、代課費用：欄寬由 colgroup 保證；多筆數字僅在 <br/> 處換行，不斷開單一金額 */
     table.ledger th.col-ledger-qty,
     table.ledger td.col-ledger-qty,
@@ -341,7 +376,7 @@ function renderLedgerTable(
   const head = `<thead><tr>
     <th class="col-date">代課日期</th>
     <th>代課教師</th>
-    <th>薪級</th>
+    <th class="col-salary-grade">薪級</th>
     <th>日薪<br/>(${dim}天)</th>
     <th class="col-ledger-qty">代課<br/>天數</th>
     <th class="col-ledger-qty">代課<br/>節數</th>
@@ -365,7 +400,7 @@ function renderLedgerTable(
       (row) => `<tr>
     <td class="nw col-date">${multilineCell(row.dateLines)}</td>
     <td class="nw">${escHtml(row.substituteName)}</td>
-    <td class="nw">${multilineCell(row.salaryPointsLines)}</td>
+    <td class="col-salary-grade">${salaryGradeCellHtml(row.salaryPointsLines)}</td>
     <td class="nw tr">${multilineCell(row.dailyRateLines)}</td>
     <td class="tr col-ledger-qty">${multilineCell(row.subDaysLines)}</td>
     <td class="tr col-ledger-qty">${multilineCell(row.subPeriodsLines)}</td>
