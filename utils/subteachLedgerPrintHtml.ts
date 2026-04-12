@@ -44,7 +44,7 @@ function salaryGradeCellHtml(s: string): string {
     const nextTrim = nextRaw != null ? nextRaw.trim() : '';
     if (nextTrim && /^\([^)]+\)$/.test(nextTrim)) {
       chunks.push(
-        `<span class="sg-num">${escHtml(cur.trim())}</span><br/><span class="sg-cert">${escHtml(nextTrim)}</span>`,
+        `<div class="sg-block"><span class="sg-num">${escHtml(cur.trim())}</span><span class="sg-cert">${escHtml(nextTrim)}</span></div>`,
       );
       i += 2;
     } else {
@@ -52,7 +52,7 @@ function salaryGradeCellHtml(s: string): string {
       i += 1;
     }
   }
-  return chunks.join('<br/>');
+  return chunks.join('<span class="sg-gap" aria-hidden="true"></span>');
 }
 
 /** 假別欄：12 號字，並於半形／全形括號前斷行 */
@@ -333,12 +333,31 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger td.col-salary-grade {
       word-break: normal;
       overflow-wrap: normal;
-      line-height: 1.3;
+      line-height: 1.05;
     }
-    table.ledger td.col-salary-grade .sg-num { display: block; }
+    table.ledger td.col-salary-grade .sg-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      line-height: 1.05;
+    }
+    table.ledger td.col-salary-grade .sg-num,
     table.ledger td.col-salary-grade .sg-cert {
-      display: inline-block;
+      display: block;
+      margin: 0;
+      padding: 0;
+      line-height: 1.05;
       white-space: nowrap;
+    }
+    table.ledger td.col-salary-grade .sg-gap {
+      display: block;
+      height: 0.2em;
+      line-height: 0;
+      overflow: hidden;
     }
     /* 代課天數、節數、代課費用：欄寬由 colgroup 保證；多筆數字僅在 <br/> 處換行，不斷開單一金額 */
     table.ledger th.col-ledger-qty,
@@ -393,7 +412,13 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     }
     /* 合計列置於 tbody 末尾，列印跨頁時不會像 tfoot 在每頁重複，僅出現於資料末頁 */
     table.ledger tbody tr.ledger-total-row td { font-weight: bold; background: #f1f5f9; }
+    table.ledger tbody tr.ledger-total-row td.ledger-total-tail {
+      min-height: 0;
+      padding: 2px 4px;
+      vertical-align: middle;
+    }
     table.ledger td.ledger-fill { min-height: 2.2em; }
+    #ledgerFormatRow.is-disabled { opacity: 0.45; pointer-events: none; filter: grayscale(0.25); }
     .ledger-footer-sign {
       margin-top: 16px;
       width: 100%;
@@ -461,6 +486,23 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
       <span class="hint">紙張請選 A4 橫向。表頭<strong>右側邊線</strong>可拖曳調欄寬（類似 Excel）。「重設」還原字級／表格寬度／縮放與欄寬（無法還原已改儲存格文字）。</span>
     </div>
+    <div class="toolbar-row is-disabled" id="ledgerFormatRow">
+      <span style="font-size:12px;color:#475569;font-weight:600">選取表內文字後套用（須勾選可編輯）：</span>
+      <button type="button" class="secondary" id="btnFmtBold">粗體</button>
+      <label>局部字級 <select id="selFmtSize">
+        <option value="">—</option>
+        <option value="10">10pt</option>
+        <option value="11">11pt</option>
+        <option value="12">12pt</option>
+        <option value="13">13pt</option>
+        <option value="14">14pt</option>
+        <option value="15">15pt</option>
+        <option value="16">16pt</option>
+        <option value="17">17pt</option>
+        <option value="18">18pt</option>
+      </select></label>
+      <label>顏色 <input type="color" id="inpFmtColor" value="#000000" title="套用至選取文字" /></label>
+    </div>
   </div>
   <div class="ledger-shell" id="ledgerShell">
     <div class="ledger-scale-inner" id="ledgerScaleInner">
@@ -497,6 +539,10 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     root.style.setProperty('--ledger-scale', String(p));
     lblScale.textContent = rngScale.value + '%';
   }
+  var fmtRow = document.getElementById('ledgerFormatRow');
+  var btnFmtBold = document.getElementById('btnFmtBold');
+  var selFmtSize = document.getElementById('selFmtSize');
+  var inpFmtColor = document.getElementById('inpFmtColor');
   function setEditable(on) {
     if (!shell) return;
     shell.querySelectorAll('table.ledger td, table.ledger th').forEach(function (el) {
@@ -505,11 +551,64 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     shell.querySelectorAll('.ledger-footer-sign .sign-line span').forEach(function (el) {
       el.contentEditable = on ? 'true' : 'false';
     });
+    if (fmtRow) fmtRow.classList.toggle('is-disabled', !on);
+  }
+  function selInShell() {
+    if (!shell) return false;
+    var sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed) return false;
+    var r = sel.getRangeAt(0);
+    var n = r.commonAncestorContainer;
+    if (n.nodeType === 3) n = n.parentElement;
+    return !!(n && shell.contains(n));
+  }
+  function wrapSelectionFontSize(pt) {
+    if (!chk.checked || !selInShell()) return;
+    var sel = window.getSelection();
+    var range = sel.getRangeAt(0);
+    var span = document.createElement('span');
+    span.style.fontSize = pt + 'pt';
+    try {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    } catch (e) {
+      return;
+    }
+    sel.removeAllRanges();
+  }
+  if (btnFmtBold) {
+    btnFmtBold.addEventListener('click', function () {
+      if (!chk.checked || !selInShell()) return;
+      try {
+        document.execCommand('bold', false, null);
+      } catch (e) {}
+    });
+  }
+  if (selFmtSize) {
+    selFmtSize.addEventListener('change', function () {
+      var v = selFmtSize.value;
+      if (!v) return;
+      wrapSelectionFontSize(v);
+      selFmtSize.value = '';
+    });
+  }
+  if (inpFmtColor) {
+    inpFmtColor.addEventListener('input', function () {
+      if (!chk.checked || !selInShell()) return;
+      try {
+        document.execCommand('styleWithCSS', false, true);
+      } catch (e) {}
+      try {
+        document.execCommand('foreColor', false, inpFmtColor.value);
+      } catch (e2) {}
+    });
   }
   rngFont.addEventListener('input', applyFont);
   rngWidth.addEventListener('input', applyWidth);
   rngScale.addEventListener('input', applyScale);
-  chk.addEventListener('change', function () { setEditable(chk.checked); });
+  chk.addEventListener('change', function () {
+    setEditable(chk.checked);
+  });
   function parseColPercentages(table) {
     var cols = table.querySelectorAll('colgroup col');
     return Array.from(cols).map(function (c) {
@@ -687,11 +786,7 @@ function renderLedgerTable(
     <td class="col-hm tr">${homeroomDaysCellHtml(String(sums.sumHmDays))}</td>
     <td class="col-hm tr col-hm-fee">${escHtml(fmtLedgerInt(sums.sumHmFee))}</td>
     <td class="tr col-payable">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td class="tr col-payable">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
-    <td></td>
+    <td colspan="5" class="ledger-total-tail"></td>
   </tr>`;
 
   const ziLiNote = hideHomeroomCols
