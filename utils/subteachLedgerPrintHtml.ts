@@ -310,8 +310,20 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       word-break: normal;
       overflow-wrap: break-word;
     }
-    table.ledger th { background: #e2e8f0; font-weight: bold; line-height: 1.2; }
+    table.ledger th { background: #e2e8f0; font-weight: bold; line-height: 1.2; position: relative; }
     table.ledger th.th-1l { white-space: nowrap; }
+    .ledger-resize-handle {
+      position: absolute;
+      top: 0;
+      right: -4px;
+      width: 8px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 3;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .ledger-resize-handle:hover { background: rgba(99, 102, 241, 0.25); }
     table.ledger th .th-brk { display: block; }
     table.ledger th .th-nobr { white-space: nowrap; }
     /* 連續日期區間不換行（如 04/14-04/17） */
@@ -432,6 +444,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
         box-shadow: none;
         background: transparent;
       }
+      .ledger-resize-handle { display: none !important; }
     }
   </style>
 </head>
@@ -446,7 +459,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
       <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
-      <span class="hint">紙張請選 A4 橫向。編輯後直接列印即可帶入紙本；「重設」還原字級／寬度／縮放（無法還原已改文字）。</span>
+      <span class="hint">紙張請選 A4 橫向。表頭<strong>右側邊線</strong>可拖曳調欄寬（類似 Excel）。「重設」還原字級／表格寬度／縮放與欄寬（無法還原已改儲存格文字）。</span>
     </div>
   </div>
   <div class="ledger-shell" id="ledgerShell">
@@ -497,6 +510,97 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   rngWidth.addEventListener('input', applyWidth);
   rngScale.addEventListener('input', applyScale);
   chk.addEventListener('change', function () { setEditable(chk.checked); });
+  function parseColPercentages(table) {
+    var cols = table.querySelectorAll('colgroup col');
+    return Array.from(cols).map(function (c) {
+      var st = c.getAttribute('style') || '';
+      var k = st.indexOf('width:');
+      if (k < 0) return 0;
+      var rest = st.slice(k + 6).trim();
+      var end = rest.indexOf('%');
+      if (end < 0) return 0;
+      var n = parseFloat(rest.slice(0, end));
+      return isNaN(n) ? 0 : n;
+    });
+  }
+  function ensureColBackup(table) {
+    if (table.dataset.ledgerColBackup) return;
+    var p = parseColPercentages(table);
+    if (p.some(function (x) { return x > 0; })) table.dataset.ledgerColBackup = JSON.stringify(p);
+  }
+  function restoreLedgerColWidths() {
+    if (!shell) return;
+    shell.querySelectorAll('table.ledger').forEach(function (table) {
+      var raw = table.dataset.ledgerColBackup;
+      if (!raw) return;
+      try {
+        var arr = JSON.parse(raw);
+        var cols = table.querySelectorAll('colgroup col');
+        arr.forEach(function (pct, j) {
+          if (cols[j]) cols[j].setAttribute('style', 'width:' + pct + '%');
+        });
+      } catch (_) {}
+    });
+  }
+  function initLedgerColResize() {
+    if (!shell) return;
+    var MIN_PX = 28;
+    shell.querySelectorAll('table.ledger').forEach(function (table) {
+      ensureColBackup(table);
+      var colgroup = table.querySelector('colgroup');
+      if (!colgroup) return;
+      var cols = Array.from(colgroup.querySelectorAll('col'));
+      var ths = Array.from(table.querySelectorAll('thead tr th'));
+      if (cols.length !== ths.length || cols.length < 2) return;
+      ths.forEach(function (th, colIndex) {
+        if (colIndex >= ths.length - 1) return;
+        var old = th.querySelector('.ledger-resize-handle');
+        if (old) old.remove();
+        var h = document.createElement('span');
+        h.className = 'ledger-resize-handle no-print';
+        h.title = '拖曳調整此欄與右鄰欄寬度';
+        th.appendChild(h);
+        h.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var i = colIndex;
+          var startX = e.clientX;
+          var initWidths = ths.map(function (t) {
+            return t.getBoundingClientRect().width;
+          });
+          function onMove(ev) {
+            var delta = ev.clientX - startX;
+            var w = initWidths.slice();
+            w[i] = initWidths[i] + delta;
+            w[i + 1] = initWidths[i + 1] - delta;
+            if (w[i] < MIN_PX) {
+              w[i + 1] -= MIN_PX - w[i];
+              w[i] = MIN_PX;
+            }
+            if (w[i + 1] < MIN_PX) {
+              w[i] -= MIN_PX - w[i + 1];
+              w[i + 1] = MIN_PX;
+            }
+            var sum = w.reduce(function (a, b) {
+              return a + b;
+            }, 0);
+            if (sum <= 0) return;
+            w.forEach(function (px, j) {
+              if (cols[j]) cols[j].setAttribute('style', 'width:' + ((px / sum) * 100).toFixed(4) + '%');
+            });
+          }
+          function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+          }
+          document.body.style.cursor = 'col-resize';
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
+    });
+  }
   btnReset.addEventListener('click', function () {
     rngFont.value = '14';
     rngWidth.value = '100';
@@ -504,10 +608,12 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     applyFont();
     applyWidth();
     applyScale();
+    restoreLedgerColWidths();
   });
   applyFont();
   applyWidth();
   applyScale();
+  setTimeout(initLedgerColResize, 0);
 })();
   </script>
 </body>
