@@ -72,22 +72,19 @@ function leaveTypeCellHtml(s: string): string {
   return `<span class="col-leave-type">${blocks.join('<br/>')}</span>`;
 }
 
-/** 代導師日數：多筆數字逐行直向排列（\n 或同列空白分隔皆拆成多行顯示） */
-function homeroomDaysCellHtml(s: string): string {
+/**
+ * 數字／金額等多筆：`\n` 與同列空白皆拆成 token，直向置中堆疊（日薪、天數、節數、代課費用、代導師日數、導師費等共用）。
+ * 姓名、事由、日期等仍用 multilineCell，避免中文被空白誤拆。
+ */
+function ledgerStackedCellHtml(s: string): string {
   const raw = String(s).trim();
-  if (!raw) return '<div class="hm-days-stack"><span class="hm-days-item">—</span></div>';
+  if (!raw) return '<div class="ledger-stack"><span class="ledger-stack-item">—</span></div>';
   const tokens = raw
     .split(/\n/)
     .flatMap((line) => line.trim().split(/\s+/).filter((x) => x.length > 0));
-  if (tokens.length === 0) return '<div class="hm-days-stack"><span class="hm-days-item">—</span></div>';
-  const spans = tokens.map((t) => `<span class="hm-days-item">${escHtml(t)}</span>`).join('');
-  return `<div class="hm-days-stack">${spans}</div>`;
-}
-
-/** 導師費：不換行（多筆以空白銜接） */
-function homeroomFeeSingleLineHtml(s: string): string {
-  const one = String(s).replace(/\s*\n\s*/g, ' ').trim();
-  return escHtml(one || '—');
+  if (tokens.length === 0) return '<div class="ledger-stack"><span class="ledger-stack-item">—</span></div>';
+  const spans = tokens.map((t) => `<span class="ledger-stack-item">${escHtml(t)}</span>`).join('');
+  return `<div class="ledger-stack">${spans}</div>`;
 }
 
 /** 備註：每一筆摘要（如 0日2節(午,5)）維持同一行，不從括號處被拆成兩行 */
@@ -395,7 +392,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       white-space: nowrap;
     }
     table.ledger td .col-leave-type { font-size: 0.86em; line-height: 1.25; }
-    table.ledger .hm-days-stack {
+    table.ledger .ledger-stack {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -404,14 +401,16 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       line-height: 1.12;
       font-variant-numeric: tabular-nums;
     }
-    table.ledger .hm-days-stack .hm-days-item {
+    table.ledger .ledger-stack .ledger-stack-item {
       display: block;
       white-space: nowrap;
       line-height: 1.12;
     }
-    table.ledger th.col-hm-fee,
-    table.ledger td.col-hm-fee {
+    table.ledger th.col-hm-fee {
       white-space: nowrap;
+    }
+    table.ledger td.col-hm-fee {
+      white-space: normal;
     }
     table.ledger .tl { text-align: left; word-break: break-word; }
     /* 數字欄位置中（與 GAS 清冊常用 14 號字一致） */
@@ -859,16 +858,16 @@ function renderLedgerTable(
     <td class="nw col-date">${multilineCell(row.dateLines)}</td>
     <td class="nw">${escHtml(row.substituteName)}</td>
     <td class="col-salary-grade">${salaryGradeCellHtml(row.salaryPointsLines)}</td>
-    <td class="nw tr">${multilineCell(row.dailyRateLines)}</td>
-    <td class="tr col-ledger-qty">${multilineCell(row.subDaysLines)}</td>
-    <td class="tr col-ledger-qty">${multilineCell(row.subPeriodsLines)}</td>
-    <td class="tr col-ledger-qty col-substitute-fee">${multilineCell(row.substitutePayLines)}</td>
+    <td class="tr">${ledgerStackedCellHtml(row.dailyRateLines)}</td>
+    <td class="tr col-ledger-qty">${ledgerStackedCellHtml(row.subDaysLines)}</td>
+    <td class="tr col-ledger-qty">${ledgerStackedCellHtml(row.subPeriodsLines)}</td>
+    <td class="tr col-ledger-qty col-substitute-fee">${ledgerStackedCellHtml(row.substitutePayLines)}</td>
     <td class="nw col-leave-person">${multilineCell(row.leaveTeacherLines)}</td>
     <td class="nw">${leaveTypeCellHtml(row.leaveTypeLines)}</td>
     <td class="nw tl">${multilineCell(row.reasonLines)}</td>
     <td class="nw tl col-note">${noteCellHtml(row.noteLines)}</td>
-    <td class="col-hm nw tr">${homeroomDaysCellHtml(row.homeroomDaysLines)}</td>
-    <td class="col-hm nw tr col-hm-fee">${homeroomFeeSingleLineHtml(row.homeroomFeeLines)}</td>
+    <td class="col-hm tr">${ledgerStackedCellHtml(row.homeroomDaysLines)}</td>
+    <td class="col-hm tr col-hm-fee">${ledgerStackedCellHtml(row.homeroomFeeLines)}</td>
     <td class="tr col-payable">${escHtml(fmtLedgerInt(row.payableTotal))}</td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
@@ -885,8 +884,8 @@ function renderLedgerTable(
     <td class="tr col-ledger-qty">${escHtml(String(sums.sumPeriods))}</td>
     <td class="tr col-ledger-qty col-substitute-fee">${escHtml(fmtLedgerInt(sums.sumHourly))}</td>
     <td colspan="4"></td>
-    <td class="col-hm tr">${homeroomDaysCellHtml(String(sums.sumHmDays))}</td>
-    <td class="col-hm tr col-hm-fee">${escHtml(fmtLedgerInt(sums.sumHmFee))}</td>
+    <td class="col-hm tr">${ledgerStackedCellHtml(String(sums.sumHmDays))}</td>
+    <td class="col-hm tr col-hm-fee">${ledgerStackedCellHtml(fmtLedgerInt(sums.sumHmFee))}</td>
     <td class="tr col-payable">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
     <td colspan="5" class="ledger-total-tail"></td>
   </tr>`;
