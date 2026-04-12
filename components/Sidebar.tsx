@@ -88,7 +88,10 @@ const Sidebar: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           </h1>
           <p className="text-xs text-slate-500 mt-1">代課薪資管理系統</p>
           {commitLabel && (
-            <p className="text-[10px] text-slate-600 mt-1 font-mono tabular-nums leading-tight" title="以本機最後一筆 git commit 時間注入（dev／build 啟動時更新）">
+            <p
+              className="text-[10px] text-white mt-1 font-mono tabular-nums leading-tight"
+              title="以本機最後一筆 git commit 時間注入（dev／build 啟動時更新）"
+            >
               {commitLabel}
             </p>
           )}
