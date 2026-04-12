@@ -477,21 +477,43 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     }
     @media print {
       .no-print, .toolbar { display: none !important; }
-      body { padding: 0; }
+      body {
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      /* 列印引擎對 transform:scale 常與畫面不一致，改以 100% 寬列印；請用「表格字級／寬度」微調列印大小 */
+      .ledger-scale-inner {
+        transform: none !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+      }
+      .ledger-shell {
+        overflow: visible !important;
+        max-width: none !important;
+      }
       .ledger-block { page-break-after: always; }
       .ledger-block:last-child { page-break-after: auto; }
-      table.ledger thead tr,
+      /* 勿對每一資料列強制 avoid，否則瀏覽器會整表縮放塞頁導致「跑版」 */
+      table.ledger thead tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
       table.ledger tbody tr {
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+      table.ledger tbody tr.ledger-total-row {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
       .ledger-footer-sign {
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
       .sign-line {
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
       table.ledger td[contenteditable="true"],
       table.ledger th[contenteditable="true"],
@@ -515,7 +537,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
       <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
-      <span class="hint">紙張請選 A4 橫向。合計上方有<strong>四列空白</strong>可補登；表頭<strong>右緣</strong>拖曳調欄寬、列底<strong>橫線</strong>拖曳調列高。「重設」還原字級／寬度／縮放／欄寬／列高（不還原儲存格文字）。</span>
+      <span class="hint">紙張請選 A4 橫向；列印對話框<strong>縮放請用 100%</strong>（勿用「適合頁面大小」以免與預覽不符）。<strong>整表縮放</strong>僅影響螢幕預覽，列印時請改<strong>表格字級／寬度</strong>。合計上有四列空白可補登；表頭右緣調欄寬、列底橫線調列高。「重設」還原字級／寬度／縮放／欄寬／列高。</span>
     </div>
     <div class="toolbar-row is-disabled" id="ledgerFormatRow">
       <span style="font-size:12px;color:#475569;font-weight:600">選取表內文字後套用（須勾選可編輯）：</span>
