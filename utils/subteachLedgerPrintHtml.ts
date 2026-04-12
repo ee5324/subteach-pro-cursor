@@ -72,11 +72,13 @@ function leaveTypeCellHtml(s: string): string {
   return `<span class="col-leave-type">${blocks.join('<br/>')}</span>`;
 }
 
-/** 代導師日數：多筆數字逐行直向排列（與換行一致，避免橫向擠成一排） */
+/** 代導師日數：多筆數字逐行直向排列（\n 或同列空白分隔皆拆成多行顯示） */
 function homeroomDaysCellHtml(s: string): string {
   const raw = String(s).trim();
   if (!raw) return '<div class="hm-days-stack"><span class="hm-days-item">—</span></div>';
-  const tokens = raw.split(/\n/).map((t) => t.trim()).filter((t) => t.length > 0);
+  const tokens = raw
+    .split(/\n/)
+    .flatMap((line) => line.trim().split(/\s+/).filter((x) => x.length > 0));
   if (tokens.length === 0) return '<div class="hm-days-stack"><span class="hm-days-item">—</span></div>';
   const spans = tokens.map((t) => `<span class="hm-days-item">${escHtml(t)}</span>`).join('');
   return `<div class="hm-days-stack">${spans}</div>`;
