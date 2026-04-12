@@ -64,6 +64,15 @@ function homeroomFeeSingleLineHtml(s: string): string {
   return escHtml(one || '—');
 }
 
+/** A4 橫向印領清冊：19 欄寬度加總 100%，避免 table-layout:fixed 時未設寬欄被壓成極窄而數字直排 */
+function ledgerTableColgroup(): string {
+  const widths = [
+    '6%', '6%', '4%', '4%', '5.5%', '5.5%', '9%', '5%', '5%', '10%', '6%', '4%', '4.5%', '5.5%', '3.5%',
+    '3.5%', '4%', '4%', '5%',
+  ];
+  return `<colgroup>${widths.map((w) => `<col style="width:${w}" />`).join('')}</colgroup>`;
+}
+
 /** 與 GAS SheetManager.generateReports titlePrefix 一致 */
 function titlePrefixRoc(rocYear: number, monthNum: string): string {
   return `加昌國小${rocYear}年${monthNum}月代課教師印領清冊~~【級科任教師】`;
@@ -204,36 +213,33 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     .ledger-h1 { text-align: center; font-size: 18px; font-weight: bold; margin: 8px 0 12px 0; line-height: 1.35; }
     .ledger-meta { text-align: center; font-size: 13px; margin-bottom: 10px; color: #334155; }
     table.ledger { width: 100%; border-collapse: collapse; font-size: 14pt; table-layout: fixed; }
-    /* 各欄左右各加約 2pt（較易閱讀） */
-    table.ledger th, table.ledger td { border: 1px solid #000; padding: 3px calc(4px + 2pt); vertical-align: middle; text-align: center; word-break: break-word; }
+    /* 各欄左右各加約 2pt；數字欄勿用 break-all 以免逐字直排 */
+    table.ledger th, table.ledger td {
+      border: 1px solid #000;
+      padding: 3px calc(4px + 2pt);
+      vertical-align: middle;
+      text-align: center;
+      word-break: normal;
+      overflow-wrap: break-word;
+    }
     table.ledger th { background: #e2e8f0; font-weight: bold; }
     /* 連續日期區間不換行（如 04/14-04/17） */
     table.ledger th.col-date,
     table.ledger td.col-date { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
-    /* 代課天數／節數／鐘點費：縮欄、略小字，多筆數字易直向斷行 */
-    table.ledger th.col-narrow-num,
-    table.ledger td.col-narrow-num {
-      width: 2.6%;
-      max-width: 2.2em;
-      min-width: 0;
-      padding: 2px calc(4px + 2pt);
-      font-size: 14pt;
-      line-height: 1.2;
-      white-space: pre-wrap;
-      word-break: break-all;
-      text-align: center;
-    }
+    /* 代課天數、節數、代課費用：欄寬由 colgroup 保證；多筆數字僅在 <br/> 處換行，不斷開單一金額 */
+    table.ledger th.col-ledger-qty,
+    table.ledger td.col-ledger-qty,
     table.ledger th.col-substitute-fee,
     table.ledger td.col-substitute-fee {
-      min-width: 3.1em;
-      max-width: none;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: normal;
+      line-height: 1.35;
+      font-variant-numeric: tabular-nums;
     }
     table.ledger th.col-leave-person,
     table.ledger td.col-leave-person {
-      width: 4.8%;
-      max-width: 4.5em;
-      min-width: 0;
-      padding: 2px calc(4px + 2pt);
+      padding: 3px calc(4px + 2pt);
       font-size: 14pt;
       line-height: 1.25;
       text-align: center;
@@ -241,19 +247,26 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger td .col-leave-type { font-size: 12pt; line-height: 1.25; }
     table.ledger .hm-days-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 1px 2px;
-      justify-items: center;
+      grid-template-columns: repeat(3, auto);
+      gap: 2px 4px;
+      justify-content: center;
+      align-items: center;
       font-variant-numeric: tabular-nums;
     }
-    table.ledger .hm-days-grid span { min-width: 0; }
+    table.ledger .hm-days-grid span { white-space: nowrap; }
     table.ledger th.col-hm-fee,
     table.ledger td.col-hm-fee {
       white-space: nowrap;
     }
-    table.ledger .tl { text-align: left; }
+    table.ledger .tl { text-align: left; word-break: break-word; }
     /* 數字欄位置中（與 GAS 清冊常用 14 號字一致） */
-    table.ledger .tr { text-align: center; font-variant-numeric: tabular-nums; }
+    table.ledger .tr {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      word-break: normal;
+      overflow-wrap: normal;
+    }
+    table.ledger td.col-payable { white-space: nowrap; }
     table.ledger .nw { white-space: pre-wrap; }
     /* 列印時盡量維持整列在同一頁（瀏覽器仍可能對極高列忽略） */
     table.ledger thead tr,
@@ -326,25 +339,25 @@ function renderLedgerTable(
   const hmClass = hideHomeroomCols ? ' hm-hide' : '';
   const dim = Math.max(1, Math.min(31, Math.floor(Number(daysInMonth)) || 30));
   const head = `<thead><tr>
-    <th class="col-date" style="width:6%">代課日期</th>
-    <th style="width:6%">代課教師</th>
-    <th style="width:4%">薪級</th>
-    <th style="width:4%">日薪<br/>(${dim}天)</th>
-    <th class="col-narrow-num">代課<br/>天數</th>
-    <th class="col-narrow-num">代課<br/>節數</th>
-    <th class="col-narrow-num col-substitute-fee">代課<br/>費用</th>
+    <th class="col-date">代課日期</th>
+    <th>代課教師</th>
+    <th>薪級</th>
+    <th>日薪<br/>(${dim}天)</th>
+    <th class="col-ledger-qty">代課<br/>天數</th>
+    <th class="col-ledger-qty">代課<br/>節數</th>
+    <th class="col-ledger-qty col-substitute-fee">代課<br/>費用</th>
     <th class="col-leave-person">請假人</th>
-    <th style="width:5%">假別</th>
-    <th style="width:9%">請假事由</th>
-    <th style="width:8%">備註</th>
-    <th class="col-hm" style="width:4%">代導師<br/>日數</th>
-    <th class="col-hm col-hm-fee" style="width:4%">導師費</th>
-    <th style="width:5%">應發金額</th>
-    <th style="width:4%">勞保</th>
-    <th style="width:4%">健保</th>
-    <th style="width:4.5%">代扣補充保費</th>
-    <th style="width:4.5%">實領金額</th>
-    <th style="width:5.5%">代課教師簽名</th>
+    <th>假別</th>
+    <th>請假事由</th>
+    <th>備註</th>
+    <th class="col-hm">代導師<br/>日數</th>
+    <th class="col-hm col-hm-fee">導師費</th>
+    <th>應發金額</th>
+    <th>勞保</th>
+    <th>健保</th>
+    <th>代扣補充保費</th>
+    <th>實領金額</th>
+    <th>代課教師簽名</th>
   </tr></thead>`;
 
   const body = rows
@@ -354,16 +367,16 @@ function renderLedgerTable(
     <td class="nw">${escHtml(row.substituteName)}</td>
     <td class="nw">${multilineCell(row.salaryPointsLines)}</td>
     <td class="nw tr">${multilineCell(row.dailyRateLines)}</td>
-    <td class="nw tr col-narrow-num">${multilineCell(row.subDaysLines)}</td>
-    <td class="nw tr col-narrow-num">${multilineCell(row.subPeriodsLines)}</td>
-    <td class="nw tr col-narrow-num col-substitute-fee">${multilineCell(row.substitutePayLines)}</td>
+    <td class="tr col-ledger-qty">${multilineCell(row.subDaysLines)}</td>
+    <td class="tr col-ledger-qty">${multilineCell(row.subPeriodsLines)}</td>
+    <td class="tr col-ledger-qty col-substitute-fee">${multilineCell(row.substitutePayLines)}</td>
     <td class="nw col-leave-person">${multilineCell(row.leaveTeacherLines)}</td>
     <td class="nw">${leaveTypeCellHtml(row.leaveTypeLines)}</td>
     <td class="nw tl">${multilineCell(row.reasonLines)}</td>
     <td class="nw tl">${multilineCell(row.noteLines)}</td>
     <td class="col-hm nw tr">${homeroomDaysCellHtml(row.homeroomDaysLines)}</td>
     <td class="col-hm nw tr col-hm-fee">${homeroomFeeSingleLineHtml(row.homeroomFeeLines)}</td>
-    <td class="tr">${escHtml(fmtLedgerInt(row.payableTotal))}</td>
+    <td class="tr col-payable">${escHtml(fmtLedgerInt(row.payableTotal))}</td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
@@ -375,17 +388,17 @@ function renderLedgerTable(
 
   const totalRow = `<tr class="ledger-total-row">
     <td colspan="4">合計</td>
-    <td class="tr col-narrow-num">${escHtml(String(sums.sumDays))}</td>
-    <td class="tr col-narrow-num">${escHtml(String(sums.sumPeriods))}</td>
-    <td class="tr col-narrow-num col-substitute-fee">${escHtml(fmtLedgerInt(sums.sumHourly))}</td>
+    <td class="tr col-ledger-qty">${escHtml(String(sums.sumDays))}</td>
+    <td class="tr col-ledger-qty">${escHtml(String(sums.sumPeriods))}</td>
+    <td class="tr col-ledger-qty col-substitute-fee">${escHtml(fmtLedgerInt(sums.sumHourly))}</td>
     <td colspan="4"></td>
     <td class="col-hm tr">${homeroomDaysCellHtml(String(sums.sumHmDays))}</td>
     <td class="col-hm tr col-hm-fee">${escHtml(fmtLedgerInt(sums.sumHmFee))}</td>
-    <td class="tr">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
+    <td class="tr col-payable">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
     <td></td>
     <td></td>
     <td></td>
-    <td class="tr">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
+    <td class="tr col-payable">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
     <td></td>
   </tr>`;
 
@@ -396,7 +409,7 @@ function renderLedgerTable(
   return `<section class="ledger-block${hmClass}">
   <h2 class="ledger-h1">${escHtml(fullTitle)}</h2>
   ${ziLiNote}
-  <table class="ledger">${head}<tbody>${body}${totalRow}</tbody></table>
+  <table class="ledger">${ledgerTableColgroup()}${head}<tbody>${body}${totalRow}</tbody></table>
   <div class="ledger-footer-sign">
     <div class="sign-line">
       <span>製表人：</span>
