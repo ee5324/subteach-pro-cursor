@@ -324,6 +324,18 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       -webkit-user-select: none;
     }
     .ledger-resize-handle:hover { background: rgba(99, 102, 241, 0.25); }
+    .ledger-row-resize-handle {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -4px;
+      height: 8px;
+      cursor: row-resize;
+      z-index: 2;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .ledger-row-resize-handle:hover { background: rgba(16, 185, 129, 0.28); }
     table.ledger th .th-brk { display: block; }
     table.ledger th .th-nobr { white-space: nowrap; }
     /* 連續日期區間不換行（如 04/14-04/17） */
@@ -404,9 +416,10 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     }
     table.ledger td.col-payable { white-space: nowrap; }
     table.ledger .nw { white-space: pre-wrap; }
-    /* 列印時盡量維持整列在同一頁（瀏覽器仍可能對極高列忽略） */
+    /* 列印時盡量維持整列在同一頁；position 供列高拖曳把手定位 */
     table.ledger thead tr,
     table.ledger tbody tr {
+      position: relative;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -473,7 +486,8 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
         box-shadow: none;
         background: transparent;
       }
-      .ledger-resize-handle { display: none !important; }
+      .ledger-resize-handle,
+      .ledger-row-resize-handle { display: none !important; }
     }
   </style>
 </head>
@@ -488,7 +502,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
       <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
-      <span class="hint">紙張請選 A4 橫向。合計列上方有<strong>四列空白</strong>可手動補登；表頭右緣可拖曳調欄寬。「重設」還原字級／寬度／縮放與欄寬（不還原儲存格文字）。</span>
+      <span class="hint">紙張請選 A4 橫向。合計上方有<strong>四列空白</strong>可補登；表頭<strong>右緣</strong>拖曳調欄寬、列底<strong>橫線</strong>拖曳調列高。「重設」還原字級／寬度／縮放／欄寬／列高（不還原儲存格文字）。</span>
     </div>
     <div class="toolbar-row is-disabled" id="ledgerFormatRow">
       <span style="font-size:12px;color:#475569;font-weight:600">選取表內文字後套用（須勾選可編輯）：</span>
@@ -704,6 +718,52 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       });
     });
   }
+  function restoreLedgerRowHeights() {
+    if (!shell) return;
+    shell.querySelectorAll('table.ledger thead tr, table.ledger tbody tr').forEach(function (tr) {
+      tr.style.height = '';
+      tr.style.minHeight = '';
+    });
+  }
+  function initLedgerRowResize() {
+    if (!shell) return;
+    var MIN_ROW = 22;
+    shell.querySelectorAll('table.ledger').forEach(function (table) {
+      var rows = table.querySelectorAll('thead tr, tbody tr');
+      rows.forEach(function (tr) {
+        var old = tr.querySelector('.ledger-row-resize-handle');
+        if (old) old.remove();
+        var rh = document.createElement('span');
+        rh.className = 'ledger-row-resize-handle no-print';
+        rh.title = '拖曳調整本列高度';
+        tr.appendChild(rh);
+        rh.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var startY = e.clientY;
+          var initH = tr.getBoundingClientRect().height;
+          function onMove(ev) {
+            var dy = ev.clientY - startY;
+            var newH = Math.max(MIN_ROW, Math.round(initH + dy));
+            tr.style.height = newH + 'px';
+            tr.style.minHeight = newH + 'px';
+          }
+          function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+          }
+          document.body.style.cursor = 'row-resize';
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
+    });
+  }
+  function initLedgerTableResize() {
+    initLedgerColResize();
+    initLedgerRowResize();
+  }
   btnReset.addEventListener('click', function () {
     rngFont.value = '14';
     rngWidth.value = '100';
@@ -712,11 +772,13 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     applyWidth();
     applyScale();
     restoreLedgerColWidths();
+    restoreLedgerRowHeights();
+    setTimeout(initLedgerTableResize, 0);
   });
   applyFont();
   applyWidth();
   applyScale();
-  setTimeout(initLedgerColResize, 0);
+  setTimeout(initLedgerTableResize, 0);
 })();
   </script>
 </body>
