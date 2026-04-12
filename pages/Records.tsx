@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, FileOutput, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare, UserSearch } from 'lucide-react';
+import { Trash2, Settings, X, Loader2, Edit2, AlertTriangle, Wifi, FileText, ExternalLink, Save, CloudUpload, Filter, RefreshCw, Calendar as CalendarIcon, ChevronDown, CheckCircle, Printer, ChevronLeft, ChevronRight, CheckSquare, Square, MinusSquare, FolderOpen, Phone, Image as ImageIcon, Calculator, Search, MessageSquare, UserSearch } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { PayType, SubstituteDetail, LeaveRecord, LeaveType, ProcessingStatus, TimetableSlot, HOURLY_RATE, PROCESSING_STATUS_OPTIONS, TeacherType } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { callGasApi } from '../utils/api';
 import { convertSlotsToDetails, getExpectedDailyRate, getDaysInMonth, deduplicateDetails } from '../utils/calculations';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
 import { getFixedOvertimeTeacherIdSet, shouldExcludeLeaveRecordFromSubteachLedger } from '../utils/fixedOvertimeLedger';
+import { openSubteachPrintPreview } from '../utils/subteachLedgerPrintHtml';
 import Modal, { ModalMode, ModalType } from '../components/Modal';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 import SubstituteSalaryReferencePanel, { CHC_SALARY_TABLE_114_PDF } from '../components/SubstituteSalaryReferencePanel';
@@ -64,7 +65,6 @@ const Records: React.FC = () => {
 
   // Sync States
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [errorLog, setErrorLog] = useState<string | null>(null);
 
@@ -751,44 +751,55 @@ const Records: React.FC = () => {
       return next;
   };
 
-  const handleBatchGenerateDispatch = async () => {
-      if (!settings.gasWebAppUrl) {
-          showModal({ title: '錯誤', message: "請先設定 GAS URL", type: 'error' });
-          return;
-      }
-      
-      if (filteredRecords.length === 0) {
-          showModal({ title: '無資料', message: "該月份無代課紀錄", type: 'warning' });
-          return;
-      }
+  const getRecordsForSubteachPrint = (): LeaveRecord[] =>
+    filteredRecords
+      .filter((r) => !shouldExcludeFromSubteachLedgerExport(r))
+      .map((r) => sliceRecordToSelectedMonth(r))
+      .filter((r): r is LeaveRecord => r != null);
 
-      // 決定要匯出的資料集：若有選取則只匯出選取，否則匯出全部；明細去重避免重複
-      let targetRecords = filteredRecords;
-      if (selectedRecordIds.size > 0) {
-          targetRecords = filteredRecords.filter(r => selectedRecordIds.has(r.id));
-      }
-      const targetRecordsDeduped = targetRecords.map(r => ({ ...r, details: deduplicateDetails(r.details || []) }));
-
-      setIsGeneratingBatch(true);
-      try {
-          const result = await callGasApi(settings.gasWebAppUrl, 'BATCH_GENERATE_FORMS', {
-              records: targetRecordsDeduped,
-              teachers: teachers,
-              yearMonth: selectedMonth
-          });
-          
-          if (result.data && result.data.url) {
-             window.open(String(result.data.url), '_blank');
-             showModal({ title: '匯出成功', message: `已成功匯出 ${targetRecords.length} 筆代課單彙整表。`, type: 'success' });
-          } else {
-             showModal({ title: '匯出成功', message: "檔案已產生，但無法自動開啟。", type: 'success' });
-          }
-      } catch (e: any) {
-          const msg = e instanceof Error ? e.message : String(e);
-          showModal({ title: '匯出失敗', message: String(msg), type: 'error' });
-      } finally {
-          setIsGeneratingBatch(false);
-      }
+  const handleSubteachPrintPreview = (mode: 'ledgers' | 'vouchers' | 'both') => {
+    const recs = getRecordsForSubteachPrint();
+    if (recs.length === 0) {
+      showModal({
+        title: '無資料',
+        message: '該月份無可列入一般代課印領清冊之紀錄，或皆遭假別／搜尋篩選排除。',
+        type: 'warning',
+      });
+      return;
+    }
+    if (mode === 'ledgers' && selectedLedgerTypes.size === 0) {
+      showModal({
+        title: '未選擇清冊',
+        message: '請開啟「匯出清冊/憑證」並勾選至少一種清冊假別，再使用列印預覽。',
+        type: 'warning',
+      });
+      return;
+    }
+    if (mode === 'vouchers' && selectedVoucherTypes.size === 0) {
+      showModal({
+        title: '未選擇憑證',
+        message: '請開啟「匯出清冊/憑證」並勾選至少一種憑證假別，再使用列印預覽。',
+        type: 'warning',
+      });
+      return;
+    }
+    if (mode === 'both' && selectedLedgerTypes.size === 0 && selectedVoucherTypes.size === 0) {
+      showModal({
+        title: '未選擇項目',
+        message: '請至少勾選一種清冊或憑證假別（於「匯出清冊/憑證」視窗內）。',
+        type: 'warning',
+      });
+      return;
+    }
+    openSubteachPrintPreview({
+      records: recs,
+      teachers,
+      fixedOvertimeConfig,
+      selectedMonth,
+      ledgerKeys: selectedLedgerTypes,
+      voucherKeys: selectedVoucherTypes,
+      mode,
+    });
   };
 
   const handleOpenFolderForRecord = async (record: LeaveRecord) => {
@@ -933,6 +944,9 @@ const Records: React.FC = () => {
         <div className="space-y-4">
           <div className="text-sm text-slate-600">
             你可以分別選擇要匯出的「清冊」與「憑證」。未勾選的類型不會產生對應工作表。
+          </div>
+          <div className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 leading-relaxed">
+            此處勾選亦適用於代課清冊頁面工具列的「清冊／憑證列印預覽（新分頁）」按鈕；可不經 Google 試算表直接以瀏覽器列印（A4 橫向、邊界約 0.5cm）。
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1089,8 +1103,11 @@ const Records: React.FC = () => {
             <p>若請假日期包含週末或系統設定之假日，系統會以紅色文字警示。請務必確認是否為誤登，或該日是否有實際代課需求。</p>
           </CollapsibleItem>
           <CollapsibleItem title="報表匯出功能">
-            <p><strong>匯出清冊/憑證：</strong>產生當月的印領清冊與黏貼憑證 (Google Doc/Sheet)，用於核銷。</p>
-            <p><strong>匯出彙整表：</strong>產生代課單彙整表 (Excel/Sheet)，方便進行大數據分析或存檔。</p>
+            <p><strong>匯出清冊/憑證：</strong>產生當月的印領清冊與黏貼憑證 (Google 試算表)，用於核銷。</p>
+            <p>
+              <strong>瀏覽器列印預覽：</strong>以新分頁開啟與 GAS 相同欄位之清冊／憑證預覽，可選 A4 橫向、邊界約 0.5cm
+              列印；假別勾選與「匯出清冊/憑證」視窗相同。
+            </p>
           </CollapsibleItem>
           <CollapsibleItem title="備註與憑證狀態">
             <p><strong>備註：</strong>每筆紀錄有「備註」欄，點擊即可填寫或修改（例：已列印 3/8、未印、跑章中），方便辨識該筆是否已列印紙本代課單。</p>
@@ -1168,15 +1185,36 @@ const Records: React.FC = () => {
              </div>
            </div>
 
-           <div className="flex flex-wrap items-center gap-3 justify-center w-full xl:w-auto">
-                <button 
-                    onClick={handleBatchGenerateDispatch}
-                    disabled={isGeneratingBatch || filteredRecords.length === 0}
-                    className="px-3 py-2 bg-white border border-slate-300 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
-                    title={selectedRecordIds.size > 0 ? "匯出選取的代課單" : "匯出本月全部代課單"}
+           <div className="flex flex-wrap items-center gap-2 justify-center w-full xl:w-auto">
+                <button
+                    type="button"
+                    onClick={() => handleSubteachPrintPreview('ledgers')}
+                    disabled={filteredRecords.length === 0}
+                    className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:text-indigo-700 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
+                    title="新分頁開啟印領清冊預覽（依「匯出清冊/憑證」所勾選假別）；列印時請選 A4 橫向、邊界約 0.5cm"
                 >
-                     {isGeneratingBatch ? <Loader2 size={16} className="animate-spin mr-2"/> : <FileOutput size={16} className="mr-2"/>}
-                     <span className="font-bold">{selectedRecordIds.size > 0 ? `匯出選取 (${selectedRecordIds.size})` : '匯出全部'}</span>
+                    <ExternalLink size={16} className="mr-1.5 shrink-0" aria-hidden />
+                    <span className="font-semibold">清冊預覽</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleSubteachPrintPreview('vouchers')}
+                    disabled={filteredRecords.length === 0}
+                    className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:text-indigo-700 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
+                    title="新分頁開啟黏貼憑證預覽（依所勾選假別之合計金額）"
+                >
+                    <ExternalLink size={16} className="mr-1.5 shrink-0" aria-hidden />
+                    <span className="font-semibold">憑證預覽</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleSubteachPrintPreview('both')}
+                    disabled={filteredRecords.length === 0}
+                    className="px-3 py-2 bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-50 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
+                    title="同一新分頁內先清冊後憑證，方便一次列印"
+                >
+                    <Printer size={16} className="mr-1.5 shrink-0" aria-hidden />
+                    <span className="font-semibold">清冊+憑證</span>
                 </button>
                 <button 
                     onClick={handleOpenExportPicker}

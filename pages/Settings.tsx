@@ -706,7 +706,7 @@ const Settings: React.FC = () => {
           </CollapsibleItem>
           <CollapsibleItem title="Google Apps Script (GAS) 連線">
             <p><strong>日常資料</strong>（代課紀錄、教師、請假申請等）皆存於 <strong>Firebase</strong>，不需 GAS 即可正常使用。</p>
-            <p><strong>需 GAS 的功能</strong>（請先設定 Web App URL 且連線成功）：代課清冊「產生報表／代課單／批次匯出」、超鐘點／固定超鐘點報表、客語／族語印領清冊、語言教師匯出、額外憑證、教師檔案上傳、從舊版試算表載入資料。詳見 <code>docs/資料存放與GAS功能說明.md</code>。</p>
+            <p><strong>需 GAS 的功能</strong>（請先設定 Web App URL 且連線成功）：代課清冊「產生報表／代課單」、超鐘點／固定超鐘點報表、客語／族語印領清冊、語言教師匯出、額外憑證、教師檔案上傳、從舊版試算表載入資料。詳見 <code>docs/資料存放與GAS功能說明.md</code>。</p>
           </CollapsibleItem>
           <CollapsibleItem title="資料遷移與備份">
             <p>若您有舊版試算表資料，請先設定 GAS URL，點擊「從 GAS 載入舊資料」進行預覽，確認無誤後再點擊「遷移至 Firebase」完成雲端化。</p>
