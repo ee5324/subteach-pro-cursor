@@ -757,7 +757,7 @@ const Records: React.FC = () => {
       .map((r) => sliceRecordToSelectedMonth(r))
       .filter((r): r is LeaveRecord => r != null);
 
-  const handleSubteachPrintPreview = (mode: 'ledgers' | 'vouchers' | 'both') => {
+  const handleSubteachPrintPreview = () => {
     const recs = getRecordsForSubteachPrint();
     if (recs.length === 0) {
       showModal({
@@ -767,26 +767,10 @@ const Records: React.FC = () => {
       });
       return;
     }
-    if (mode === 'ledgers' && selectedLedgerTypes.size === 0) {
+    if (selectedLedgerTypes.size === 0) {
       showModal({
         title: '未選擇清冊',
-        message: '請開啟「匯出清冊/憑證」並勾選至少一種清冊假別，再使用列印預覽。',
-        type: 'warning',
-      });
-      return;
-    }
-    if (mode === 'vouchers' && selectedVoucherTypes.size === 0) {
-      showModal({
-        title: '未選擇憑證',
-        message: '請開啟「匯出清冊/憑證」並勾選至少一種憑證假別，再使用列印預覽。',
-        type: 'warning',
-      });
-      return;
-    }
-    if (mode === 'both' && selectedLedgerTypes.size === 0 && selectedVoucherTypes.size === 0) {
-      showModal({
-        title: '未選擇項目',
-        message: '請至少勾選一種清冊或憑證假別（於「匯出清冊/憑證」視窗內）。',
+        message: '請開啟「匯出清冊/憑證」並勾選至少一種清冊假別，再使用清冊列印預覽。',
         type: 'warning',
       });
       return;
@@ -797,8 +781,6 @@ const Records: React.FC = () => {
       fixedOvertimeConfig,
       selectedMonth,
       ledgerKeys: selectedLedgerTypes,
-      voucherKeys: selectedVoucherTypes,
-      mode,
     });
   };
 
@@ -946,7 +928,7 @@ const Records: React.FC = () => {
             你可以分別選擇要匯出的「清冊」與「憑證」。未勾選的類型不會產生對應工作表。
           </div>
           <div className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 leading-relaxed">
-            此處勾選亦適用於代課清冊頁面工具列的「清冊／憑證列印預覽（新分頁）」按鈕；可不經 Google 試算表直接以瀏覽器列印（A4 橫向、邊界約 0.5cm）。
+            「清冊」勾選亦適用於頁面工具列的「清冊列印預覽（新分頁）」；可不經 Google 試算表直接以瀏覽器列印（A4 橫向、邊界約 0.5cm）。黏貼憑證仍以試算表匯出為準。
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1105,8 +1087,8 @@ const Records: React.FC = () => {
           <CollapsibleItem title="報表匯出功能">
             <p><strong>匯出清冊/憑證：</strong>產生當月的印領清冊與黏貼憑證 (Google 試算表)，用於核銷。</p>
             <p>
-              <strong>瀏覽器列印預覽：</strong>以新分頁開啟與 GAS 相同欄位之清冊／憑證預覽，可選 A4 橫向、邊界約 0.5cm
-              列印；假別勾選與「匯出清冊/憑證」視窗相同。
+              <strong>瀏覽器列印預覽：</strong>以新分頁開啟與 GAS 相同欄位之<strong>印領清冊</strong>預覽，可選 A4 橫向、邊界約 0.5cm
+              列印；清冊假別勾選與「匯出清冊/憑證」視窗中「清冊」區相同。黏貼憑證請使用試算表匯出。
             </p>
           </CollapsibleItem>
           <CollapsibleItem title="備註與憑證狀態">
@@ -1188,33 +1170,13 @@ const Records: React.FC = () => {
            <div className="flex flex-wrap items-center gap-2 justify-center w-full xl:w-auto">
                 <button
                     type="button"
-                    onClick={() => handleSubteachPrintPreview('ledgers')}
+                    onClick={handleSubteachPrintPreview}
                     disabled={filteredRecords.length === 0}
                     className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:text-indigo-700 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
-                    title="新分頁開啟印領清冊預覽（依「匯出清冊/憑證」所勾選假別）；列印時請選 A4 橫向、邊界約 0.5cm"
+                    title="新分頁開啟印領清冊預覽（依「匯出清冊/憑證」所勾選之清冊假別）；列印時請選 A4 橫向、邊界約 0.5cm"
                 >
                     <ExternalLink size={16} className="mr-1.5 shrink-0" aria-hidden />
-                    <span className="font-semibold">清冊預覽</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => handleSubteachPrintPreview('vouchers')}
-                    disabled={filteredRecords.length === 0}
-                    className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:text-indigo-700 hover:border-indigo-300 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
-                    title="新分頁開啟黏貼憑證預覽（依所勾選假別之合計金額）"
-                >
-                    <ExternalLink size={16} className="mr-1.5 shrink-0" aria-hidden />
-                    <span className="font-semibold">憑證預覽</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => handleSubteachPrintPreview('both')}
-                    disabled={filteredRecords.length === 0}
-                    className="px-3 py-2 bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-50 rounded-lg text-sm flex items-center shadow-sm transition-colors whitespace-nowrap"
-                    title="同一新分頁內先清冊後憑證，方便一次列印"
-                >
-                    <Printer size={16} className="mr-1.5 shrink-0" aria-hidden />
-                    <span className="font-semibold">清冊+憑證</span>
+                    <span className="font-semibold">清冊列印預覽</span>
                 </button>
                 <button 
                     onClick={handleOpenExportPicker}

@@ -1,7 +1,5 @@
 import { LeaveRecord, LeaveType, PayType, Teacher } from '../types';
 import type { FixedOvertimeConfig } from '../types';
-
-type FixedOvertimeConfigList = FixedOvertimeConfig[] | undefined;
 import { deduplicateDetails } from './calculations';
 import { shouldExcludeLeaveRecordFromSubteachLedger } from './fixedOvertimeLedger';
 import {
@@ -18,6 +16,8 @@ import {
   type LedgerLine,
   type MergedLedgerRow,
 } from './subteachLedgerLines';
+
+type FixedOvertimeConfigList = FixedOvertimeConfig[] | undefined;
 
 function escHtml(s: string): string {
   return String(s)
@@ -105,35 +105,25 @@ export function collectLedgerLinesByExportKey(
   return buckets;
 }
 
-export function sumPayableMerged(rows: MergedLedgerRow[]): number {
-  return rows.reduce((s, row) => s + Math.ceil(Number(row.payableTotal) || 0), 0);
-}
-
-export type SubteachPrintMode = 'ledgers' | 'vouchers' | 'both';
-
 export type BuildSubteachPrintHtmlArgs = {
   records: LeaveRecord[];
   teachers: Teacher[];
   fixedOvertimeConfig: FixedOvertimeConfigList;
   selectedMonth: string;
   ledgerKeys: Set<string>;
-  voucherKeys: Set<string>;
-  mode: SubteachPrintMode;
 };
 
 export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs): string {
-  const { records, teachers, fixedOvertimeConfig, selectedMonth, ledgerKeys, voucherKeys, mode } = args;
+  const { records, teachers, fixedOvertimeConfig, selectedMonth, ledgerKeys } = args;
   const [yStr, mStr] = selectedMonth.split('-');
   const year = Number(yStr);
   const monthNum = mStr;
   const rocYear = year - 1911;
-  const lastDay = new Date(year, Number(monthNum), 0).getDate();
   const tp = titlePrefixRoc(rocYear, monthNum);
 
   const buckets = collectLedgerLinesByExportKey(records, teachers, fixedOvertimeConfig, selectedMonth);
 
   const ledgerSections: string[] = [];
-  const voucherSections: string[] = [];
 
   for (const typeRaw of LEDGER_EXPORT_TYPE_ORDER) {
     const lines = buckets.get(typeRaw) || [];
@@ -145,7 +135,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     const fullTitle = tp + typeStr;
     const hideHm = typeRaw === '自理';
 
-    if ((mode === 'ledgers' || mode === 'both') && ledgerKeys.has(typeRaw)) {
+    if (ledgerKeys.has(typeRaw)) {
       if (mergedFiltered.length === 0) {
         ledgerSections.push(`<section class="ledger-block"><p class="muted">【${escHtml(typeStr)}】本月無資料</p></section>`);
       } else {
@@ -153,30 +143,19 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
         ledgerSections.push(renderLedgerTable(fullTitle, typeStr, mergedFiltered, sums, hideHm));
       }
     }
-
-    if ((mode === 'vouchers' || mode === 'both') && voucherKeys.has(typeRaw)) {
-      const sumTotal = sumPayableMerged(mergedFiltered);
-      const voucherTitle = typeRaw === '家長會' ? tp + '公假家長會' : tp + displayTypeStrFromSuffix(typeRaw);
-      voucherSections.push(renderVoucherBlock(voucherTitle, sumTotal, rocYear, Number(monthNum), lastDay));
-    }
   }
 
-  const bodyParts: string[] = [];
-  if (mode === 'ledgers' || mode === 'both') {
-    bodyParts.push('<h1 class="doc-title no-print">代課印領清冊預覽（瀏覽器列印）</h1>');
-    bodyParts.push(...ledgerSections);
-  }
-  if (mode === 'vouchers' || mode === 'both') {
-    bodyParts.push('<h1 class="doc-title no-print voucher-title-gap">黏貼憑證預覽（瀏覽器列印）</h1>');
-    bodyParts.push(...voucherSections);
-  }
+  const bodyParts: string[] = [
+    '<h1 class="doc-title no-print">代課印領清冊預覽（瀏覽器列印）</h1>',
+    ...ledgerSections,
+  ];
 
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>清冊／憑證列印 ${escHtml(selectedMonth)}</title>
+  <title>印領清冊列印 ${escHtml(selectedMonth)}</title>
   <style>
     @page { size: A4 landscape; margin: 0.5cm; }
     * { box-sizing: border-box; }
@@ -186,7 +165,6 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     .toolbar button:hover { background: #334155; }
     .toolbar span { font-size: 13px; color: #334155; }
     .doc-title { font-size: 16px; margin: 0 0 12px 0; color: #0f172a; }
-    .voucher-title-gap { margin-top: 28px; }
     .ledger-block { page-break-after: always; margin-bottom: 24px; }
     .ledger-block:last-of-type { page-break-after: auto; }
     .ledger-h1 { text-align: center; font-size: 18px; font-weight: bold; margin: 8px 0 12px 0; line-height: 1.35; }
@@ -205,19 +183,12 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.sign-table td:nth-child(2) { text-align: center; }
     table.sign-table td:nth-child(3) { text-align: right; }
     .muted { color: #64748b; font-size: 13px; }
-    .voucher-wrap { page-break-after: always; margin-bottom: 20px; border: 2px solid #000; padding: 16px 20px; max-width: 100%; }
-    .voucher-wrap:last-child { page-break-after: auto; }
-    .voucher-grid { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
-    .voucher-title { font-size: 14pt; font-weight: bold; text-align: center; margin: 8px 0; line-height: 1.4; }
-    .digits { display: flex; justify-content: flex-end; gap: 4px; margin: 10px 0; }
-    .digits span { display: inline-block; min-width: 1.25em; border: 1px solid #000; text-align: center; font-size: 16pt; padding: 4px 6px; font-weight: bold; }
-    .voucher-date { font-size: 12pt; margin-top: 8px; text-align: right; }
     .hm-hide .col-hm { visibility: hidden; }
     @media print {
       .no-print, .toolbar { display: none !important; }
       body { padding: 0; }
-      .ledger-block, .voucher-wrap { page-break-after: always; }
-      .ledger-block:last-child, .voucher-wrap:last-child { page-break-after: auto; }
+      .ledger-block { page-break-after: always; }
+      .ledger-block:last-child { page-break-after: auto; }
     }
   </style>
 </head>
@@ -330,35 +301,6 @@ function renderLedgerTable(
       </tr>
     </table>
   </div>
-</section>`;
-}
-
-function renderVoucherBlock(
-  title: string,
-  sumTotal: number,
-  rocYear: number,
-  month: number,
-  lastDayOfMonth: number,
-): string {
-  const amount = Math.ceil(Number(sumTotal) || 0);
-  const moneyStr = String(amount);
-  const cells: string[] = [];
-  for (let i = 0; i < 6; i++) {
-    const charIndex = moneyStr.length - 1 - i;
-    const ch = charIndex >= 0 ? moneyStr.charAt(charIndex) : '—';
-    cells.unshift(`<span>${escHtml(ch)}</span>`);
-  }
-  return `<section class="voucher-wrap">
-  <div class="voucher-title">${escHtml(title)}</div>
-  <div class="voucher-grid">
-    <div>
-      <p class="muted" style="margin:0 0 6px 0;">黏貼憑證（金額欄位對齊 GAS 六位數配置；實際格線以學校紙本為準）</p>
-      <div class="digits">${cells.join('')}</div>
-      <p style="font-size:13pt;font-weight:bold;margin:12px 0 0 0;">金額合計：<span style="border-bottom:1px solid #000;padding:0 8px">${escHtml(String(amount))}</span> 元</p>
-    </div>
-  </div>
-  <div class="voucher-date">中　華　民　國　　${escHtml(String(rocYear))}　　年　　${escHtml(String(month))}　　月　　${escHtml(String(lastDayOfMonth))}　　日　止</div>
-  <p class="voucher-title" style="margin-top:20px;font-size:12pt;">${escHtml(title)}</p>
 </section>`;
 }
 
