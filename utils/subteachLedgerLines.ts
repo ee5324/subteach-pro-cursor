@@ -121,9 +121,7 @@ export function buildLedgerLine(
   } else {
     note = `${lineDays}日0節`;
   }
-  if (record.adminNote?.trim()) {
-    note = note ? `${note}；${record.adminNote.trim()}` : record.adminNote.trim();
-  }
+  // 清冊／薪水幹事備註欄僅顯示「O日O節」等計費摘要，不附帶請假紀錄之管理備註
 
   const salaryPts = subTeacher?.salaryPoints;
   const salaryPointsText =
@@ -212,11 +210,9 @@ function isNextCalendarDay(prevYmd: string, nextYmd: string): boolean {
   return toYMD(nextYmd) === addOneCalendarDayYmd(prevYmd);
 }
 
-/** 合併後備註：總日數 + 原「日0節」後方管理備註 */
-function mergedDailyNote(totalDays: number, firstNote: string): string {
-  const tail = firstNote.replace(/^\d+(?:\.\d+)?日0節/, '').replace(/^；/, '');
-  const base = `${fmtLedgerQty(totalDays)}日0節`;
-  return tail ? `${base}；${tail}` : base;
+/** 合併連續日薪後備註：僅總日數之「O日0節」，不含管理備註 */
+function mergedDailyNote(totalDays: number): string {
+  return `${fmtLedgerQty(totalDays)}日0節`;
 }
 
 function formatDateRangeDisplay(startYmd: string, endYmd: string): string {
@@ -246,7 +242,7 @@ function combineConsecutiveDailyRun(run: LedgerLine[]): LedgerLine {
     homeroomDays: totalHmDays,
     homeroomFee: totalHmFee,
     payableAmount: totalPayable,
-    note: mergedDailyNote(totalDays, first.note),
+    note: mergedDailyNote(totalDays),
   };
 }
 
