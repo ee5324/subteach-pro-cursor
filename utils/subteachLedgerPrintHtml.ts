@@ -94,34 +94,25 @@ function noteCellHtml(s: string): string {
   return lines.map((ln) => `<span class="note-line-block">${escHtml(ln)}</span>`).join('<br/>');
 }
 
-/** A4 橫向印領清冊：19 欄寬度加總 100%，避免 table-layout:fixed 時未設寬欄被壓成極窄而數字直排 */
-function ledgerTableColgroup(): string {
-  /*
-   * 預設比例：對齊紙本印領清冊常用編排——請假事由加寬以利長文換行；代課天數／節數／費用適中；
-   * 薪級、日薪、代導師日數／導師費略窄；尾段勞健保、補充保費、實領、簽名保留可讀寬度。
-   */
-  const widths = [
-    '5.2%',
-    '5.5%',
-    '4.2%',
-    '3.8%',
-    '5.0%',
-    '5.0%',
-    '8.0%',
-    '4.8%',
-    '4.5%',
-    '12.0%',
-    '5.2%',
-    '3.5%',
-    '3.8%',
-    '5.0%',
-    '4.0%',
-    '4.0%',
-    '4.3%',
-    '4.3%',
-    '7.9%',
-  ];
-  return `<colgroup>${widths.map((w) => `<col style="width:${w}" />`).join('')}</colgroup>`;
+/**
+ * 19 欄預設寬度（%）；課務自理時省略索引 11–12（代導師日數、導師費）後重新加總為 100%。
+ */
+const LEDGER_COL_WIDTHS_PCT = [
+  5.2, 5.5, 4.2, 3.8, 5.0, 5.0, 8.0, 4.8, 4.5, 12.0, 5.2, 3.5, 3.8, 5.0, 4.0, 4.0, 4.3, 4.3, 7.9,
+];
+
+function ledgerColWidthsPercent(omitHomeroom: boolean): number[] {
+  if (!omitHomeroom) return [...LEDGER_COL_WIDTHS_PCT];
+  const w = LEDGER_COL_WIDTHS_PCT;
+  return [...w.slice(0, 11), ...w.slice(13)];
+}
+
+/** A4 橫向印領清冊：避免 table-layout:fixed 時未設寬欄被壓成極窄而數字直排 */
+function ledgerTableColgroup(omitHomeroom: boolean): string {
+  const nums = ledgerColWidthsPercent(omitHomeroom);
+  const sum = nums.reduce((a, b) => a + b, 0);
+  const widths = nums.map((n) => `${((n / sum) * 100).toFixed(3)}%`);
+  return `<colgroup>${widths.map((pct) => `<col style="width:${pct}" />`).join('')}</colgroup>`;
 }
 
 /** 與 GAS SheetManager.generateReports titlePrefix 一致 */
@@ -257,6 +248,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       --ledger-table-font: 14pt;
       --ledger-table-width: 100%;
       --ledger-scale: 1;
+      --ledger-sign-font: 14pt;
     }
     body { margin: 0; padding: 12px; font-family: "Times New Roman", Times, "標楷體", "DFKai-SB", "BiauKai ST", serif; color: #000; background: #fff; }
     .toolbar {
@@ -461,7 +453,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       grid-template-columns: repeat(6, minmax(0, 1fr));
       align-items: baseline;
       gap: 0.2rem 0.35rem;
-      font-size: 10.5pt;
+      font-size: var(--ledger-sign-font, 14pt);
       font-weight: bold;
       line-height: 1.45;
       text-align: center;
@@ -486,7 +478,6 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       page-break-after: auto;
       break-after: auto;
     }
-    .hm-hide .col-hm { visibility: hidden; }
     table.ledger td[contenteditable="true"],
     table.ledger th[contenteditable="true"],
     .ledger-footer-sign .sign-line span[contenteditable="true"] {
@@ -565,9 +556,10 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     </div>
     <div class="toolbar-row">
       <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
+      <label>核章字級 <input type="range" id="rngSignFont" min="10" max="20" step="0.5" value="14" /><span id="lblSignFont">14pt</span></label>
       <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
       <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
-      <span class="hint">若一般列印仍跑版，請按<strong>「以畫面列印（截圖）」</strong>（需短暫連線載入函式庫），再按列印——即與目前預覽相同。紙張選 A4 橫向；列印對話框縮放建議 100%。一般列印時整表縮放不套用，請改表格字級／寬度。合計上有四列空白；表頭右緣調欄寬、列底橫線調列高。</span>
+      <span class="hint">若一般列印仍跑版，請按<strong>「以畫面列印（截圖）」</strong>（需短暫連線載入函式庫），再按列印——即與目前預覽相同。紙張選 A4 橫向；列印對話框縮放建議 100%。一般列印時整表縮放不套用，請改表格字級／寬度。核章列字級可獨立調整。「重設版面」還原表格字級、核章字級、寬度、縮放、欄寬、列高。合計上有四列空白；表頭右緣調欄寬、列底橫線調列高。</span>
     </div>
     <div class="toolbar-row is-disabled" id="ledgerFormatRow">
       <span style="font-size:12px;color:#475569;font-weight:600">選取表內文字後套用（須勾選可編輯）：</span>
@@ -601,9 +593,11 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   var scaleInner = document.getElementById('ledgerScaleInner');
   var chk = document.getElementById('chkEditable');
   var rngFont = document.getElementById('rngFont');
+  var rngSignFont = document.getElementById('rngSignFont');
   var rngWidth = document.getElementById('rngWidth');
   var rngScale = document.getElementById('rngScale');
   var lblFont = document.getElementById('lblFont');
+  var lblSignFont = document.getElementById('lblSignFont');
   var lblWidth = document.getElementById('lblWidth');
   var lblScale = document.getElementById('lblScale');
   var btnReset = document.getElementById('btnResetLayout');
@@ -697,6 +691,12 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     root.style.setProperty('--ledger-table-font', v + 'pt');
     lblFont.textContent = v + 'pt';
   }
+  function applySignFont() {
+    if (!rngSignFont || !lblSignFont) return;
+    var v = rngSignFont.value;
+    root.style.setProperty('--ledger-sign-font', v + 'pt');
+    lblSignFont.textContent = v + 'pt';
+  }
   function applyWidth() {
     var v = rngWidth.value;
     root.style.setProperty('--ledger-table-width', v + '%');
@@ -774,6 +774,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     });
   }
   rngFont.addEventListener('input', applyFont);
+  if (rngSignFont) rngSignFont.addEventListener('input', applySignFont);
   rngWidth.addEventListener('input', applyWidth);
   rngScale.addEventListener('input', applyScale);
   chk.addEventListener('change', function () {
@@ -919,9 +920,11 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   btnReset.addEventListener('click', function () {
     clearPrintSnapshot();
     rngFont.value = '14';
+    if (rngSignFont) rngSignFont.value = '14';
     rngWidth.value = '100';
     rngScale.value = '100';
     applyFont();
+    applySignFont();
     applyWidth();
     applyScale();
     restoreLedgerColWidths();
@@ -929,6 +932,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     setTimeout(initLedgerTableResize, 0);
   });
   applyFont();
+  applySignFont();
   applyWidth();
   applyScale();
   setTimeout(initLedgerTableResize, 0);
@@ -939,7 +943,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
 }
 
 /** 合計列上方：供列印預覽手動補登之空白列（與資料列同欄位 class，便於勾選可編輯後填寫） */
-const LEDGER_MANUAL_BLANK_ROW = `<tr class="ledger-manual-row">
+const LEDGER_MANUAL_BLANK_ROW_FULL = `<tr class="ledger-manual-row">
     <td class="nw col-date"></td>
     <td class="nw"></td>
     <td class="col-salary-grade"></td>
@@ -961,7 +965,31 @@ const LEDGER_MANUAL_BLANK_ROW = `<tr class="ledger-manual-row">
     <td class="ledger-fill"></td>
   </tr>`;
 
-const LEDGER_MANUAL_BLANK_ROWS = Array.from({ length: 4 }, () => LEDGER_MANUAL_BLANK_ROW).join('\n');
+/** 課務自理：不輸出代導師／導師費兩欄（與刪欄後表頭一致） */
+const LEDGER_MANUAL_BLANK_ROW_NO_HM = `<tr class="ledger-manual-row">
+    <td class="nw col-date"></td>
+    <td class="nw"></td>
+    <td class="col-salary-grade"></td>
+    <td class="nw tr"></td>
+    <td class="tr col-ledger-qty"></td>
+    <td class="tr col-ledger-qty"></td>
+    <td class="tr col-ledger-qty col-substitute-fee"></td>
+    <td class="nw col-leave-person"></td>
+    <td class="nw"></td>
+    <td class="nw tl"></td>
+    <td class="nw tl col-note"></td>
+    <td class="tr col-payable"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+    <td class="ledger-fill"></td>
+  </tr>`;
+
+function ledgerManualBlankRows(omitHomeroom: boolean): string {
+  const row = omitHomeroom ? LEDGER_MANUAL_BLANK_ROW_NO_HM : LEDGER_MANUAL_BLANK_ROW_FULL;
+  return Array.from({ length: 4 }, () => row).join('\n');
+}
 
 function renderLedgerTable(
   fullTitle: string,
@@ -971,8 +999,10 @@ function renderLedgerTable(
   hideHomeroomCols: boolean,
   daysInMonth: number,
 ): string {
-  const hmClass = hideHomeroomCols ? ' hm-hide' : '';
+  const omitHm = hideHomeroomCols;
   const dim = Math.max(1, Math.min(31, Math.floor(Number(daysInMonth)) || 30));
+  const hmHead = `<th class="col-hm"><span class="th-nobr">代導師</span><span class="th-brk">日數</span></th>
+    <th class="col-hm col-hm-fee th-1l">導師費</th>`;
   const head = `<thead><tr>
     <th class="col-date th-1l">代課日期</th>
     <th class="th-1l">代課教師</th>
@@ -985,8 +1015,7 @@ function renderLedgerTable(
     <th class="th-1l">假別</th>
     <th><span class="th-nobr">請假</span><span class="th-brk">事由</span></th>
     <th class="th-1l">備註</th>
-    <th class="col-hm"><span class="th-nobr">代導師</span><span class="th-brk">日數</span></th>
-    <th class="col-hm col-hm-fee th-1l">導師費</th>
+    ${omitHm ? '' : hmHead}
     <th><span class="th-nobr">應發</span><span class="th-brk">金額</span></th>
     <th class="th-1l">勞保</th>
     <th class="th-1l">健保</th>
@@ -996,8 +1025,10 @@ function renderLedgerTable(
   </tr></thead>`;
 
   const body = rows
-    .map(
-      (row) => `<tr>
+    .map((row) => {
+      const hmCells = `<td class="col-hm tr">${ledgerStackedCellHtml(row.homeroomDaysLines)}</td>
+    <td class="col-hm tr col-hm-fee">${ledgerStackedCellHtml(row.homeroomFeeLines)}</td>`;
+      return `<tr>
     <td class="nw col-date">${multilineCell(row.dateLines)}</td>
     <td class="nw">${escHtml(row.substituteName)}</td>
     <td class="col-salary-grade">${salaryGradeCellHtml(row.salaryPointsLines)}</td>
@@ -1009,38 +1040,38 @@ function renderLedgerTable(
     <td class="nw">${leaveTypeCellHtml(row.leaveTypeLines)}</td>
     <td class="nw tl">${multilineCell(row.reasonLines)}</td>
     <td class="nw tl col-note">${noteCellHtml(row.noteLines)}</td>
-    <td class="col-hm tr">${ledgerStackedCellHtml(row.homeroomDaysLines)}</td>
-    <td class="col-hm tr col-hm-fee">${ledgerStackedCellHtml(row.homeroomFeeLines)}</td>
+    ${omitHm ? '' : hmCells}
     <td class="tr col-payable">${escHtml(fmtLedgerInt(row.payableTotal))}</td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
     <td class="ledger-fill"></td>
-  </tr>`,
-    )
+  </tr>`;
+    })
     .join('');
 
+  const totalHmCells = `<td class="col-hm tr">${ledgerStackedCellHtml(String(sums.sumHmDays))}</td>
+    <td class="col-hm tr col-hm-fee">${ledgerStackedCellHtml(fmtLedgerInt(sums.sumHmFee))}</td>`;
   const totalRow = `<tr class="ledger-total-row">
     <td colspan="4">合計</td>
     <td class="tr col-ledger-qty">${escHtml(String(sums.sumDays))}</td>
     <td class="tr col-ledger-qty">${escHtml(String(sums.sumPeriods))}</td>
     <td class="tr col-ledger-qty col-substitute-fee">${escHtml(fmtLedgerInt(sums.sumHourly))}</td>
     <td colspan="4"></td>
-    <td class="col-hm tr">${ledgerStackedCellHtml(String(sums.sumHmDays))}</td>
-    <td class="col-hm tr col-hm-fee">${ledgerStackedCellHtml(fmtLedgerInt(sums.sumHmFee))}</td>
+    ${omitHm ? '' : totalHmCells}
     <td class="tr col-payable">${escHtml(fmtLedgerInt(sums.sumPayable))}</td>
     <td colspan="5" class="ledger-total-tail"></td>
   </tr>`;
 
-  const ziLiNote = hideHomeroomCols
-    ? '<p class="ledger-meta" style="margin-top:6px">課務自理「代導師日數／導師費」欄與 GAS 相同不列入本表；另「課務自理導師費」專表請以試算表匯出為準。</p>'
+  const ziLiNote = omitHm
+    ? '<p class="ledger-meta" style="margin-top:6px">課務自理不列入「代導師日數／導師費」欄；「課務自理導師費」專表請以試算表匯出為準。</p>'
     : '';
 
-  return `<section class="ledger-block${hmClass}">
+  return `<section class="ledger-block">
   <h2 class="ledger-h1">${escHtml(fullTitle)}</h2>
   ${ziLiNote}
-  <table class="ledger">${ledgerTableColgroup()}${head}<tbody>${body}${LEDGER_MANUAL_BLANK_ROWS}${totalRow}</tbody></table>
+  <table class="ledger">${ledgerTableColgroup(omitHm)}${head}<tbody>${body}${ledgerManualBlankRows(omitHm)}${totalRow}</tbody></table>
   <div class="ledger-footer-sign">
     <div class="sign-line">
       <span>製表人：</span>
