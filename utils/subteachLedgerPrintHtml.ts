@@ -237,10 +237,10 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     }
   }
 
-  const bodyParts: string[] = [
+  const bodyInner = [
     '<h1 class="doc-title no-print">代課印領清冊預覽（瀏覽器列印）</h1>',
     ...ledgerSections,
-  ];
+  ].join('\n');
 
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -251,17 +251,56 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
   <style>
     @page { size: A4 landscape; margin: 0.5cm; }
     * { box-sizing: border-box; }
+    :root {
+      --ledger-table-font: 14pt;
+      --ledger-table-width: 100%;
+      --ledger-scale: 1;
+    }
     body { margin: 0; padding: 12px; font-family: "Times New Roman", Times, "標楷體", "DFKai-SB", "BiauKai ST", serif; color: #000; background: #fff; }
-    .toolbar { position: sticky; top: 0; z-index: 10; background: #f1f5f9; border: 1px solid #94a3b8; padding: 10px 12px; margin-bottom: 14px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #f1f5f9;
+      border: 1px solid #94a3b8;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .toolbar-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; width: 100%; }
+    .toolbar label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #334155; white-space: nowrap; }
+    .toolbar input[type="range"] { width: 120px; vertical-align: middle; }
+    .toolbar .hint { font-size: 12px; color: #64748b; flex: 1 1 200px; min-width: 180px; }
     .toolbar button { padding: 8px 16px; font-size: 14px; cursor: pointer; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: #fff; font-weight: 600; }
     .toolbar button:hover { background: #334155; }
+    .toolbar button.secondary { background: #fff; color: #1e293b; border-color: #94a3b8; }
+    .toolbar button.secondary:hover { background: #f8fafc; }
     .toolbar span { font-size: 13px; color: #334155; }
+    .ledger-shell { overflow-x: auto; padding-bottom: 8px; }
+    .ledger-scale-inner {
+      transform: scale(var(--ledger-scale));
+      transform-origin: top center;
+      width: calc(100% / var(--ledger-scale));
+      margin: 0 auto;
+    }
     .doc-title { font-size: 16px; margin: 0 0 12px 0; color: #0f172a; }
     .ledger-block { page-break-after: always; margin-bottom: 24px; }
     .ledger-block:last-of-type { page-break-after: auto; }
     .ledger-h1 { text-align: center; font-size: 18px; font-weight: bold; margin: 8px 0 12px 0; line-height: 1.35; }
     .ledger-meta { text-align: center; font-size: 13px; margin-bottom: 10px; color: #334155; }
-    table.ledger { width: 100%; border-collapse: collapse; font-size: 14pt; table-layout: fixed; }
+    table.ledger {
+      width: var(--ledger-table-width);
+      margin-left: auto;
+      margin-right: auto;
+      border-collapse: collapse;
+      font-size: var(--ledger-table-font, 14pt);
+      table-layout: fixed;
+      max-width: none;
+    }
     /* 各欄左右各加約 2pt；數字欄勿用 break-all 以免逐字直排 */
     table.ledger th, table.ledger td {
       border: 1px solid #000;
@@ -303,7 +342,6 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     table.ledger th.col-leave-person,
     table.ledger td.col-leave-person {
       padding: 2px 3px;
-      font-size: 14pt;
       line-height: 1.25;
       text-align: center;
     }
@@ -311,7 +349,7 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
       display: block;
       white-space: nowrap;
     }
-    table.ledger td .col-leave-type { font-size: 12pt; line-height: 1.25; }
+    table.ledger td .col-leave-type { font-size: 0.86em; line-height: 1.25; }
     table.ledger .hm-days-grid {
       display: grid;
       grid-template-columns: repeat(3, auto);
@@ -364,6 +402,12 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
     .sign-line span { white-space: nowrap; min-width: 0; }
     .muted { color: #64748b; font-size: 13px; }
     .hm-hide .col-hm { visibility: hidden; }
+    table.ledger td[contenteditable="true"],
+    table.ledger th[contenteditable="true"],
+    .ledger-footer-sign .sign-line span[contenteditable="true"] {
+      box-shadow: inset 0 0 0 1px #94a3b8;
+      background: #fffef7;
+    }
     @media print {
       .no-print, .toolbar { display: none !important; }
       body { padding: 0; }
@@ -382,15 +426,90 @@ export function buildSubteachPrintHtmlDocument(args: BuildSubteachPrintHtmlArgs)
         break-inside: avoid !important;
         page-break-inside: avoid !important;
       }
+      table.ledger td[contenteditable="true"],
+      table.ledger th[contenteditable="true"],
+      .ledger-footer-sign .sign-line span[contenteditable="true"] {
+        box-shadow: none;
+        background: transparent;
+      }
     }
   </style>
 </head>
 <body>
   <div class="toolbar no-print">
-    <button type="button" onclick="window.print()">列印</button>
-    <span>紙張請選 A4 橫向；邊界約 0.5cm（依瀏覽器「更多設定」微調）。格式對齊 GAS 印領清冊欄位與合計列。</span>
+    <div class="toolbar-row">
+      <button type="button" onclick="window.print()">列印</button>
+      <button type="button" class="secondary" id="btnResetLayout">重設版面</button>
+      <label><input type="checkbox" id="chkEditable" /> 可編輯內容（表內儲存格與核章列文字）</label>
+    </div>
+    <div class="toolbar-row">
+      <label>表格字級 <input type="range" id="rngFont" min="10" max="18" step="0.5" value="14" /><span id="lblFont">14pt</span></label>
+      <label>表格寬度 <input type="range" id="rngWidth" min="78" max="118" value="100" /><span id="lblWidth">100%</span></label>
+      <label>整表縮放 <input type="range" id="rngScale" min="75" max="125" value="100" /><span id="lblScale">100%</span></label>
+      <span class="hint">紙張請選 A4 橫向。編輯後直接列印即可帶入紙本；「重設」還原字級／寬度／縮放（無法還原已改文字）。</span>
+    </div>
   </div>
-  ${bodyParts.join('\n')}
+  <div class="ledger-shell" id="ledgerShell">
+    <div class="ledger-scale-inner" id="ledgerScaleInner">
+      ${bodyInner}
+    </div>
+  </div>
+  <script>
+(function () {
+  var root = document.documentElement;
+  var shell = document.getElementById('ledgerShell');
+  var scaleInner = document.getElementById('ledgerScaleInner');
+  var chk = document.getElementById('chkEditable');
+  var rngFont = document.getElementById('rngFont');
+  var rngWidth = document.getElementById('rngWidth');
+  var rngScale = document.getElementById('rngScale');
+  var lblFont = document.getElementById('lblFont');
+  var lblWidth = document.getElementById('lblWidth');
+  var lblScale = document.getElementById('lblScale');
+  var btnReset = document.getElementById('btnResetLayout');
+  function applyFont() {
+    var v = rngFont.value;
+    root.style.setProperty('--ledger-table-font', v + 'pt');
+    lblFont.textContent = v + 'pt';
+  }
+  function applyWidth() {
+    var v = rngWidth.value;
+    root.style.setProperty('--ledger-table-width', v + '%');
+    lblWidth.textContent = v + '%';
+  }
+  function applyScale() {
+    var p = Number(rngScale.value) / 100;
+    if (p < 0.5) p = 0.5;
+    if (p > 1.5) p = 1.5;
+    root.style.setProperty('--ledger-scale', String(p));
+    lblScale.textContent = rngScale.value + '%';
+  }
+  function setEditable(on) {
+    if (!shell) return;
+    shell.querySelectorAll('table.ledger td, table.ledger th').forEach(function (el) {
+      el.contentEditable = on ? 'true' : 'false';
+    });
+    shell.querySelectorAll('.ledger-footer-sign .sign-line span').forEach(function (el) {
+      el.contentEditable = on ? 'true' : 'false';
+    });
+  }
+  rngFont.addEventListener('input', applyFont);
+  rngWidth.addEventListener('input', applyWidth);
+  rngScale.addEventListener('input', applyScale);
+  chk.addEventListener('change', function () { setEditable(chk.checked); });
+  btnReset.addEventListener('click', function () {
+    rngFont.value = '14';
+    rngWidth.value = '100';
+    rngScale.value = '100';
+    applyFont();
+    applyWidth();
+    applyScale();
+  });
+  applyFont();
+  applyWidth();
+  applyScale();
+})();
+  </script>
 </body>
 </html>`;
 }
