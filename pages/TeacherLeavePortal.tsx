@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, BookOpen, Filter, Search, Sun } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { LeaveRecord, LeaveType } from '../types';
+import { FixedOvertimeConfig, LeaveRecord, LeaveType, Teacher } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
 import { shouldExcludeLeaveRecordFromSubteachLedger } from '../utils/fixedOvertimeLedger';
 import {
@@ -44,12 +44,80 @@ type LeaveTypeGroup = { leaveType: LeaveType; lines: LedgerLine[] };
 
 const ALL_LEAVE_TYPES = Object.values(LeaveType) as LeaveType[];
 
+/** 本地當日 YYYY-MM-DD（中午避免時區誤差） */
+function getTodayYmdLocal(): string {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** 本地日曆隔日 YYYY-MM-DD（中午避免時區誤差） */
 function getTomorrowYmdLocal(): string {
   const d = new Date();
   d.setHours(12, 0, 0, 0);
   d.setDate(d.getDate() + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function defaultSubDateRange(): { start: string; end: string } {
+  return { start: getTodayYmdLocal(), end: getTomorrowYmdLocal() };
+}
+
+const SUB_DATE_RANGE_MAX_DAYS = 31;
+
+/** 含首尾之連續本地日 YYYY-MM-DD；若起訖顛倒則自動對調 */
+function enumerateYmdInclusive(startYmd: string, endYmd: string): string[] {
+  const a = startYmd <= endYmd ? startYmd : endYmd;
+  const b = startYmd <= endYmd ? endYmd : startYmd;
+  const [y1, m1, d1] = a.split('-').map(Number);
+  const [y2, m2, d2] = b.split('-').map(Number);
+  const end = new Date(y2, m2 - 1, d2, 12, 0, 0, 0);
+  const out: string[] = [];
+  let cur = new Date(y1, m1 - 1, d1, 12, 0, 0, 0);
+  let n = 0;
+  while (cur <= end && n < SUB_DATE_RANGE_MAX_DAYS) {
+    out.push(
+      `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`,
+    );
+    cur.setDate(cur.getDate() + 1);
+    n += 1;
+  }
+  return out;
+}
+
+function ymdToRocParts(ymd: string): { roc: number; mm: string; dd: string } | null {
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return { roc: Number(m[1]) - 1911, mm: m[2], dd: m[3] };
+}
+
+function collectSubstituteRowsForYmd(
+  ymd: string,
+  records: LeaveRecord[],
+  teachers: Teacher[],
+  fixedOvertimeConfig: FixedOvertimeConfig[] | undefined,
+): TomorrowSubstituteNameRow[] {
+  const byKey = new Map<string, TomorrowSubstituteNameRow>();
+  for (const r of records) {
+    if (shouldExcludeLeaveRecordFromSubteachLedger(r, teachers, fixedOvertimeConfig)) continue;
+    const deduped = deduplicateDetails(r.details || []);
+    for (const d of deduped) {
+      if (d.isOvertime === true) continue;
+      if (toYMD(d.date) !== ymd) continue;
+      const subName = substituteDisplayName(d.substituteTeacherId, teachers);
+      const id = (d.substituteTeacherId || '').trim();
+      const dedupKey = id || `name:${subName}`;
+      if (byKey.has(dedupKey)) continue;
+      const searchText = [subName, id].join(' ').toLowerCase();
+      byKey.set(dedupKey, {
+        key: dedupKey,
+        substituteName: subName,
+        substituteTeacherId: id,
+        searchText,
+      });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.substituteName.localeCompare(b.substituteName, 'zh-Hant'));
 }
 
 type TomorrowSubstituteNameRow = {
@@ -121,39 +189,62 @@ const TeacherLeavePortal: React.FC = () => {
 
   const [portalTab, setPortalTab] = useState<'ledger' | 'tomorrow'>('ledger');
   const [tomorrowQuery, setTomorrowQuery] = useState('');
+  const [subDateStart, setSubDateStart] = useState(() => defaultSubDateRange().start);
+  const [subDateEnd, setSubDateEnd] = useState(() => defaultSubDateRange().end);
 
-  const tomorrowSubRows = useMemo((): TomorrowSubstituteNameRow[] => {
-    const ymd = getTomorrowYmdLocal();
-    const byKey = new Map<string, TomorrowSubstituteNameRow>();
-    for (const r of records) {
-      if (shouldExcludeLeaveRecordFromSubteachLedger(r, teachers, fixedOvertimeConfig)) continue;
-      const deduped = deduplicateDetails(r.details || []);
-      for (const d of deduped) {
-        if (d.isOvertime === true) continue;
-        if (toYMD(d.date) !== ymd) continue;
-        const subName = substituteDisplayName(d.substituteTeacherId, teachers);
-        const id = (d.substituteTeacherId || '').trim();
-        const dedupKey = id || `name:${subName}`;
-        if (byKey.has(dedupKey)) continue;
-        const searchText = [subName, id].join(' ').toLowerCase();
-        byKey.set(dedupKey, {
-          key: dedupKey,
-          substituteName: subName,
-          substituteTeacherId: id,
-          searchText,
-        });
-      }
-    }
-    return [...byKey.values()].sort((a, b) =>
-      a.substituteName.localeCompare(b.substituteName, 'zh-Hant'),
-    );
-  }, [records, teachers, fixedOvertimeConfig]);
+  const subViewYmdList = useMemo(
+    () => enumerateYmdInclusive(subDateStart, subDateEnd),
+    [subDateStart, subDateEnd],
+  );
 
-  const displayedTomorrowRows = useMemo(() => {
+  const byDateSubRows = useMemo(
+    () =>
+      subViewYmdList.map((ymd) => ({
+        dateYmd: ymd,
+        rows: collectSubstituteRowsForYmd(ymd, records, teachers, fixedOvertimeConfig),
+      })),
+    [subViewYmdList, records, teachers, fixedOvertimeConfig],
+  );
+
+  const displayedByDateSubRows = useMemo(() => {
     const q = tomorrowQuery.trim().toLowerCase();
-    if (!q) return tomorrowSubRows;
-    return tomorrowSubRows.filter((row) => row.searchText.includes(q));
-  }, [tomorrowSubRows, tomorrowQuery]);
+    if (!q) return byDateSubRows;
+    return byDateSubRows.map(({ dateYmd, rows }) => ({
+      dateYmd,
+      rows: rows.filter((row) => row.searchText.includes(q)),
+    }));
+  }, [byDateSubRows, tomorrowQuery]);
+
+  const subDateRangeLabel = useMemo(() => {
+    if (subDateStart === subDateEnd) return subDateStart;
+    return `${subDateStart} ～ ${subDateEnd}`;
+  }, [subDateStart, subDateEnd]);
+
+  const totalSubstituteSlots = useMemo(
+    () => byDateSubRows.reduce((s, d) => s + d.rows.length, 0),
+    [byDateSubRows],
+  );
+
+  const totalDisplayedSlots = useMemo(
+    () => displayedByDateSubRows.reduce((s, d) => s + d.rows.length, 0),
+    [displayedByDateSubRows],
+  );
+
+  const applyDefaultSubDateRange = () => {
+    const { start, end } = defaultSubDateRange();
+    setSubDateStart(start);
+    setSubDateEnd(end);
+  };
+
+  const onSubDateStartChange = (v: string) => {
+    setSubDateStart(v);
+    setSubDateEnd((end) => (v > end ? v : end));
+  };
+
+  const onSubDateEndChange = (v: string) => {
+    setSubDateEnd(v);
+    setSubDateStart((start) => (v < start ? v : start));
+  };
 
   const toggleLeaveTypeFilter = (lt: LeaveType) => {
     setLeaveTypeSelection((prev) => {
@@ -187,12 +278,6 @@ const TeacherLeavePortal: React.FC = () => {
 
   const tableCell = 'border border-slate-800 px-2 py-2 align-middle text-slate-900';
   const tableHead = `${tableCell} bg-slate-200 font-bold text-center whitespace-nowrap text-base`;
-
-  const tomorrowYmdDisplay = getTomorrowYmdLocal();
-  const tomorrowMatch = tomorrowYmdDisplay.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const tomorrowRoc = tomorrowMatch ? Number(tomorrowMatch[1]) - 1911 : 0;
-  const tomorrowMM = tomorrowMatch ? tomorrowMatch[2] : '';
-  const tomorrowDD = tomorrowMatch ? tomorrowMatch[3] : '';
 
   const tabBtnBase =
     'inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors rounded-t-md';
@@ -233,9 +318,9 @@ const TeacherLeavePortal: React.FC = () => {
               </p>
             ) : (
               <p className="text-sm md:text-base text-slate-600 mt-2">
-                依<strong>本機日期的隔日</strong>（西元 <span className={NUM_FONT}>{tomorrowYmdDisplay}</span>，民國{' '}
-                <span className={NUM_FONT}>{tomorrowRoc}</span> 年 <span className={NUM_FONT}>{tomorrowMM}</span> 月{' '}
-                <span className={NUM_FONT}>{tomorrowDD}</span> 日）列出<strong>代課教師名單</strong>（同一人僅列一次）；不含超鐘點與固定兼課請假人。下方可搜尋代課教師姓名。
+                預設為<strong>今日至明日</strong>（本機日曆），可依下方起訖日期調整（最長連續{' '}
+                <span className={NUM_FONT}>{SUB_DATE_RANGE_MAX_DAYS}</span> 日）。列出所選各日之<strong>代課教師名單</strong>
+                （同一日同一人僅列一次）；不含超鐘點與固定兼課請假人。下方可搜尋代課教師姓名。
               </p>
             )}
           </div>
@@ -416,7 +501,64 @@ const TeacherLeavePortal: React.FC = () => {
         )
         ) : (
           <>
-            <div className="mb-5 rounded-lg border border-slate-300 bg-white px-3 py-3 shadow-sm print:hidden">
+            <div className="mb-5 rounded-lg border border-slate-300 bg-white px-3 py-3 shadow-sm print:hidden space-y-4">
+              <div className="flex flex-col lg:flex-row lg:flex-wrap lg:items-end gap-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                    起日
+                    <input
+                      type="date"
+                      value={subDateStart}
+                      onChange={(e) => onSubDateStartChange(e.target.value)}
+                      className="border border-slate-300 rounded-lg px-2 py-2 text-base text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+                    迄日
+                    <input
+                      type="date"
+                      value={subDateEnd}
+                      onChange={(e) => onSubDateEndChange(e.target.value)}
+                      className="border border-slate-300 rounded-lg px-2 py-2 text-base text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={applyDefaultSubDateRange}
+                    className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100"
+                  >
+                    今日～明日
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = getTodayYmdLocal();
+                      setSubDateStart(t);
+                      setSubDateEnd(t);
+                    }}
+                    className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    僅今日
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = getTomorrowYmdLocal();
+                      setSubDateStart(t);
+                      setSubDateEnd(t);
+                    }}
+                    className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    僅明日
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600">
+                目前區間：<span className={NUM_FONT}>{subDateRangeLabel}</span>（共{' '}
+                <span className={NUM_FONT}>{subViewYmdList.length}</span> 日）
+              </p>
               <label className="flex items-center gap-2 max-w-2xl">
                 <Search className="text-slate-500 shrink-0" size={20} aria-hidden />
                 <input
@@ -428,36 +570,69 @@ const TeacherLeavePortal: React.FC = () => {
                   autoComplete="off"
                 />
               </label>
-              <p className="text-xs text-slate-500 mt-2">
-                共 <span className={NUM_FONT}>{tomorrowSubRows.length}</span> 位代課教師
+              <p className="text-xs text-slate-500">
+                範圍內各日去重後合計 <span className={NUM_FONT}>{totalSubstituteSlots}</span> 人次
                 {tomorrowQuery.trim() ? (
                   <>
-                    ，符合 <span className={NUM_FONT}>{displayedTomorrowRows.length}</span> 位
+                    ，符合關鍵字 <span className={NUM_FONT}>{totalDisplayedSlots}</span> 人次
                   </>
                 ) : null}
               </p>
             </div>
-            {tomorrowSubRows.length === 0 ? (
+            {totalSubstituteSlots === 0 ? (
               <div className="rounded-lg border border-slate-300 bg-white p-12 text-center text-slate-600 text-base shadow-sm">
-                隔日（<span className={NUM_FONT}>{tomorrowYmdDisplay}</span>）尚無代課教師名單，或該日資料尚未建立。
+                所選區間（<span className={NUM_FONT}>{subDateRangeLabel}</span>
+                ）尚無代課教師名單，或該期間資料尚未建立。
               </div>
-            ) : displayedTomorrowRows.length === 0 ? (
+            ) : totalDisplayedSlots === 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-10 text-center text-amber-900 text-base shadow-sm">
                 查無符合「<span className="font-mono">{tomorrowQuery.trim()}</span>」的項目，請調整關鍵字。
               </div>
             ) : (
-              <div className="bg-white border border-slate-400 shadow-sm rounded-sm overflow-hidden print:border-black max-w-md">
-                <ul className="m-0 list-none divide-y divide-slate-200 p-0">
-                  {displayedTomorrowRows.map((row, i) => (
-                    <li
-                      key={row.key}
-                      className="flex items-baseline gap-3 px-4 py-3 text-base text-slate-900"
-                    >
-                      <span className={`${NUM_FONT} w-8 shrink-0 text-right text-slate-500`}>{i + 1}.</span>
-                      <span className="font-medium">{row.substituteName}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="space-y-8 max-w-md">
+                {displayedByDateSubRows
+                  .filter(({ rows }) => !tomorrowQuery.trim() || rows.length > 0)
+                  .map(({ dateYmd, rows }) => {
+                  const roc = ymdToRocParts(dateYmd);
+                  const dayTotal =
+                    byDateSubRows.find((d) => d.dateYmd === dateYmd)?.rows.length ?? 0;
+                  return (
+                    <section key={dateYmd}>
+                      <h3 className="text-sm font-bold text-slate-800 mb-2 leading-snug">
+                        西元 <span className={NUM_FONT}>{dateYmd}</span>
+                        {roc ? (
+                          <>
+                            {' '}
+                            （民國 <span className={NUM_FONT}>{roc.roc}</span> 年{' '}
+                            <span className={NUM_FONT}>{roc.mm}</span> 月 <span className={NUM_FONT}>{roc.dd}</span> 日）
+                          </>
+                        ) : null}
+                        <span className="text-slate-500 font-normal">
+                          {' '}
+                          · 該日 <span className={NUM_FONT}>{dayTotal}</span> 位
+                          {tomorrowQuery.trim() && rows.length !== dayTotal ? (
+                            <>
+                              ，符合 <span className={NUM_FONT}>{rows.length}</span> 位
+                            </>
+                          ) : null}
+                        </span>
+                      </h3>
+                      <div className="bg-white border border-slate-400 shadow-sm rounded-sm overflow-hidden print:border-black">
+                        <ul className="m-0 list-none divide-y divide-slate-200 p-0">
+                          {rows.map((row, i) => (
+                            <li
+                              key={`${dateYmd}-${row.key}`}
+                              className="flex items-baseline gap-3 px-4 py-3 text-base text-slate-900"
+                            >
+                              <span className={`${NUM_FONT} w-8 shrink-0 text-right text-slate-500`}>{i + 1}.</span>
+                              <span className="font-medium">{row.substituteName}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
             )}
           </>
