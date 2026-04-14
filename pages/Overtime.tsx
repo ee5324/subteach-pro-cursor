@@ -388,6 +388,25 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
       return Math.max(0, standard - totalReduction);
   };
 
+  const resolveInheritedSortOrder = (teacherId: string, currentMonth: string): number | undefined => {
+      const records = overtimeRecords || [];
+      const candidates = records
+          .filter(r => {
+              if (r.teacherId !== teacherId) return false;
+              if (r.yearMonth >= currentMonth) return false;
+              if (typeof r.sortOrder !== 'number') return false;
+              if (activeSemesterId) return r.semesterId === activeSemesterId;
+              return !r.semesterId;
+          })
+          .sort((a, b) => {
+              if (a.yearMonth !== b.yearMonth) {
+                  return a.yearMonth < b.yearMonth ? 1 : -1;
+              }
+              return (b.updatedAt || 0) - (a.updatedAt || 0);
+          });
+      return candidates[0]?.sortOrder;
+  };
+
   const periodOrderOvertime = ['早', '1', '2', '3', '4', '午', '5', '6', '7'];
   const calculatePreciseOvertime = (teacherId: string, overtimeSlots: { day: number; period: string }[]): { grossCount: number, netCount: number, details: string[] } => {
       if (!overtimeSlots || overtimeSlots.length === 0) return { grossCount: 0, netCount: 0, details: [] };
@@ -694,7 +713,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
         return {
             teacher: t,
             recordId,
-            sortOrder: existing?.sortOrder ?? null,
+            sortOrder: existing?.sortOrder ?? resolveInheritedSortOrder(t.id, selectedMonth) ?? null,
             standardBase, 
             reduction: totalReduction,
             reductionDetails,
@@ -786,6 +805,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
       const recordId = overtimeRecordFirestoreId(activeSemesterId, selectedMonth, teacherId);
       const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, teacherId, activeSemesterId);
       const teacher = (teachers || []).find(t => t.id === teacherId);
+      const inheritedSortOrder = resolveInheritedSortOrder(teacherId, selectedMonth);
       const numVal = (['weeklyBasic','weeklyActual','weeksCount','adjustment'].includes(field)) ? Number(value) : value;
       
       let baseRecord: OvertimeRecord = existing || { 
@@ -793,7 +813,7 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
           teacherId, 
           yearMonth: selectedMonth, 
           semesterId: activeSemesterId || undefined,
-          sortOrder: existing?.sortOrder,
+          sortOrder: existing?.sortOrder ?? inheritedSortOrder,
           weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0, 
           weeklyActual: resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0,
           weeksCount: calculatedWeeks,
@@ -811,12 +831,13 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
       await Promise.all(orderedRows.map((row, index) => {
           const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, row.teacher.id, activeSemesterId);
           const teacher = (teachers || []).find(t => t.id === row.teacher.id);
+          const inheritedSortOrder = resolveInheritedSortOrder(row.teacher.id, selectedMonth);
           const record: OvertimeRecord = existing || {
               id: row.recordId,
               teacherId: row.teacher.id,
               yearMonth: selectedMonth,
               semesterId: activeSemesterId || undefined,
-              sortOrder: index,
+              sortOrder: inheritedSortOrder,
               weeklyBasic: teacher ? calculateDefaultBasic(teacher) : 0,
               weeklyActual: resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0,
               weeksCount: calculatedWeeks,
@@ -908,13 +929,14 @@ const Overtime: React.FC<OvertimePageProps> = ({ variant = 'general' }) => {
                 if (teacher.defaultOvertimeSlots && teacher.defaultOvertimeSlots.length > 0) {
                     const newRecordId = overtimeRecordFirestoreId(activeSemesterId, selectedMonth, teacher.id);
                     const existing = findOvertimeRecord(overtimeRecords || [], selectedMonth, teacher.id, activeSemesterId);
+                    const inheritedSortOrder = resolveInheritedSortOrder(teacher.id, selectedMonth);
                     
                     const newRecord: OvertimeRecord = {
                         id: newRecordId,
                         teacherId: teacher.id,
                         yearMonth: selectedMonth,
                         semesterId: activeSemesterId || undefined,
-                        sortOrder: existing?.sortOrder,
+                        sortOrder: existing?.sortOrder ?? inheritedSortOrder,
                         weeklyBasic: existing?.weeklyBasic ?? calculateDefaultBasic(teacher),
                         weeklyActual: existing?.weeklyActual ?? (resolveTeacherDefaultSchedule(teacher, activeSemesterId)?.length ?? 0),
                         weeksCount: existing?.weeksCount ?? calculatedWeeks,
