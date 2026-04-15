@@ -58,6 +58,31 @@ const getWeekDays = (baseDate: Date) => {
 const sortTeachersByName = (list: Teacher[]) =>
   [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
 
+const toYMD = (d: unknown): string => {
+  if (d == null) return '';
+  const s = String(d).trim();
+  if (!s) return '';
+  const normalized = s.replace(/\//g, '-');
+  const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  return normalized;
+};
+
+const recordHasActualDateInMonth = (record: LeaveRecord, monthStartStr: string, monthEndStr: string): boolean => {
+  const detailDates = deduplicateDetails(record.details || []).map((d) => toYMD(d.date)).filter(Boolean);
+  const slotDates = (record.slots || []).map((s) => toYMD(s.date)).filter(Boolean);
+  const actualDates = [...detailDates, ...slotDates];
+  if (actualDates.length > 0) {
+    return actualDates.some((date) => date >= monthStartStr && date <= monthEndStr);
+  }
+
+  // 舊資料若無明細日期，才退回請假區間判斷，避免整筆消失。
+  const start = toYMD(record.startDate || '');
+  const end = toYMD(record.endDate || '');
+  if (!start || !end) return false;
+  return start <= monthEndStr && end >= monthStartStr;
+};
+
 function salaryDetailPeriodText(d: SubstituteDetail, periodOrder: string[]): string {
   let periodText = '';
   if (d.payType === PayType.HOURLY) {
@@ -334,8 +359,11 @@ const MobileQueryHub: React.FC = () => {
   const recordsLiteList = useMemo(() => {
     const q = recordQuery.trim().toLowerCase();
     const teacherNameById = new Map(teacherList.map((t) => [t.id, t.name || t.id]));
+    const [year, month] = recordMonth.split('-').map(Number);
+    const monthStartStr = `${recordMonth}-01`;
+    const monthEndStr = `${recordMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
     const inMonth = recordList
-      .filter((r) => String(r.startDate || '').startsWith(recordMonth) || String(r.endDate || '').startsWith(recordMonth))
+      .filter((r) => recordHasActualDateInMonth(r, monthStartStr, monthEndStr))
       .map((r) => {
         const teacherName = teacherNameById.get(r.originalTeacherId) || r.originalTeacherId;
         return { record: r, teacherName };
