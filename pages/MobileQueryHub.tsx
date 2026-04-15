@@ -1,13 +1,26 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Calendar, Search, Wallet, ChevronLeft, ChevronRight, ExternalLink, ClipboardList } from 'lucide-react';
+import {
+  Calendar,
+  Search,
+  Wallet,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  ClipboardList,
+  FileText,
+  PlusCircle,
+  Save,
+} from 'lucide-react';
 import EduTrackApp from '../edutrack/App';
 import { useAppStore } from '../store/useAppStore';
 import { resolveTeacherDefaultSchedule, teacherMatchesClassKeyword } from '../utils/teacherSchedule';
 import { calculateSubstituteMonthlyBreakdown } from '../utils/substituteCompensation';
-import { PayType, type SubstituteDetail, type Teacher, type TeacherScheduleSlot } from '../types';
+import { PayType, type LeaveRecord, type ProcessingStatus, type SubstituteDetail, type Teacher, type TeacherScheduleSlot } from '../types';
 import { deduplicateDetails } from '../utils/calculations';
 
-type TabKey = 'weekly' | 'teacher' | 'salary' | 'edutrack';
+type TabKey = 'weekly' | 'teacher' | 'salary' | 'recordsLite' | 'edutrack';
+
+const MOBILE_RECORD_STATUS_OPTIONS: ProcessingStatus[] = ['待處理', '已印代課單', '跑章中', '結案待算'];
 
 const PERIOD_ROWS = [
   { id: '早', label: '早' },
@@ -108,6 +121,7 @@ const MobileQueryHub: React.FC = () => {
     fixedOvertimeConfig,
     settings,
     activeSemesterId,
+    updateRecord,
   } = useAppStore();
 
   const teacherList = Array.isArray(teachers) ? teachers : [];
@@ -124,6 +138,14 @@ const MobileQueryHub: React.FC = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [recordMonth, setRecordMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [recordQuery, setRecordQuery] = useState('');
+  const [recordDrafts, setRecordDrafts] = useState<Record<string, { processingStatus: ProcessingStatus; adminNote: string }>>({});
+  const [recordSavingId, setRecordSavingId] = useState<string | null>(null);
+  const [recordSaveMessage, setRecordSaveMessage] = useState('');
 
   const weekDays = useMemo(() => getWeekDays(viewDate), [viewDate]);
 
@@ -309,6 +331,70 @@ const MobileQueryHub: React.FC = () => {
     return rows;
   }, [selectedSalaryTeacher, salaryMonth, recordList, teacherList]);
 
+  const recordsLiteList = useMemo(() => {
+    const q = recordQuery.trim().toLowerCase();
+    const teacherNameById = new Map(teacherList.map((t) => [t.id, t.name || t.id]));
+    const inMonth = recordList
+      .filter((r) => String(r.startDate || '').startsWith(recordMonth) || String(r.endDate || '').startsWith(recordMonth))
+      .map((r) => {
+        const teacherName = teacherNameById.get(r.originalTeacherId) || r.originalTeacherId;
+        return { record: r, teacherName };
+      })
+      .sort((a, b) => (b.record.startDate || '').localeCompare(a.record.startDate || ''));
+    if (!q) return inMonth;
+    return inMonth.filter(({ record, teacherName }) =>
+      teacherName.toLowerCase().includes(q) ||
+      (record.leaveType || '').toLowerCase().includes(q) ||
+      (record.reason || '').toLowerCase().includes(q),
+    );
+  }, [recordList, recordMonth, teacherList, recordQuery]);
+
+  useEffect(() => {
+    setRecordDrafts((prev) => {
+      const next: Record<string, { processingStatus: ProcessingStatus; adminNote: string }> = {};
+      recordsLiteList.forEach(({ record }) => {
+        const existing = prev[record.id];
+        next[record.id] = existing || {
+          processingStatus: (record.processingStatus || '待處理') as ProcessingStatus,
+          adminNote: record.adminNote || '',
+        };
+      });
+      return next;
+    });
+  }, [recordsLiteList]);
+
+  const updateRecordDraft = (id: string, patch: Partial<{ processingStatus: ProcessingStatus; adminNote: string }>) => {
+    setRecordDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        processingStatus: prev[id]?.processingStatus || '待處理',
+        adminNote: prev[id]?.adminNote || '',
+        ...patch,
+      },
+    }));
+  };
+
+  const saveRecordLite = async (target: LeaveRecord) => {
+    const draft = recordDrafts[target.id];
+    if (!draft) return;
+    setRecordSavingId(target.id);
+    setRecordSaveMessage('');
+    try {
+      const merged: LeaveRecord = {
+        ...target,
+        processingStatus: draft.processingStatus,
+        adminNote: draft.adminNote.trim() || undefined,
+      };
+      await updateRecord(merged);
+      setRecordSaveMessage(`已儲存：${target.startDate} ${draft.processingStatus}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '儲存失敗，請稍後再試。';
+      setRecordSaveMessage(msg);
+    } finally {
+      setRecordSavingId(null);
+    }
+  };
+
   const openSalaryTab = () => {
     if (!selectedSalaryTeacher || !monthlyBreakdown) return;
     const popup = window.open('', '_blank');
@@ -389,7 +475,7 @@ const MobileQueryHub: React.FC = () => {
         單一網址提供總表週課、教師課表搜尋、代課老師月薪資整合，以及教學組事務（與主站登入／白名單一致）。
       </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
         <button
           type="button"
           onClick={() => setTab('weekly')}
@@ -410,6 +496,14 @@ const MobileQueryHub: React.FC = () => {
           className={`px-2 py-2.5 rounded-lg text-xs sm:text-sm touch-manipulation ${tab === 'salary' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
         >
           代課薪資
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('recordsLite')}
+          className={`px-2 py-2.5 rounded-lg text-xs sm:text-sm touch-manipulation flex items-center justify-center gap-1 ${tab === 'recordsLite' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+        >
+          <FileText size={14} className="shrink-0" />
+          清冊/憑證
         </button>
         <button
           type="button"
@@ -744,6 +838,130 @@ const MobileQueryHub: React.FC = () => {
             </>
           )}
           {!selectedSalaryTeacher && <div className="text-sm text-slate-400">請先選擇代課老師。</div>}
+        </section>
+      )}
+
+      {tab === 'recordsLite' && (
+        <section className="bg-white border border-slate-200 rounded-xl p-3 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 font-semibold text-slate-700">
+                <FileText size={16} />
+                代課清冊/憑證（簡易）
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                僅提供手機快速調整「憑證狀態、管理備註」；完整匯出與進階功能請開啟原頁面。
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => { window.location.hash = '#/records'; }}
+              className="w-full px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold flex items-center justify-center gap-1.5"
+            >
+              <ExternalLink size={14} />
+              開完整代課清冊/憑證
+            </button>
+            <button
+              type="button"
+              onClick={() => { window.location.hash = '#/entry'; }}
+              className="w-full px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-semibold flex items-center justify-center gap-1.5"
+            >
+              <PlusCircle size={14} />
+              新增代課單（手機）
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              type="month"
+              value={recordMonth}
+              onChange={(e) => setRecordMonth(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            />
+            <input
+              value={recordQuery}
+              onChange={(e) => setRecordQuery(e.target.value)}
+              placeholder="搜尋：教師/假別/事由"
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            />
+          </div>
+          {recordSaveMessage && (
+            <div className="text-xs rounded-md px-2.5 py-2 bg-slate-50 border border-slate-200 text-slate-600">
+              {recordSaveMessage}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {recordsLiteList.map(({ record, teacherName }) => {
+              const draft = recordDrafts[record.id] || {
+                processingStatus: (record.processingStatus || '待處理') as ProcessingStatus,
+                adminNote: record.adminNote || '',
+              };
+              const isSaving = recordSavingId === record.id;
+              return (
+                <article key={record.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50/40">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 truncate">{teacherName}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{record.startDate} ~ {record.endDate}</div>
+                    </div>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">
+                      {record.leaveType}
+                    </span>
+                  </div>
+
+                  <label className="block text-xs font-semibold text-slate-600 mt-2 mb-1">憑證狀態</label>
+                  <select
+                    value={draft.processingStatus}
+                    onChange={(e) => updateRecordDraft(record.id, { processingStatus: e.target.value as ProcessingStatus })}
+                    className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg bg-white"
+                  >
+                    {MOBILE_RECORD_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="block text-xs font-semibold text-slate-600 mt-2 mb-1">管理備註</label>
+                  <textarea
+                    value={draft.adminNote}
+                    onChange={(e) => updateRecordDraft(record.id, { adminNote: e.target.value })}
+                    rows={2}
+                    placeholder="例如：已印 4/13、跑章中"
+                    className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg bg-white resize-y"
+                  />
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => saveRecordLite(record)}
+                      className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60 flex items-center gap-1"
+                    >
+                      <Save size={14} />
+                      {isSaving ? '儲存中…' : '儲存'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { window.location.hash = `#/entry/${record.id}`; }}
+                      className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm"
+                    >
+                      開完整編輯
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            {recordsLiteList.length === 0 && (
+              <div className="px-3 py-8 text-center text-sm text-slate-400 border border-dashed border-slate-300 rounded-lg">
+                這個月份沒有符合條件的代課單。
+              </div>
+            )}
+          </div>
         </section>
       )}
 
