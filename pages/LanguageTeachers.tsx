@@ -6,7 +6,6 @@ import Modal from '../components/Modal';
 import SearchableSelect from '../components/SearchableSelect';
 import InstructionPanel, { CollapsibleItem } from '../components/InstructionPanel';
 import { getDaysInMonth, sortPeriods } from '../utils/calculations';
-import { callGasApi } from '../utils/api';
 
 const LanguageTeachers: React.FC = () => {
   const { teachers, updateTeacher, addTeacher, languagePayrolls, addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll, settings, holidays } = useAppStore();
@@ -426,45 +425,141 @@ const LanguageTeachers: React.FC = () => {
       }
       
       const targetPayrolls = languagePayrolls.filter(p => selectedPayrollIds.has(p.id));
-      const exportData = targetPayrolls.map(p => {
-          const teacher = teachers.find(t => t.id === p.teacherId);
-          return {
-              ...p,
-              teacherName: teacher?.name,
-              teacherCategory: teacher?.teacherCategory,
-              teacherIdNumber: 'A123456789', // Placeholder or add to Teacher type?
-              teacherAddress: 'Address...', // Placeholder
-              teacherBank: 'Bank...', // Placeholder
-          };
-      });
-
       setIsExporting(true);
       try {
-          const targetUrl = settings.gasWebAppUrl;
-          if (!targetUrl) throw new Error('未設定 GAS URL');
-          
-          await callGasApi(targetUrl, 'EXPORT_LANGUAGE_PAYROLL', {
-              month: selectedMonth,
-              payrolls: exportData,
-              templateName: '語言教師清冊範本',
-              templateSpreadsheetId: '1k0t09n4JZJSuQu8lq3bPlqvRjQZ24Fp4bD494UXlPKE' // User provided ID
-          }).then(res => {
-              if (res.data && res.data.url) {
-                  window.open(res.data.url, '_blank');
-              }
+          const escapeHtml = (value: string) =>
+            value
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+
+          const monthDate = new Date(`${selectedMonth}-01`);
+          const rocYear = monthDate.getFullYear() - 1911;
+          const monthNum = monthDate.getMonth() + 1;
+
+          const pagesHtml = targetPayrolls.map((payroll) => {
+              const teacher = teachers.find(t => t.id === payroll.teacherId);
+              const teacherName = teacher?.name || '未命名教師';
+              const language = payroll.language || teacher?.languageSpecialty || '';
+              const isIndigenous = teacher?.teacherCategory === 'Indigenous' || language.includes('族');
+              const title = isIndigenous
+                ? '表2：國中小原住民語文教學支援老師鐘點費印領清冊【從聘學校按月填寫】'
+                : '表5：國中、小新住民語文教學支援老師鐘點費印領清冊【從聘學校按月填寫】';
+
+              const sortedEntries = [...(payroll.entries || [])].sort((a, b) => a.date.localeCompare(b.date));
+              const rowsHtml = sortedEntries.length > 0
+                ? sortedEntries.map((entry, idx) => `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td class="text-left">${escapeHtml(`${entry.date}；${entry.periodLabels || ''}`)}</td>
+                      <td>${entry.periodCount}</td>
+                      <td>${entry.hourlyRate}</td>
+                      <td>${entry.totalAmount}</td>
+                      <td></td>
+                    </tr>
+                  `).join('')
+                : `
+                  <tr>
+                    <td>1</td>
+                    <td class="text-left"></td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td>0</td>
+                    <td></td>
+                  </tr>
+                `;
+
+              const totalPeriods = sortedEntries.reduce((sum, item) => sum + item.periodCount, 0);
+              const totalAmount = sortedEntries.reduce((sum, item) => sum + item.totalAmount, 0);
+
+              return `
+                <section class="page">
+                  <h1>${escapeHtml(title)}</h1>
+                  <div class="meta">上課月份：${rocYear} 年 ${monthNum} 月</div>
+                  <div class="meta">所屬主聘學校：${escapeHtml(payroll.hostSchool || '')}</div>
+                  <div class="meta">上課學校名稱：${escapeHtml(payroll.teachingSchool || '')}</div>
+                  <div class="meta">語言別：${escapeHtml(language)}</div>
+                  <div class="meta">教支老師姓名：${escapeHtml(teacherName)}</div>
+
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width: 9%;">編號</th>
+                        <th style="width: 43%;">上課時間 (日期；節次)</th>
+                        <th style="width: 10%;">節數</th>
+                        <th style="width: 14%;">鐘點費單價</th>
+                        <th style="width: 14%;">合計</th>
+                        <th style="width: 10%;">上課老師簽章</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rowsHtml}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colspan="2" class="text-right"><strong>總計</strong></td>
+                        <td><strong>${totalPeriods}</strong></td>
+                        <td></td>
+                        <td><strong>${totalAmount}</strong></td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </section>
+              `;
           });
-          showMessage({ title: '匯出成功', message: '匯出指令已發送。報表已自動開啟，若未開啟請檢查瀏覽器阻擋視窗設定。', type: 'success' });
+
+          const printHtml = `
+            <!doctype html>
+            <html lang="zh-Hant">
+              <head>
+                <meta charset="utf-8" />
+                <title>語言教師印領清冊列印</title>
+                <style>
+                  @page { size: A4 portrait; margin: 12mm; }
+                  body { margin: 0; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; color: #111; }
+                  .page {
+                    width: 100%;
+                    min-height: calc(297mm - 24mm);
+                    box-sizing: border-box;
+                    page-break-after: always;
+                    padding: 2mm 0;
+                  }
+                  .page:last-child { page-break-after: auto; }
+                  h1 { font-size: 16px; margin: 0 0 10px 0; line-height: 1.4; }
+                  .meta { font-size: 13px; margin-bottom: 4px; }
+                  table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+                  th, td { border: 1px solid #000; font-size: 12px; padding: 6px 4px; vertical-align: top; text-align: center; word-break: break-word; }
+                  .text-left { text-align: left; }
+                  .text-right { text-align: right; }
+                </style>
+              </head>
+              <body>
+                ${pagesHtml.join('')}
+                <script>
+                  window.onload = function () {
+                    window.print();
+                  };
+                </script>
+              </body>
+            </html>
+          `;
+
+          const printWindow = window.open('', '_blank');
+          if (!printWindow) {
+            throw new Error('瀏覽器已阻擋彈出視窗，請允許彈出視窗後再試一次。');
+          }
+
+          printWindow.document.open();
+          printWindow.document.write(printHtml);
+          printWindow.document.close();
+
+          showMessage({ title: '列印頁已開啟', message: '已以前端渲染 A4 直式版面（每位老師一頁），請直接在新分頁列印。', type: 'success' });
       } catch (e: any) {
           const msg = e.message || String(e);
-          if (msg.includes('找不到範本檔案')) {
-             showMessage({ 
-                 title: '範本讀取失敗', 
-                 message: `後端程式 (GAS) 無法找到範本。\n\n原因：目前的 GAS 程式可能僅支援「依檔名搜尋檔案」，尚未支援「依 ID 讀取工作表」。\n\n請更新您的 Google Apps Script 程式碼以支援 templateSpreadsheetId 參數，並讀取指定 Spreadsheet 中的工作表。`, 
-                 type: 'error' 
-             });
-          } else {
-             showMessage({ title: '匯出失敗', message: msg, type: 'error' });
-          }
+          showMessage({ title: '列印失敗', message: msg, type: 'error' });
       } finally {
           setIsExporting(false);
       }
