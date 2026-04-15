@@ -21,6 +21,13 @@ import { deduplicateDetails } from '../utils/calculations';
 type TabKey = 'weekly' | 'teacher' | 'salary' | 'recordsLite' | 'edutrack';
 
 const MOBILE_RECORD_STATUS_OPTIONS: ProcessingStatus[] = ['待處理', '已印代課單', '跑章中', '結案待算'];
+const MOBILE_PAY_TYPE_OPTIONS: PayType[] = [PayType.HOURLY, PayType.DAILY, PayType.HALF_DAY];
+
+type MobileRecordLiteDraft = {
+  processingStatus: ProcessingStatus;
+  adminNote: string;
+  details: SubstituteDetail[];
+};
 
 const PERIOD_ROWS = [
   { id: '早', label: '早' },
@@ -72,15 +79,13 @@ const recordHasActualDateInMonth = (record: LeaveRecord, monthStartStr: string, 
   const detailDates = deduplicateDetails(record.details || []).map((d) => toYMD(d.date)).filter(Boolean);
   const slotDates = (record.slots || []).map((s) => toYMD(s.date)).filter(Boolean);
   const actualDates = [...detailDates, ...slotDates];
-  if (actualDates.length > 0) {
-    return actualDates.some((date) => date >= monthStartStr && date <= monthEndStr);
-  }
-
-  // 舊資料若無明細日期，才退回請假區間判斷，避免整筆消失。
   const start = toYMD(record.startDate || '');
   const end = toYMD(record.endDate || '');
-  if (!start || !end) return false;
-  return start <= monthEndStr && end >= monthStartStr;
+  const inMonthByActual = actualDates.some((date) => date >= monthStartStr && date <= monthEndStr);
+  const inMonthByRange = !!start && !!end && start <= monthEndStr && end >= monthStartStr;
+
+  // 與完整清冊頁一致：實際明細日期或請假區間任一命中即列入，避免手機版漏單。
+  return inMonthByActual || inMonthByRange;
 };
 
 function salaryDetailPeriodText(d: SubstituteDetail, periodOrder: string[]): string {
@@ -167,8 +172,10 @@ const MobileQueryHub: React.FC = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [recordTeacherQuery, setRecordTeacherQuery] = useState('');
   const [recordQuery, setRecordQuery] = useState('');
-  const [recordDrafts, setRecordDrafts] = useState<Record<string, { processingStatus: ProcessingStatus; adminNote: string }>>({});
+  const [selectedRecordTeacherId, setSelectedRecordTeacherId] = useState('');
+  const [recordDrafts, setRecordDrafts] = useState<Record<string, MobileRecordLiteDraft>>({});
   const [recordSavingId, setRecordSavingId] = useState<string | null>(null);
   const [recordSaveMessage, setRecordSaveMessage] = useState('');
 
@@ -357,49 +364,100 @@ const MobileQueryHub: React.FC = () => {
   }, [selectedSalaryTeacher, salaryMonth, recordList, teacherList]);
 
   const recordsLiteList = useMemo(() => {
-    const q = recordQuery.trim().toLowerCase();
     const teacherNameById = new Map(teacherList.map((t) => [t.id, t.name || t.id]));
     const [year, month] = recordMonth.split('-').map(Number);
     const monthStartStr = `${recordMonth}-01`;
     const monthEndStr = `${recordMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
-    const inMonth = recordList
+    return recordList
       .filter((r) => recordHasActualDateInMonth(r, monthStartStr, monthEndStr))
       .map((r) => {
         const teacherName = teacherNameById.get(r.originalTeacherId) || r.originalTeacherId;
         return { record: r, teacherName };
       })
       .sort((a, b) => (b.record.startDate || '').localeCompare(a.record.startDate || ''));
-    if (!q) return inMonth;
-    return inMonth.filter(({ record, teacherName }) =>
-      teacherName.toLowerCase().includes(q) ||
-      (record.leaveType || '').toLowerCase().includes(q) ||
-      (record.reason || '').toLowerCase().includes(q),
-    );
-  }, [recordList, recordMonth, teacherList, recordQuery]);
+  }, [recordList, recordMonth, teacherList]);
+
+  const recordsLiteTeachers = useMemo(() => {
+    const byTeacher = new Map<string, { teacherId: string; teacherName: string; count: number }>();
+    recordsLiteList.forEach(({ record, teacherName }) => {
+      const key = record.originalTeacherId || '';
+      const prev = byTeacher.get(key);
+      if (prev) {
+        prev.count += 1;
+      } else {
+        byTeacher.set(key, { teacherId: key, teacherName, count: 1 });
+      }
+    });
+    const q = recordTeacherQuery.trim().toLowerCase();
+    return [...byTeacher.values()]
+      .filter((x) => !q || x.teacherName.toLowerCase().includes(q))
+      .sort((a, b) => a.teacherName.localeCompare(b.teacherName, 'zh-Hant'));
+  }, [recordsLiteList, recordTeacherQuery]);
+
+  useEffect(() => {
+    if (recordsLiteTeachers.length === 0) {
+      setSelectedRecordTeacherId('');
+      return;
+    }
+    if (!recordsLiteTeachers.some((t) => t.teacherId === selectedRecordTeacherId)) {
+      setSelectedRecordTeacherId(recordsLiteTeachers[0].teacherId);
+    }
+  }, [recordsLiteTeachers, selectedRecordTeacherId]);
+
+  const selectedTeacherRecordsLiteList = useMemo(() => {
+    const q = recordQuery.trim().toLowerCase();
+    return recordsLiteList.filter(({ record, teacherName }) => {
+      if (record.originalTeacherId !== selectedRecordTeacherId) return false;
+      if (!q) return true;
+      return (
+        teacherName.toLowerCase().includes(q) ||
+        (record.leaveType || '').toLowerCase().includes(q) ||
+        (record.reason || '').toLowerCase().includes(q) ||
+        (record.docId || '').toLowerCase().includes(q)
+      );
+    });
+  }, [recordsLiteList, selectedRecordTeacherId, recordQuery]);
 
   useEffect(() => {
     setRecordDrafts((prev) => {
-      const next: Record<string, { processingStatus: ProcessingStatus; adminNote: string }> = {};
+      const next: Record<string, MobileRecordLiteDraft> = {};
       recordsLiteList.forEach(({ record }) => {
         const existing = prev[record.id];
         next[record.id] = existing || {
           processingStatus: (record.processingStatus || '待處理') as ProcessingStatus,
           adminNote: record.adminNote || '',
+          details: deduplicateDetails(record.details || []).map((d) => ({ ...d })),
         };
       });
       return next;
     });
   }, [recordsLiteList]);
 
-  const updateRecordDraft = (id: string, patch: Partial<{ processingStatus: ProcessingStatus; adminNote: string }>) => {
+  const updateRecordDraft = (id: string, patch: Partial<MobileRecordLiteDraft>) => {
     setRecordDrafts((prev) => ({
       ...prev,
       [id]: {
         processingStatus: prev[id]?.processingStatus || '待處理',
         adminNote: prev[id]?.adminNote || '',
+        details: prev[id]?.details || [],
         ...patch,
       },
     }));
+  };
+
+  const updateRecordDetailDraft = (recordId: string, detailId: string, patch: Partial<SubstituteDetail>) => {
+    setRecordDrafts((prev) => {
+      const base = prev[recordId];
+      if (!base) return prev;
+      const nextDetails = (base.details || []).map((d) => (d.id === detailId ? { ...d, ...patch } : d));
+      return {
+        ...prev,
+        [recordId]: {
+          ...base,
+          details: nextDetails,
+        },
+      };
+    });
   };
 
   const saveRecordLite = async (target: LeaveRecord) => {
@@ -412,6 +470,15 @@ const MobileQueryHub: React.FC = () => {
         ...target,
         processingStatus: draft.processingStatus,
         adminNote: draft.adminNote.trim() || undefined,
+        details: (draft.details || []).map((d) => ({
+          ...d,
+          date: toYMD(d.date),
+          periodCount: Number(d.periodCount) || 0,
+          calculatedAmount: Number(d.calculatedAmount) || 0,
+          selectedPeriods: Array.isArray(d.selectedPeriods)
+            ? d.selectedPeriods.map((x) => String(x)).filter((x) => x.length > 0)
+            : [],
+        })),
       };
       await updateRecord(merged);
       setRecordSaveMessage(`已儲存：${target.startDate} ${draft.processingStatus}`);
@@ -902,7 +969,7 @@ const MobileQueryHub: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               type="month"
               value={recordMonth}
@@ -910,9 +977,15 @@ const MobileQueryHub: React.FC = () => {
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
             />
             <input
+              value={recordTeacherQuery}
+              onChange={(e) => setRecordTeacherQuery(e.target.value)}
+              placeholder="先搜尋教師"
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            />
+            <input
               value={recordQuery}
               onChange={(e) => setRecordQuery(e.target.value)}
-              placeholder="搜尋：教師/假別/事由"
+              placeholder="再篩選假單：假別/事由/公文"
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
             />
           </div>
@@ -922,11 +995,37 @@ const MobileQueryHub: React.FC = () => {
             </div>
           )}
 
-          <div className="space-y-2">
-            {recordsLiteList.map(({ record, teacherName }) => {
+          <div className="grid grid-cols-1 lg:grid-cols-[260px,1fr] gap-3">
+            <aside className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <div className="px-3 py-2 text-xs font-semibold text-slate-600 border-b border-slate-200 bg-slate-50">
+                教師（{recordsLiteTeachers.length}）
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {recordsLiteTeachers.map((t) => (
+                  <button
+                    key={t.teacherId}
+                    type="button"
+                    onClick={() => setSelectedRecordTeacherId(t.teacherId)}
+                    className={`w-full text-left px-3 py-2 border-b border-slate-100 last:border-b-0 ${
+                      selectedRecordTeacherId === t.teacherId ? 'bg-indigo-50' : 'bg-white'
+                    }`}
+                  >
+                    <div className="text-sm font-medium text-slate-800">{t.teacherName}</div>
+                    <div className="text-xs text-slate-500">{t.count} 筆假單</div>
+                  </button>
+                ))}
+                {recordsLiteTeachers.length === 0 && (
+                  <div className="px-3 py-6 text-center text-sm text-slate-400">這個月份沒有可編修資料。</div>
+                )}
+              </div>
+            </aside>
+
+            <div className="space-y-2">
+            {selectedTeacherRecordsLiteList.map(({ record, teacherName }) => {
               const draft = recordDrafts[record.id] || {
                 processingStatus: (record.processingStatus || '待處理') as ProcessingStatus,
                 adminNote: record.adminNote || '',
+                details: deduplicateDetails(record.details || []).map((d) => ({ ...d })),
               };
               const isSaving = recordSavingId === record.id;
               return (
@@ -963,6 +1062,80 @@ const MobileQueryHub: React.FC = () => {
                     className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg bg-white resize-y"
                   />
 
+                  <div className="mt-2 border border-slate-200 rounded-lg bg-white">
+                    <div className="px-2.5 py-2 text-xs font-semibold text-slate-600 border-b border-slate-200">
+                      代課明細（可直接改）
+                    </div>
+                    <div className="p-2 space-y-2">
+                      {(draft.details || []).map((d) => (
+                        <div key={d.id} className="border border-slate-200 rounded-md p-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="date"
+                              value={toYMD(d.date)}
+                              onChange={(e) => updateRecordDetailDraft(record.id, d.id, { date: e.target.value })}
+                              className="px-2 py-1.5 text-sm border border-slate-200 rounded"
+                            />
+                            <select
+                              value={d.payType}
+                              onChange={(e) => updateRecordDetailDraft(record.id, d.id, { payType: e.target.value as PayType })}
+                              className="px-2 py-1.5 text-sm border border-slate-200 rounded"
+                            >
+                              {MOBILE_PAY_TYPE_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={d.substituteTeacherId || ''}
+                              onChange={(e) => updateRecordDetailDraft(record.id, d.id, { substituteTeacherId: e.target.value })}
+                              className="px-2 py-1.5 text-sm border border-slate-200 rounded"
+                            >
+                              <option value="">待聘</option>
+                              {sortTeachersByName(teacherList).map((t) => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={Number(d.periodCount) || 0}
+                              onChange={(e) => updateRecordDetailDraft(record.id, d.id, { periodCount: Number(e.target.value) || 0 })}
+                              className="px-2 py-1.5 text-sm border border-slate-200 rounded"
+                              placeholder="節數/天數"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={Number(d.calculatedAmount) || 0}
+                              onChange={(e) => updateRecordDetailDraft(record.id, d.id, { calculatedAmount: Number(e.target.value) || 0 })}
+                              className="px-2 py-1.5 text-sm border border-slate-200 rounded col-span-2"
+                              placeholder="金額"
+                            />
+                            <input
+                              type="text"
+                              value={Array.isArray(d.selectedPeriods) ? d.selectedPeriods.join(',') : ''}
+                              onChange={(e) =>
+                                updateRecordDetailDraft(record.id, d.id, {
+                                  selectedPeriods: e.target.value
+                                    .split(',')
+                                    .map((x) => x.trim())
+                                    .filter((x) => x.length > 0),
+                                })
+                              }
+                              className="px-2 py-1.5 text-sm border border-slate-200 rounded col-span-2"
+                              placeholder="節次（逗號分隔，例如 早,1,2）"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      {(draft.details || []).length === 0 && (
+                        <div className="text-xs text-slate-400 py-2 text-center">此筆沒有可編輯代課明細。</div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"
@@ -984,11 +1157,12 @@ const MobileQueryHub: React.FC = () => {
                 </article>
               );
             })}
-            {recordsLiteList.length === 0 && (
+            {selectedTeacherRecordsLiteList.length === 0 && (
               <div className="px-3 py-8 text-center text-sm text-slate-400 border border-dashed border-slate-300 rounded-lg">
-                這個月份沒有符合條件的代課單。
+                請先選擇教師，或目前教師在此篩選下沒有假單。
               </div>
             )}
+            </div>
           </div>
         </section>
       )}
