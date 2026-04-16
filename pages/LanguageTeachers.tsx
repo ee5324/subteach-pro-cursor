@@ -530,50 +530,61 @@ const LanguageTeachers: React.FC = () => {
 
           return `
             <section class="page">
-              <div class="inner">
-                <h1>${escapeHtml(title)}</h1>
-                <h2>【從聘學校按月填寫】</h2>
-                <div class="meta-row">上課月份：${rocYear}年 ${monthNum} 月</div>
-                <div class="meta-row">所屬主聘學校：${escapeHtml(payroll.hostSchool || '')}</div>
-                <div class="meta-row">上課學校名稱：${escapeHtml(payroll.teachingSchool || '')}</div>
-                <div class="meta-inline">
-                  <span>${languageLabel}：${escapeHtml(language)}</span>
-                  <span>教支老師姓名：${escapeHtml(teacherName)}</span>
+              <div class="canvas">
+                <div class="snap-block" data-role="title" style="left:0mm;top:0mm;width:186mm;">
+                  <h1>${escapeHtml(title)}</h1>
                 </div>
-
-                <table>
-                  <thead>
-                    <tr>
-                      <th style="width: 8%;">編號</th>
-                      <th style="width: 36%;">上課時間</th>
-                      <th style="width: 10%;">節數</th>
-                      <th style="width: 18%;">鐘點費單價</th>
-                      <th style="width: 14%;">合計</th>
-                      <th style="width: 14%;">上課老師簽章</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${rowHtml}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colspan="2" class="center"><b>總計</b></td>
-                      <td>${totalPeriods} 節</td>
-                      <td></td>
-                      <td>${totalAmount} 元</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-
-                <div class="notes">●請各校按每月實際上課情形核實，紙本核章後，於每月3日前公文交換或郵寄至主聘學校，以利核計薪資。</div>
-                <div class="notes">●國小族語每節360元、國中族語每節400元。</div>
-
-                <div class="sign-row">
-                  <span>承辦人：</span>
-                  <span>教務主任：</span>
-                  <span>會計單位：</span>
-                  <span>校長：</span>
+                <div class="snap-block" data-role="subtitle" style="left:0mm;top:8mm;width:186mm;">
+                  <h2>【從聘學校按月填寫】</h2>
+                </div>
+                <div class="snap-block" data-role="meta-main" style="left:0mm;top:15mm;width:186mm;">
+                  <div class="meta-row">上課月份：${rocYear}年 ${monthNum} 月</div>
+                  <div class="meta-row">所屬主聘學校：${escapeHtml(payroll.hostSchool || '')}</div>
+                  <div class="meta-row">上課學校名稱：${escapeHtml(payroll.teachingSchool || '')}</div>
+                  <div class="meta-inline">
+                    <span>${languageLabel}：${escapeHtml(language)}</span>
+                    <span>教支老師姓名：${escapeHtml(teacherName)}</span>
+                  </div>
+                </div>
+                <div class="snap-block" data-role="table" style="left:0mm;top:31mm;width:186mm;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width: 8%;">編號</th>
+                        <th style="width: 36%;">上課時間</th>
+                        <th style="width: 10%;">節數</th>
+                        <th style="width: 18%;">鐘點費單價</th>
+                        <th style="width: 14%;">合計</th>
+                        <th style="width: 14%;">上課老師簽章</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rowHtml}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colspan="2" class="center"><b>總計</b></td>
+                        <td>${totalPeriods} 節</td>
+                        <td></td>
+                        <td>${totalAmount} 元</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div class="snap-block" data-role="note-1" style="left:0mm;top:228mm;width:186mm;">
+                  <div class="notes">●請各校按每月實際上課情形核實，紙本核章後，於每月3日前公文交換或郵寄至主聘學校，以利核計薪資。</div>
+                </div>
+                <div class="snap-block" data-role="note-2" style="left:0mm;top:234mm;width:186mm;">
+                  <div class="notes">●國小族語每節360元、國中族語每節400元。</div>
+                </div>
+                <div class="snap-block" data-role="sign-row" style="left:0mm;top:246mm;width:186mm;">
+                  <div class="sign-row">
+                    <span>承辦人：</span>
+                    <span>教務主任：</span>
+                    <span>會計單位：</span>
+                    <span>校長：</span>
+                  </div>
                 </div>
               </div>
             </section>
@@ -588,10 +599,16 @@ const LanguageTeachers: React.FC = () => {
             <title>語言教師清冊 A4 列印</title>
             <style>
               @page { size: A4 portrait; margin: 8mm 10mm; }
-              body { margin: 0; background: #fff; font-family: "DFKai-SB", "KaiTi", "PMingLiU", "Microsoft JhengHei", serif; color: #000; }
-              .page { width: 100%; min-height: calc(297mm - 16mm); page-break-after: always; }
+              body { margin: 0; background: #e2e8f0; font-family: "DFKai-SB", "KaiTi", "PMingLiU", "Microsoft JhengHei", serif; color: #000; }
+              .toolbar { position: sticky; top: 0; z-index: 30; background: #0f172a; color: #f8fafc; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+              .toolbar button { border: none; border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+              .toolbar .primary { background: #2563eb; color: #fff; }
+              .toolbar .secondary { background: #334155; color: #fff; border: 1px solid #475569; }
+              .toolbar .hint { font-size: 12px; opacity: .9; margin-left: auto; }
+              .workspace { padding: 12px 0 20px; }
+              .page { width: 210mm; min-height: 297mm; margin: 8px auto; page-break-after: always; background: #fff; box-shadow: 0 6px 20px rgba(15, 23, 42, .18); position: relative; }
               .page:last-child { page-break-after: auto; }
-              .inner { width: 186mm; margin: 8mm auto 0 auto; }
+              .canvas { width: 186mm; height: 277mm; margin: 8mm auto; position: relative; }
               h1 { margin: 0; text-align: center; font-size: 16px; line-height: 1.2; }
               h2 { margin: 0 0 8px 0; text-align: center; font-size: 14px; line-height: 1.1; }
               .meta-row { font-size: 13px; line-height: 1.25; margin: 1px 0; }
@@ -605,12 +622,123 @@ const LanguageTeachers: React.FC = () => {
               .center { text-align: center; }
               .notes { font-size: 12px; margin-top: 4px; line-height: 1.25; }
               .sign-row { margin-top: 16px; display: flex; justify-content: space-between; font-size: 14px; padding: 0 6px; }
+              .snap-block { position: absolute; min-width: 28mm; min-height: 6mm; cursor: move; user-select: none; background: transparent; }
+              .snap-block.active { outline: 1px dashed #2563eb; outline-offset: 2px; }
+              .snap-block .resize-handle { position: absolute; width: 10px; height: 10px; right: -5px; bottom: -5px; border-radius: 999px; background: #2563eb; cursor: nwse-resize; }
+              .snapshot-only { display: none; }
+              body.snapshot-mode .toolbar { display: none; }
+              body.snapshot-mode .page { box-shadow: none; margin: 0 auto; }
+              body.snapshot-mode .snap-block { outline: none !important; }
+              body.snapshot-mode .resize-handle { display: none !important; }
             </style>
           </head>
           <body>
-            ${pagesHtml.join('')}
+            <div class="toolbar">
+              <button class="primary" id="snapshot-print">快照列印（保持目前排版）</button>
+              <button class="secondary" id="system-print">直接列印目前頁面</button>
+              <button class="secondary" id="reset-layout">重設預設位置</button>
+              <span class="hint">可拖曳區塊改位置；拖右下角圓點改寬度。</span>
+            </div>
+            <div class="workspace">
+              ${pagesHtml.join('')}
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
             <script>
-              window.onload = function () { window.print(); };
+              (function () {
+                const snapshots = [];
+                const pages = Array.from(document.querySelectorAll('.page'));
+                const setupBlock = (block) => {
+                  const style = window.getComputedStyle(block);
+                  const leftPx = parseFloat(style.left || '0');
+                  const topPx = parseFloat(style.top || '0');
+                  const widthPx = parseFloat(style.width || '0');
+                  block.dataset.left = String(leftPx);
+                  block.dataset.top = String(topPx);
+                  block.dataset.width = String(widthPx);
+                  snapshots.push({ block, leftPx, topPx, widthPx });
+                  const resize = document.createElement('div');
+                  resize.className = 'resize-handle';
+                  block.appendChild(resize);
+                  let mode = '';
+                  let startX = 0;
+                  let startY = 0;
+                  let startLeft = 0;
+                  let startTop = 0;
+                  let startWidth = 0;
+                  const onMove = (evt) => {
+                    if (!mode) return;
+                    const dx = evt.clientX - startX;
+                    const dy = evt.clientY - startY;
+                    if (mode === 'drag') {
+                      const nextLeft = Math.max(0, startLeft + dx);
+                      const nextTop = Math.max(0, startTop + dy);
+                      block.style.left = nextLeft + 'px';
+                      block.style.top = nextTop + 'px';
+                    } else {
+                      const nextWidth = Math.max(100, startWidth + dx);
+                      block.style.width = nextWidth + 'px';
+                    }
+                  };
+                  const onUp = () => {
+                    mode = '';
+                    block.classList.remove('active');
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                  };
+                  block.addEventListener('pointerdown', (evt) => {
+                    if (document.body.classList.contains('snapshot-mode')) return;
+                    evt.preventDefault();
+                    mode = evt.target.classList.contains('resize-handle') ? 'resize' : 'drag';
+                    startX = evt.clientX;
+                    startY = evt.clientY;
+                    const rect = block.getBoundingClientRect();
+                    const pageRect = block.closest('.canvas').getBoundingClientRect();
+                    startLeft = rect.left - pageRect.left;
+                    startTop = rect.top - pageRect.top;
+                    startWidth = rect.width;
+                    block.classList.add('active');
+                    window.addEventListener('pointermove', onMove);
+                    window.addEventListener('pointerup', onUp);
+                  });
+                };
+                document.querySelectorAll('.snap-block').forEach(setupBlock);
+
+                document.getElementById('reset-layout')?.addEventListener('click', () => {
+                  snapshots.forEach((item) => {
+                    item.block.style.left = item.leftPx + 'px';
+                    item.block.style.top = item.topPx + 'px';
+                    item.block.style.width = item.widthPx + 'px';
+                  });
+                });
+
+                document.getElementById('system-print')?.addEventListener('click', () => {
+                  window.print();
+                });
+
+                document.getElementById('snapshot-print')?.addEventListener('click', async () => {
+                  const btn = document.getElementById('snapshot-print');
+                  if (btn) btn.textContent = '快照渲染中...';
+                  document.body.classList.add('snapshot-mode');
+                  try {
+                    const images = [];
+                    for (const page of pages) {
+                      const canvas = await window.html2canvas(page, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+                      images.push(canvas.toDataURL('image/png'));
+                    }
+                    const printWin = window.open('', '_blank');
+                    if (!printWin) throw new Error('瀏覽器阻擋彈出視窗');
+                    const imgs = images.map((src) => '<img src="' + src + '" style="display:block;width:190mm;margin:0 auto 8mm auto;page-break-after:always;" />').join('');
+                    printWin.document.open();
+                    printWin.document.write('<!doctype html><html><head><meta charset="utf-8"><title>快照列印</title><style>@page{size:A4 portrait;margin:8mm 10mm;}body{margin:0;background:#fff;}img:last-child{page-break-after:auto!important;}</style></head><body>' + imgs + '<script>window.onload=function(){window.print();};<\/script></body></html>');
+                    printWin.document.close();
+                  } catch (error) {
+                    alert('快照列印失敗：' + (error?.message || error));
+                  } finally {
+                    document.body.classList.remove('snapshot-mode');
+                    if (btn) btn.textContent = '快照列印（保持目前排版）';
+                  }
+                });
+              })();
             </script>
           </body>
         </html>
@@ -624,7 +752,7 @@ const LanguageTeachers: React.FC = () => {
       printWindow.document.open();
       printWindow.document.write(printHtml);
       printWindow.document.close();
-      showMessage({ title: '列印頁已開啟', message: '已開啟 A4 渲染列印頁（每位老師一頁）。', type: 'success' });
+      showMessage({ title: '列印頁已開啟', message: '已開啟可調整版面列印頁，可拖曳/縮放後用「快照列印」輸出。', type: 'success' });
   };
 
   // Calculate Total
