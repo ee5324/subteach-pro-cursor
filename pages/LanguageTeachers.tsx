@@ -594,17 +594,17 @@ const LanguageTeachers: React.FC = () => {
               .inner { width: 186mm; margin: 8mm auto 0 auto; }
               h1 { margin: 0; text-align: center; font-size: 16px; line-height: 1.2; }
               h2 { margin: 0 0 8px 0; text-align: center; font-size: 14px; line-height: 1.1; }
-              .meta-row { font-size: 13px; line-height: 1.25; margin: 1px 0; }
-              .meta-inline { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin: 1px 0 4px 0; }
+              .meta-row { font-size: 14px; line-height: 1.25; margin: 1px 0; }
+              .meta-inline { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin: 1px 0 4px 0; }
               table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-              th, td { border: 1px solid #000; font-size: 12px; padding: 1px 3px; text-align: center; vertical-align: middle; line-height: 1.2; }
+              th, td { border: 1px solid #000; font-size: 13px; padding: 1px 3px; text-align: center; vertical-align: middle; line-height: 1.2; }
               thead th { font-weight: 600; }
               .class-time { text-align: left; white-space: pre-line; line-height: 1.15; }
               tbody tr { height: 29px; }
               tfoot tr { height: 24px; }
               .center { text-align: center; }
               .notes { font-size: 12px; margin-top: 4px; line-height: 1.25; }
-              .sign-row { margin-top: 16px; display: flex; justify-content: flex-start; gap: 24mm; font-size: 14px; padding: 0 12mm 0 6px; }
+              .sign-row { margin-top: 16px; display: flex; justify-content: flex-start; gap: 24mm; font-size: 15px; padding: 0 12mm 0 6px; }
             </style>
           </head>
           <body>
