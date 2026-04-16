@@ -569,12 +569,14 @@ const LanguageTeachers: React.FC = () => {
                 <div class="notes">●請各校按每月實際上課情形核實，紙本核章後，於每月3日前公文交換或郵寄至主聘學校，以利核計薪資。</div>
                 <div class="notes">●國小族語每節360元、國中族語每節400元。</div>
 
-                <div class="sign-row">
-                  <span>承辦人：</span>
-                  <span>教務主任：</span>
-                  <span>會計單位：</span>
-                  <span>校長：</span>
-                </div>
+                <table class="sign-table" aria-label="核章欄">
+                  <tr>
+                    <td>承辦人：</td>
+                    <td>教務主任：</td>
+                    <td>會計單位：</td>
+                    <td>校長：</td>
+                  </tr>
+                </table>
               </div>
             </section>
           `;
@@ -600,11 +602,13 @@ const LanguageTeachers: React.FC = () => {
               th, td { border: 1px solid #000; font-size: 13px; padding: 1px 3px; text-align: center; vertical-align: middle; line-height: 1.2; }
               thead th { font-weight: 600; }
               .class-time { text-align: left; white-space: pre-line; line-height: 1.15; }
-              tbody tr { height: 29px; }
+              tbody tr { height: 30px; }
               tfoot tr { height: 24px; }
               .center { text-align: center; }
               .notes { font-size: 12px; margin-top: 4px; line-height: 1.25; }
-              .sign-row { margin-top: 16px; display: flex; justify-content: flex-start; gap: 24mm; font-size: 15px; padding: 0 12mm 0 6px; }
+              /* 四欄等寬，與常見紙本清冊「整列均分」一致，避免 flex+gap 造成右側大片空白 */
+              .sign-table { width: 100%; margin-top: 16px; border-collapse: collapse; table-layout: fixed; font-size: 15px; }
+              .sign-table td { width: 25%; border: none; padding: 8px 6px 0 0; text-align: left; vertical-align: bottom; line-height: 1.3; }
             </style>
           </head>
           <body>
