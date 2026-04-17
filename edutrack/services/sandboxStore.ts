@@ -1040,6 +1040,16 @@ export function sandboxGetSchoolTeacherNames(): Promise<string[]> {
   return Promise.resolve(['王小明', '林雅婷', '陳美玲', '張志豪', '李佩珊']);
 }
 
+/** Sandbox: 從教師名單模擬導師（供段考白名單匯入測試） */
+export function sandboxGetHomeroomTeachersForExamWhitelist(): Promise<
+  { email: string; teacherName: string; className: string | null; teacherId: string }[]
+> {
+  return Promise.resolve([
+    { email: 'homeroom.demo@school.edu.tw', teacherName: '王小明', className: '301', teacherId: '王小明' },
+    { email: 'homeroom.demo2@school.edu.tw', teacherName: '林雅婷', className: '302', teacherId: '林雅婷' },
+  ]);
+}
+
 export function sandboxUpdateMonthlyRecurringMonthStatus(payload: {
   id: string;
   yearMonth: string;

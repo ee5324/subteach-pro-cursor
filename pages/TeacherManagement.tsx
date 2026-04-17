@@ -108,6 +108,7 @@ export default function TeacherManagement() {
     teachingClasses: '',
     subjects: '',
     phone: '',
+    schoolEmail: '',
     jobTitle: '',
     isSpecialEd: false,
     isGraduatingHomeroom: false,
@@ -139,6 +140,7 @@ export default function TeacherManagement() {
         teachingClasses: teacher.teachingClasses || '',
         subjects: teacher.subjects || '',
         phone: teacher.phone || '',
+        schoolEmail: teacher.schoolEmail || '',
         jobTitle: teacher.jobTitle || '',
         isSpecialEd: teacher.isSpecialEd || false,
         isGraduatingHomeroom: teacher.isGraduatingHomeroom || false,
@@ -170,6 +172,7 @@ export default function TeacherManagement() {
         teachingClasses: '',
         subjects: '',
         phone: '',
+        schoolEmail: '',
         jobTitle: '',
         isSpecialEd: false,
         isGraduatingHomeroom: false,
@@ -992,6 +995,18 @@ export default function TeacherManagement() {
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">電話</label>
                         <input type="text" className="w-full px-3 py-2 border rounded-lg" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">學校 Google 帳號（選填）</label>
+                        <input
+                          type="email"
+                          autoComplete="email"
+                          placeholder="與段考填報登入一致"
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={formData.schoolEmail ?? ''}
+                          onChange={(e) => setFormData({ ...formData, schoolEmail: e.target.value })}
+                        />
+                        <p className="text-xs text-slate-500 mt-0.5">供教學組「段考提報」白名單從教師名單匯入導師用。</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">類別</label>

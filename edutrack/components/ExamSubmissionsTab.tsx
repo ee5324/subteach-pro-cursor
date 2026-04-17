@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Unlock, Save, UserPlus, Trash2, ExternalLink, Copy } from 'lucide-react';
+import { Plus, RefreshCw, Unlock, Save, UserPlus, Trash2, ExternalLink, Copy, Users } from 'lucide-react';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
 import {
   createExamCampaign,
@@ -7,6 +7,7 @@ import {
   getExamCampaigns,
   getExamSubmitAllowedUsers,
   getExamSubmissions,
+  getHomeroomTeachersForExamWhitelist,
   saveExamAwardsConfig,
   setExamSubmitAllowedUser,
   unlockExamSubmission,
@@ -47,6 +48,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
   const [newWhitelistTeacherName, setNewWhitelistTeacherName] = useState('');
   const [batchWhitelistText, setBatchWhitelistText] = useState('');
   const [whitelistLoading, setWhitelistLoading] = useState(false);
+  const [homeroomImporting, setHomeroomImporting] = useState(false);
 
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
@@ -204,6 +206,42 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
       setMsg('已加入白名單');
     } catch (e: any) {
       setErr(e?.message || '加入白名單失敗');
+    }
+  };
+
+  const importHomeroomTeachersFromRoster = async () => {
+    if (!isAdmin) return;
+    setErr(null);
+    setMsg(null);
+    setHomeroomImporting(true);
+    try {
+      const rows = await getHomeroomTeachersForExamWhitelist();
+      if (rows.length === 0) {
+        setErr(
+          '沒有可匯入的導師：請在「教師管理」標註導師（導師身分／畢業班導師等），並填寫「學校 Google 帳號」欄位（schoolEmail），與登入段考填報的 Email 一致。',
+        );
+        return;
+      }
+      let ok = 0;
+      let fail = 0;
+      for (const r of rows) {
+        try {
+          await setExamSubmitAllowedUser(r.email, {
+            enabled: true,
+            className: r.className,
+            teacherName: r.teacherName,
+          });
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      await reloadWhitelist();
+      setMsg(`已從教師名單匯入導師 ${ok} 筆${fail > 0 ? `（${fail} 筆寫入失敗）` : ''}。`);
+    } catch (e: any) {
+      setErr(e?.message || '從教師名單匯入失敗');
+    } finally {
+      setHomeroomImporting(false);
     }
   };
 
@@ -482,6 +520,21 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
               <button type="button" onClick={addWhitelist} className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-2">
                 <UserPlus size={16} /> 加入
               </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={importHomeroomTeachersFromRoster}
+                disabled={homeroomImporting || whitelistLoading}
+                className="px-3 py-1.5 rounded text-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                <Users size={16} />
+                {homeroomImporting ? '匯入中…' : '從教師名單匯入導師'}
+              </button>
+              <span className="text-xs text-slate-500">
+                依主系統「教師管理」：導師身分且已填學校 Google 帳號者；班級帶入「任課班級」。
+              </span>
             </div>
 
             <div className="border rounded-lg p-3 bg-slate-50 space-y-2">

@@ -129,6 +129,8 @@ export interface Teacher {
   teachingClasses?: string; // 任課班級
   subjects?: string; // 任教科目
   phone?: string; // 電話
+  /** 學校 Google 帳號（選填；段考填報白名單等需與登入 Email 一致） */
+  schoolEmail?: string;
   jobTitle?: string; // 職別
   isSpecialEd: boolean; // 特教教師
   isGraduatingHomeroom: boolean; // 畢業班導師

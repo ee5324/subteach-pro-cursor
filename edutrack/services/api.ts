@@ -114,6 +114,7 @@ import {
   sandboxSaveExamSubmission,
   sandboxUnlockExamSubmission,
   sandboxGetSchoolTeacherNames,
+  sandboxGetHomeroomTeachersForExamWhitelist,
 } from './sandboxStore';
 import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission } from '../types';
 
@@ -149,6 +150,52 @@ export async function getSchoolTeacherNames(): Promise<string[]> {
       }
     }
     return [...names].sort((a, b) => a.localeCompare(b, 'zh-TW'));
+  } catch {
+    return [];
+  }
+}
+
+/** 段考填報白名單：從主系統 teachers 集合匯入「導師」；需已填 schoolEmail（或 email）且為有效 Google 帳號格式 */
+export interface HomeroomTeacherForExamWhitelistRow {
+  email: string;
+  teacherName: string;
+  className: string | null;
+  teacherId: string;
+}
+
+function isHomeroomTeacherDoc(data: Record<string, unknown>): boolean {
+  if (data.isRetired === true) return false;
+  if (data.isHomeroom === true) return true;
+  const role = String(data.teacherRole ?? '');
+  if (role.includes('導師')) return true;
+  if (data.isGraduatingHomeroom === true) return true;
+  return false;
+}
+
+export async function getHomeroomTeachersForExamWhitelist(): Promise<HomeroomTeacherForExamWhitelistRow[]> {
+  if (isSandbox()) return sandboxGetHomeroomTeachersForExamWhitelist();
+  const db = getDb();
+  if (!db) return [];
+  try {
+    const snap = await getDocs(collection(db, 'teachers'));
+    const byEmail = new Map<string, HomeroomTeacherForExamWhitelistRow>();
+    for (const d of snap.docs) {
+      const data = d.data() as Record<string, unknown>;
+      if (!isHomeroomTeacherDoc(data)) continue;
+      const raw = String(data.schoolEmail ?? data.email ?? '').trim().toLowerCase();
+      if (!raw || !raw.includes('@')) continue;
+      const teacherName = String(data.name ?? '').trim() || d.id;
+      const tc = String(data.teachingClasses ?? '').trim();
+      const className = tc.length > 0 ? tc : null;
+      const row: HomeroomTeacherForExamWhitelistRow = {
+        email: raw,
+        teacherName,
+        className,
+        teacherId: d.id,
+      };
+      byEmail.set(raw, row);
+    }
+    return [...byEmail.values()].sort((a, b) => a.email.localeCompare(b.email));
   } catch {
     return [];
   }
