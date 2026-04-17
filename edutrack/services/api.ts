@@ -119,6 +119,7 @@ import {
 } from './sandboxStore';
 import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission } from '../types';
 import { normalizeExamAwardsConfig } from '../utils/examAwardGrade';
+import { stripUndefinedDeep } from '../utils/stripUndefinedDeep';
 
 const GAS_API_URL = import.meta.env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbzWyYHtUbAMIFGBtMtXGvdXuAIiml1pAdf0qKykQ3vzCY5QFdAsMjCoyZ_Znam7oxRC/exec';
 
@@ -1582,10 +1583,15 @@ export async function getExamAwardsConfig(): Promise<ExamAwardsConfig> {
 }
 
 export async function saveExamAwardsConfig(config: ExamAwardsConfig): Promise<void> {
-  if (isSandbox()) return sandboxSaveExamAwardsConfig(config);
+  const cleaned = stripUndefinedDeep(config);
+  if (isSandbox()) return sandboxSaveExamAwardsConfig(cleaned);
   const db = getDb();
   if (!db) throw new Error('Firebase 未初始化');
-  await setDoc(doc(db, COLLECTIONS.EXAM_SYSTEM, EXAM_AWARDS_DOC_ID), { ...config, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(
+    doc(db, COLLECTIONS.EXAM_SYSTEM, EXAM_AWARDS_DOC_ID),
+    { ...cleaned, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
 }
 
 export async function getExamCampaigns(): Promise<ExamCampaign[]> {
