@@ -231,6 +231,7 @@ const BudgetPlanLedgerPanel: React.FC<{
   const [entries, setEntries] = useState<BudgetPlanLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [budgetWarning, setBudgetWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -260,6 +261,7 @@ const BudgetPlanLedgerPanel: React.FC<{
     async (alwaysSyncSpent: boolean) => {
       setLoading(true);
       setError(null);
+      setBudgetWarning(null);
       try {
         const list = await getBudgetPlanLedgerEntries(planId);
         setEntries(list);
@@ -323,6 +325,7 @@ const BudgetPlanLedgerPanel: React.FC<{
 
   const openCreate = (parentId: string | null, kind: BudgetPlanLedgerKind) => {
     setDialog({ mode: 'create', parentId });
+    setBudgetWarning(null);
     setFormKind(kind);
     setFormTitle('');
     setFormEstimated('');
@@ -340,6 +343,7 @@ const BudgetPlanLedgerPanel: React.FC<{
 
   const openEdit = (entry: BudgetPlanLedgerEntry) => {
     setDialog({ mode: 'edit', parentId: entry.parentId ?? null, entry });
+    setBudgetWarning(null);
     setFormKind(entry.kind);
     setFormTitle(entry.title);
     setFormEstimated(String(entry.estimatedAmount ?? 0));
@@ -398,17 +402,20 @@ const BudgetPlanLedgerPanel: React.FC<{
       }
     }
 
-    const validateFolderBudget = (nextEntries: BudgetPlanLedgerEntry[], touched: BudgetPlanLedgerEntry) => {
-      if (touched.kind !== 'expense') return null;
+    const validateFolderBudget = (
+      nextEntries: BudgetPlanLedgerEntry[],
+      touched: BudgetPlanLedgerEntry
+    ): { hardError?: string; softWarning?: string } => {
+      if (touched.kind !== 'expense') return {};
 
       const folders = nextEntries.filter((e) => e.kind === 'folder' && (e.parentId ?? null) === null);
       const hasBudgetSetup = folders.some((f) => (f.budgetAllocated ?? 0) > 0);
-      if (!hasBudgetSetup) return null; // 舊資料相容：未設定子項目額度就不擋
+      if (!hasBudgetSetup) return {}; // 舊資料相容：未設定子項目額度就不擋
 
       const folderById = new Map(folders.map((f) => [f.id, f]));
       const parentFolderId = touched.parentId ?? null;
       if (!parentFolderId || !folderById.has(parentFolderId)) {
-        return '本計畫已設定子項目額度，請在支用表單選擇「從哪一筆子項目支出」。';
+        return { hardError: '本計畫已設定子項目額度，請在支用表單選擇「從哪一筆子項目支出」。' };
       }
 
       const folder = folderById.get(parentFolderId)!;
@@ -427,26 +434,31 @@ const BudgetPlanLedgerPanel: React.FC<{
         const pooledUsed = pooledFolders.reduce((s, f) => s + (usedByFolder.get(f.id) ?? 0), 0);
         const remaining = pooledBudget - pooledUsed;
         if (remaining < 0) {
-          return `「可勻支池」額度不足：池額度 ${fmtMoney(pooledBudget)}，已用/佔用 ${fmtMoney(pooledUsed)}，超出 ${fmtMoney(
-            Math.abs(remaining)
-          )}。請調整子項目分配額度或支用金額。`;
+          return {
+            softWarning: `「可勻支池」額度不足：池額度 ${fmtMoney(pooledBudget)}，已用/佔用 ${fmtMoney(pooledUsed)}，超出 ${fmtMoney(
+              Math.abs(remaining)
+            )}。本筆仍可儲存，請後續調整子項目分配額度或支用金額。`,
+          };
         }
-        return null;
+        return {};
       }
 
       const ownBudget = folder.budgetAllocated ?? 0;
       const ownUsed = usedByFolder.get(folder.id) ?? 0;
       const remaining = ownBudget - ownUsed;
       if (remaining < 0) {
-        return `子項目「${folder.title}」未勾選可勻支，需各自控管額度：額度 ${fmtMoney(ownBudget)}，已用/佔用 ${fmtMoney(
-          ownUsed
-        )}，超出 ${fmtMoney(Math.abs(remaining))}。`;
+        return {
+          hardError: `子項目「${folder.title}」未勾選可勻支，需各自控管額度：額度 ${fmtMoney(ownBudget)}，已用/佔用 ${fmtMoney(
+            ownUsed
+          )}，超出 ${fmtMoney(Math.abs(remaining))}。`,
+        };
       }
-      return null;
+      return {};
     };
 
     setSaving(true);
     setError(null);
+    setBudgetWarning(null);
     try {
       const base: Partial<BudgetPlanLedgerEntry> & { title: string; kind: BudgetPlanLedgerKind } = {
         kind: formKind,
@@ -501,11 +513,12 @@ const BudgetPlanLedgerPanel: React.FC<{
         dialog.mode === 'edit' && dialog.entry
           ? entries.map((e) => (e.id === dialog.entry!.id ? { ...e, ...touchedEntry } : e))
           : [...entries, touchedEntry];
-      const budgetErr = validateFolderBudget(nextEntries, touchedEntry);
-      if (budgetErr) {
-        setError(budgetErr);
+      const budgetCheck = validateFolderBudget(nextEntries, touchedEntry);
+      if (budgetCheck.hardError) {
+        setError(budgetCheck.hardError);
         return;
       }
+      if (budgetCheck.softWarning) setBudgetWarning(budgetCheck.softWarning);
 
       if (dialog.mode === 'edit' && dialog.entry) {
         base.id = dialog.entry.id;
@@ -591,6 +604,9 @@ const BudgetPlanLedgerPanel: React.FC<{
       <div className="p-4 space-y-3">
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{error}</div>
+        )}
+        {budgetWarning && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{budgetWarning}</div>
         )}
 
         <div className="flex flex-wrap gap-2">

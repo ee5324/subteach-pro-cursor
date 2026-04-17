@@ -57,6 +57,7 @@ function classNumericFromClassName(className: string | undefined | null): number
 
 const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }) => {
   const isAdmin = currentAccess?.role === 'admin';
+  const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
 
   const [campaigns, setCampaigns] = useState<ExamCampaign[]>([]);
   const [campaignLoading, setCampaignLoading] = useState(false);
@@ -537,6 +538,16 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
     } catch (e: any) {
       setErr(e?.message || '解鎖失敗');
     }
+  };
+
+  const formatAwardLabel = (awardKey: string) => {
+    const idx = awardKey.indexOf(':');
+    if (idx <= 0) return awardKey;
+    const catId = awardKey.slice(0, idx);
+    const itemId = awardKey.slice(idx + 1);
+    const cat = awardsConfig.categories.find((c) => c.id === catId);
+    const item = cat?.items?.find((it) => it.id === itemId);
+    return `${cat?.label ?? catId}・${item?.label ?? itemId}`;
   };
 
   return (
@@ -1031,21 +1042,62 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {submissions.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-3 py-2 font-medium">{s.className}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{s.submittedAt}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{s.submittedByEmail}</td>
-                    <td className="px-3 py-2">{s.locked ? '是' : '否'}</td>
-                    <td className="px-3 py-2 text-right">
-                      {isAdmin && s.locked && (
-                        <button type="button" onClick={() => unlockOne(s.id)} className="px-2 py-1 rounded text-xs bg-amber-600 text-white hover:bg-amber-700 inline-flex items-center gap-1">
-                          <Unlock size={14} /> 解鎖
-                        </button>
+                {submissions.map((s) => {
+                  const isExpanded = expandedSubmissionId === s.id;
+                  const students = [...(s.students ?? [])].sort((a, b) =>
+                    String(a.seat ?? '').localeCompare(String(b.seat ?? ''), undefined, { numeric: true })
+                  );
+                  return (
+                    <React.Fragment key={s.id}>
+                      <tr>
+                        <td className="px-3 py-2 font-medium">{s.className}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{s.submittedAt}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{s.submittedByEmail}</td>
+                        <td className="px-3 py-2">{s.locked ? '是' : '否'}</td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSubmissionId(isExpanded ? null : s.id)}
+                              className="px-2 py-1 rounded text-xs bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            >
+                              {isExpanded ? '收合名單' : '查看名單'}
+                            </button>
+                            {isAdmin && s.locked && (
+                              <button type="button" onClick={() => unlockOne(s.id)} className="px-2 py-1 rounded text-xs bg-amber-600 text-white hover:bg-amber-700 inline-flex items-center gap-1">
+                                <Unlock size={14} /> 解鎖
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-3 bg-slate-50/60">
+                            {students.length === 0 ? (
+                              <div className="text-xs text-slate-500">此班目前無學生提報明細。</div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {students.map((stu) => (
+                                  <div key={`${stu.className}_${stu.seat}_${stu.name}`} className="text-xs text-slate-700 border border-slate-200 bg-white rounded px-2 py-1.5">
+                                    <span className="font-mono mr-2">{stu.seat}號</span>
+                                    <span className="font-medium mr-2">{stu.name}</span>
+                                    <span className="text-slate-500 mr-2">({stu.className})</span>
+                                    <span className="text-slate-600">
+                                      {Array.isArray(stu.awards) && stu.awards.length > 0
+                                        ? stu.awards.map((k) => formatAwardLabel(k)).join('、')
+                                        : '未勾選獎項'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
                 {submissions.length === 0 && (
                   <tr>
                     <td className="px-3 py-3 text-slate-500 text-sm" colSpan={5}>
