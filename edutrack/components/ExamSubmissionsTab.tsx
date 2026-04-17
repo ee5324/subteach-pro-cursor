@@ -54,7 +54,12 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const publicSubmitUrl = typeof window !== 'undefined' ? `${window.location.origin}/exam-submit` : '';
+  const publicSubmitUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const basePath = window.location.pathname.replace(/#.*$/, '');
+    // Use hash route to stay compatible with deployments under subpaths.
+    return `${window.location.origin}${basePath}#/exam-submit`;
+  }, []);
   const openPublicUrl = () => {
     if (publicSubmitUrl) window.open(publicSubmitUrl, '_blank', 'noopener,noreferrer');
   };

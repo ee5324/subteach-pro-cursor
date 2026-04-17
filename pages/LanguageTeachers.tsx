@@ -596,10 +596,10 @@ const LanguageTeachers: React.FC = () => {
               .inner { width: 186mm; margin: 8mm auto 0 auto; }
               h1 { margin: 0; text-align: center; font-size: 16px; line-height: 1.2; }
               h2 { margin: 0 0 8px 0; text-align: center; font-size: 14px; line-height: 1.1; }
-              .meta-row { font-size: 14px; line-height: 1.25; margin: 1px 0; }
-              .meta-inline { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin: 1px 0 4px 0; }
+              .meta-row { font-size: 15px; line-height: 1.25; margin: 1px 0; }
+              .meta-inline { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; margin: 1px 0 4px 0; }
               table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-              th, td { border: 1px solid #000; font-size: 13px; padding: 1px 3px; text-align: center; vertical-align: middle; line-height: 1.2; }
+              th, td { border: 1px solid #000; font-size: 14px; padding: 1px 3px; text-align: center; vertical-align: middle; line-height: 1.2; }
               thead th { font-weight: 600; }
               .class-time { text-align: left; white-space: pre-line; line-height: 1.15; }
               tbody tr { height: 30px; }
@@ -607,7 +607,7 @@ const LanguageTeachers: React.FC = () => {
               .center { text-align: center; }
               .notes { font-size: 12px; margin-top: 4px; line-height: 1.25; }
               /* 四欄等寬，與常見紙本清冊「整列均分」一致，避免 flex+gap 造成右側大片空白 */
-              .sign-table { width: 100%; margin-top: 16px; border-collapse: collapse; table-layout: fixed; font-size: 15px; }
+              .sign-table { width: 100%; margin-top: 16px; border-collapse: collapse; table-layout: fixed; font-size: 16px; }
               .sign-table td { width: 25%; border: none; padding: 8px 6px 0 0; text-align: left; vertical-align: bottom; line-height: 1.3; }
             </style>
           </head>
