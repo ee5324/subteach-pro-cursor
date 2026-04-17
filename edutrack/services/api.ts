@@ -1570,8 +1570,12 @@ export async function getExamAwardsConfig(): Promise<ExamAwardsConfig> {
   if (!db) return { categories: [] };
   const snap = await getDoc(doc(db, COLLECTIONS.EXAM_SYSTEM, EXAM_AWARDS_DOC_ID));
   const data = snap.exists() ? (snap.data() as any) : {};
+  const rawTi = data?.teacherInstructions;
+  const teacherInstructions =
+    typeof rawTi === 'string' && rawTi.trim() !== '' ? rawTi.trim() : null;
   return {
     categories: Array.isArray(data?.categories) ? data.categories : [],
+    teacherInstructions,
     updatedAt: data?.updatedAt?.toDate?.()?.toISOString?.() ?? data?.updatedAt,
   };
 }

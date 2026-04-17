@@ -308,7 +308,10 @@ const ExamSubmitPublicPage: React.FC = () => {
                   <span className="font-semibold">同一班重複提報</span>：以 <span className="font-semibold">最後一次送出時間</span> 為準（會記錄送出者 Email 與時間）。
                 </li>
                 <li>
-                  <span className="font-semibold">同一學生可多個獎項</span>：在學生卡片內可複選（優異 / 進步底下的細項皆可勾選）。
+                  <span className="font-semibold">同一學生可多個獎項</span>：在學生卡片內可複選（各分類底下的細項皆可勾選）。
+                </li>
+                <li>
+                  <span className="font-semibold">該勾選哪個獎項？</span> 頁面上方「獎項提報說明」會列出本次開放的分類與細項；教學組若另有公告（標準、名額、連結）也會一併顯示。實際認定仍以校內規定為準，不清楚請洽教學組。
                 </li>
               </ul>
             </div>
@@ -320,6 +323,39 @@ const ExamSubmitPublicPage: React.FC = () => {
             {err ?? msg}
           </div>
         )}
+
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+          <h2 className="font-semibold text-slate-800">獎項提報說明</h2>
+          <p className="text-sm text-slate-700">
+            教學組已設定下方「分類」（例如優異、進步）與「細項」（各科或項目）。請依
+            <span className="font-semibold"> 校內公告或教學組訂定之標準 </span>
+            ，為符合條件之學生在該生卡片內勾選對應細項；可複選多個細項。若不清楚應勾選哪些項目，請洽教學組。
+          </p>
+          {awardsConfig.teacherInstructions ? (
+            <div className="rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-sm text-slate-900 whitespace-pre-wrap">
+              <div className="text-xs font-semibold text-sky-900 mb-1">教學組說明</div>
+              {awardsConfig.teacherInstructions}
+            </div>
+          ) : null}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+            <div className="text-xs font-semibold text-slate-700 mb-2">本次開放勾選之分類與細項</div>
+            {awardsConfig.categories.length === 0 ? (
+              <p className="text-slate-500">尚未設定獎項，請聯絡教學組。</p>
+            ) : (
+              <ul className="space-y-2 list-none pl-0">
+                {awardsConfig.categories.map((cat) => (
+                  <li key={cat.id}>
+                    <span className="font-medium text-slate-800">{cat.label}</span>
+                    <span className="text-slate-600">
+                      ：
+                      {(cat.items ?? []).length > 0 ? (cat.items ?? []).map((it) => it.label).join('、') : '（尚無細項）'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -418,7 +454,7 @@ const ExamSubmitPublicPage: React.FC = () => {
                         {stu.name}
                         <span className="text-slate-400 ml-2">{stu.className}</span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">可複選獎項</div>
+                      <div className="text-xs text-slate-500 mt-1">依規定勾選符合之細項（可複選）</div>
                     </div>
                     <button type="button" onClick={() => removeStudent(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300">
                       移除

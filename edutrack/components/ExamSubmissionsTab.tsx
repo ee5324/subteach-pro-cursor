@@ -672,6 +672,17 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
           )}
         </div>
         <p className="text-xs text-slate-500">格式：每行一個細項（例：國語、數學…）。</p>
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-slate-600">給導師的填報說明（顯示於對外填報頁）</label>
+          <textarea
+            className="w-full border rounded p-2 text-sm min-h-[88px]"
+            placeholder="例：優異／進步之認定依教務處公告；名額與成績標準請見校網連結…（可寫標準、連結、洽詢方式）"
+            value={awardsConfig.teacherInstructions ?? ''}
+            onChange={(e) => setAwardsConfig((p) => ({ ...p, teacherInstructions: e.target.value }))}
+            disabled={!isAdmin}
+          />
+          <p className="text-xs text-slate-500">導師在對外頁會看到「有哪些獎項細項」與本段文字；實際該勾選哪幾項請在此寫清楚或請導師依校內規定辦理。</p>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {awardsConfig.categories.map((cat, idx) => (
             <div key={cat.id} className="border rounded-lg p-3">

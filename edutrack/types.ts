@@ -133,6 +133,8 @@ export interface ExamAwardCategory {
 /** 段考獎項設定（系統設定） */
 export interface ExamAwardsConfig {
   categories: ExamAwardCategory[];
+  /** 對外填報頁給導師看的說明（得獎標準、公告連結、注意事項等；由教學組在管理端維護） */
+  teacherInstructions?: string | null;
   updatedAt?: string;
 }
 
