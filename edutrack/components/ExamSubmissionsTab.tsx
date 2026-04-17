@@ -672,6 +672,27 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
             </button>
           )}
         </div>
+        {isAdmin && (
+          <label className="inline-flex items-start gap-2 text-sm text-slate-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              checked={awardsConfig.allowPublicSubmitNoLogin === true}
+              onChange={(e) =>
+                setAwardsConfig((p) => ({
+                  ...p,
+                  allowPublicSubmitNoLogin: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              允許未登入直接填寫段考名單
+              <span className="block text-xs text-slate-500">
+                開啟後，老師可不經 Google 登入與白名單驗證直接填報；送出者將記錄為 public（匿名）。
+              </span>
+            </span>
+          </label>
+        )}
         <ExamAwardSettingsEditor awardsConfig={awardsConfig} setAwardsConfig={setAwardsConfig} isAdmin={isAdmin} />
         {!isAdmin && <p className="text-xs text-slate-500">（僅管理者可編輯獎項設定）</p>}
       </div>

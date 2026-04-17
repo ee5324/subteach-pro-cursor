@@ -86,8 +86,17 @@ const ExamSubmitPublicPage: React.FC = () => {
     () => filterExamAwardsConfigForGrade(awardsConfig, teacherGrade),
     [awardsConfig, teacherGrade]
   );
+  const allowPublicSubmitNoLogin = awardsConfig.allowPublicSubmitNoLogin === true;
+  const anonymousMode = !userEmail && allowPublicSubmitNoLogin;
+  const rosterClassOptions = useMemo(() => {
+    const classes: string[] = roster
+      .map((s) => String(s.className ?? '').trim())
+      .filter((v) => v.length > 0);
+    return [...new Set(classes)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [roster]);
 
   const classConfigError = useMemo(() => {
+    if (anonymousMode) return null;
     if (!allowedUser) return null;
     if (!allowedUser.className) {
       return '管理者尚未在白名單設定您的「班級」，無法填報。請聯絡教學組。';
@@ -109,7 +118,7 @@ const ExamSubmitPublicPage: React.FC = () => {
       return `白名單班級「${allowedUser.className}」與本學年度學生主檔班級字串不一致；請管理者將白名單改為「${fuzzyClassHint}」（須與主檔完全相同）。`;
     }
     return `本學年度學生主檔中找不到班級「${allowedUser.className}」。請管理者核對白名單班級與語言選修／學生主檔。`;
-  }, [allowedUser, examMetaLoading, examMetaError, rosterLoading, campaign, campaigns.length, teacherResolvedClass, fuzzyClassHint]);
+  }, [anonymousMode, allowedUser, examMetaLoading, examMetaError, rosterLoading, campaign, campaigns.length, teacherResolvedClass, fuzzyClassHint]);
 
   const classStudents = useMemo(() => roster.filter((s) => String(s.className) === String(className)), [roster, className]);
 
@@ -189,15 +198,6 @@ const ExamSubmitPublicPage: React.FC = () => {
    * 常會在 Auth 尚未附加到請求時送出 → 權限錯誤；重新整理則 session 已還原故正常。
    */
   useEffect(() => {
-    if (!userEmail) {
-      setCampaigns([]);
-      setCampaignId('');
-      setAwardsConfig({ categories: [] });
-      setExamMetaError(null);
-      setExamMetaLoading(false);
-      return;
-    }
-
     let cancelled = false;
     setExamMetaLoading(true);
     setExamMetaError(null);
@@ -227,7 +227,7 @@ const ExamSubmitPublicPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [userEmail]);
+  }, []);
 
   useEffect(() => {
     if (!campaign?.academicYear) return;
@@ -244,9 +244,11 @@ const ExamSubmitPublicPage: React.FC = () => {
   }, [campaignId, className]);
 
   useEffect(() => {
-    if (teacherResolvedClass) setClassName(teacherResolvedClass);
-    else setClassName('');
-  }, [teacherResolvedClass]);
+    if (!anonymousMode) {
+      if (teacherResolvedClass) setClassName(teacherResolvedClass);
+      else setClassName('');
+    }
+  }, [anonymousMode, teacherResolvedClass]);
 
   useEffect(() => {
     const visible = buildVisibleAwardKeySet(awardsConfig, teacherGrade);
@@ -319,8 +321,9 @@ const ExamSubmitPublicPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!userEmail || !campaignId || !className || !teacherResolvedClass) return;
-    if (className !== teacherResolvedClass) {
+    if (!campaignId || !className) return;
+    if (!anonymousMode && (!userEmail || !teacherResolvedClass)) return;
+    if (!anonymousMode && className !== teacherResolvedClass) {
       setErr('班級與白名單不一致，無法送出。');
       return;
     }
@@ -365,7 +368,7 @@ const ExamSubmitPublicPage: React.FC = () => {
         className,
         students: studentsPayload,
         locked,
-        submittedByEmail: userEmail,
+        submittedByEmail: userEmail || 'public',
         submittedAt: new Date().toISOString(),
       } as any);
       setMsg(locked ? '已送出（已鎖定）。如需修改請聯絡管理者解鎖。' : '已送出（未鎖定，可再次送出更新）。');
@@ -384,7 +387,7 @@ const ExamSubmitPublicPage: React.FC = () => {
     );
   }
 
-  if (!userEmail) {
+  if (!userEmail && !allowPublicSubmitNoLogin) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-4">
@@ -403,7 +406,7 @@ const ExamSubmitPublicPage: React.FC = () => {
     );
   }
 
-  if (allowedLoading || !allowedUser) {
+  if (!anonymousMode && (allowedLoading || !allowedUser)) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-3">
@@ -422,16 +425,26 @@ const ExamSubmitPublicPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-4">
       <div className="max-w-4xl mx-auto space-y-4">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-start justify-between gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-800">段考名單填報</h1>
-            <p className="text-xs text-slate-500 mt-1 font-mono">{userEmail}</p>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800">段考名單填報</h1>
+            <p className="text-xs text-slate-500 mt-1 font-mono">{userEmail || 'public (免登入模式)'}</p>
           </div>
-          <button type="button" onClick={() => signOut().then(() => window.location.reload())} className="text-sm px-3 py-1.5 rounded bg-slate-200 text-slate-700 hover:bg-slate-300">
-            登出
-          </button>
+          {userEmail ? (
+            <button
+              type="button"
+              onClick={() => signOut().then(() => window.location.reload())}
+              className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+            >
+              登出
+            </button>
+          ) : (
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+              目前為免登入填報模式
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
@@ -450,6 +463,11 @@ const ExamSubmitPublicPage: React.FC = () => {
                 <li>
                   <span className="font-semibold">班級與學生名單</span>：系統會依教學組白名單將你的 Google 帳號綁定一個班級；你只能搜尋、勾選該班學生，無法改選他班。
                 </li>
+                {anonymousMode && (
+                  <li>
+                    <span className="font-semibold">免登入模式</span>：本頁目前允許未登入填報，請先自行選擇班級後再提報，送出者會記錄為 public。
+                  </li>
+                )}
                 <li>
                   <span className="font-semibold">要修改怎麼辦？</span> 請聯絡管理者在管理端「提報總覽」按 <span className="font-semibold">解鎖</span>，你才可以重新送出更新資料。
                 </li>
@@ -543,11 +561,27 @@ const ExamSubmitPublicPage: React.FC = () => {
                 <div className="text-sm text-slate-500 py-2">載入段考活動與獎項設定中…</div>
               ) : rosterLoading ? (
                 <div className="text-sm text-slate-500 py-2">載入學生名單中…</div>
+              ) : anonymousMode ? (
+                <div className="space-y-1">
+                  <select
+                    className="w-full border rounded px-3 py-2 text-sm"
+                    value={className}
+                    onChange={(e) => setClassName(e.target.value)}
+                  >
+                    <option value="">請選擇班級</option>
+                    {rosterClassOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-xs text-slate-500">免登入模式：請自行選擇班級。</div>
+                </div>
               ) : classConfigError ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 whitespace-pre-wrap">{classConfigError}</div>
               ) : (
                 <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
                     <div className="flex-1 min-w-[120px] border rounded px-3 py-2 text-sm bg-slate-50 text-slate-900 font-medium">
                       {teacherResolvedClass ?? '—'}
                     </div>
@@ -576,14 +610,14 @@ const ExamSubmitPublicPage: React.FC = () => {
                   <button
                     key={`${s.className}_${s.seat}`}
                     type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-start sm:items-center justify-between gap-2"
                     onClick={() => addStudent(s)}
                   >
-                    <span>
+                    <span className="min-w-0">
                       <span className="font-mono mr-2">{s.seat}</span>
                       <span className="font-medium">{s.name}</span>
                     </span>
-                    <span className="text-slate-400">{s.className}</span>
+                    <span className="text-slate-400 text-xs sm:text-sm shrink-0">{s.className}</span>
                   </button>
                 ))}
               </div>
@@ -592,7 +626,7 @@ const ExamSubmitPublicPage: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <h2 className="font-semibold text-slate-800">已選學生（{selectedList.length}）</h2>
             <button
               type="button"
@@ -608,7 +642,7 @@ const ExamSubmitPublicPage: React.FC = () => {
                 awardDuplicateConflicts.length > 0 ||
                 studentCategoryConflicts.length > 0
               }
-              className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+              className="w-full sm:w-auto px-3 py-2.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               {campaign?.lockedByDefault === false ? '送出（不鎖定）' : '送出並鎖定'}
@@ -656,7 +690,7 @@ const ExamSubmitPublicPage: React.FC = () => {
               const stuKey = `${stu.className}_${stu.seat}`;
               return (
                 <div key={stuKey} className="border rounded-lg p-3">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-slate-800">
                         <span className="font-mono mr-2">{stu.seat}</span>
@@ -667,7 +701,11 @@ const ExamSubmitPublicPage: React.FC = () => {
                         同一學生可跨類別複選；同一學生於同一類別僅限一項，且同一細項於全班僅限一位學生。
                       </div>
                     </div>
-                    <button type="button" onClick={() => removeStudent(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300">
+                    <button
+                      type="button"
+                      onClick={() => removeStudent(stuKey)}
+                      className="w-full sm:w-auto text-xs px-2 py-1.5 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+                    >
                       移除
                     </button>
                   </div>
@@ -675,13 +713,13 @@ const ExamSubmitPublicPage: React.FC = () => {
                     {displayAwardsConfig.categories.map((cat) => (
                       <div key={cat.id} className="border rounded p-2">
                         <div className="text-sm font-semibold text-slate-700 mb-1">{cat.label}</div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2.5">
                           {(cat.items ?? []).map((it) => {
                             const key = buildAwardKey(cat.id, it.id);
                             const checked = stu.awards.includes(key);
                             return (
-                              <label key={key} className="text-sm inline-flex items-center gap-1 cursor-pointer select-none">
-                                <input type="checkbox" checked={checked} onChange={() => toggleAward(stuKey, key)} />
+                              <label key={key} className="text-sm inline-flex items-center gap-1.5 cursor-pointer select-none rounded px-1 py-0.5 hover:bg-slate-50">
+                                <input type="checkbox" checked={checked} onChange={() => toggleAward(stuKey, key)} className="h-4 w-4" />
                                 <span>{it.label}</span>
                               </label>
                             );

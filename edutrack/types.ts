@@ -137,6 +137,8 @@ export interface ExamAwardsConfig {
   categories: ExamAwardCategory[];
   /** 對外填報頁給導師看的說明（得獎標準、公告連結、注意事項等；由教學組在管理端維護） */
   teacherInstructions?: string | null;
+  /** true 時允許不登入直接進入段考填報頁（不檢查白名單） */
+  allowPublicSubmitNoLogin?: boolean;
   updatedAt?: string;
 }
 

@@ -33,6 +33,7 @@ export function normalizeExamAwardsConfig(raw: Partial<ExamAwardsConfig> | Recor
       items: Array.isArray(c?.items) ? (c.items as Record<string, unknown>[]).map((it) => normalizeExamAwardItem(it)) : [],
     })),
     teacherInstructions,
+    allowPublicSubmitNoLogin: r?.allowPublicSubmitNoLogin === true,
     updatedAt:
       typeof r?.updatedAt === 'string'
         ? r.updatedAt
