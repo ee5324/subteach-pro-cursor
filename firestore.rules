@@ -215,11 +215,13 @@ service cloud.firestore {
       allow read, write: if isEduTrackAllowedUser();
     }
     match /edutrack_language_elective/{id} {
-      allow read, write: if isEduTrackAllowedUser();
+      allow read: if isEduTrackAllowedUser() || isExamPublicSubmitEnabled();
+      allow write: if isEduTrackAllowedUser();
     }
     // 語言選修學生主檔（B 方案）：權限與 edutrack_language_elective 相同，僅 EduTrack 白名單
     match /edutrack_language_elective_students/{id} {
-      allow read, write: if isEduTrackAllowedUser();
+      allow read: if isEduTrackAllowedUser() || isExamPublicSubmitEnabled();
+      allow write: if isEduTrackAllowedUser();
     }
     // 段考提報：活動、獎項設定、提報資料
     match /edutrack_exam_campaigns/{id} {

@@ -18,6 +18,15 @@ type Suggestion = { className: string; seat: string; name: string };
 
 const buildAwardKey = (categoryId: string, itemId: string) => `${categoryId}:${itemId}`;
 
+function maskStudentNameForPublic(raw: string): string {
+  const name = String(raw ?? '').trim();
+  if (!name) return '';
+  const chars = Array.from(name);
+  if (chars.length <= 1) return name;
+  if (chars.length === 2) return `${chars[0]}O`;
+  return `${chars[0]}${'O'.repeat(chars.length - 2)}${chars[chars.length - 1]}`;
+}
+
 /** 白名單班級字串須與語言選修學生主檔「班級」欄完全一致（含空白需一致；建議管理者從名單複製）。 */
 function resolveTeacherClassInRoster(
   whitelistClass: string | null | undefined,
@@ -88,6 +97,7 @@ const ExamSubmitPublicPage: React.FC = () => {
   );
   const allowPublicSubmitNoLogin = awardsConfig.allowPublicSubmitNoLogin === true;
   const anonymousMode = !userEmail && allowPublicSubmitNoLogin;
+  const displayStudentName = (name: string) => (anonymousMode ? maskStudentNameForPublic(name) : name);
   const rosterClassOptions = useMemo(() => {
     const classes: string[] = roster
       .map((s) => String(s.className ?? '').trim())
@@ -287,7 +297,7 @@ const ExamSubmitPublicPage: React.FC = () => {
         if (k === stuKey) continue;
         if (stu.awards.includes(awardKey)) {
           const label = awardKeyToDisplayLabel(awardKey, awardsConfig);
-          const other = `${stu.seat}號 ${stu.name}`;
+          const other = `${stu.seat}號 ${displayStudentName(stu.name)}`;
           queueMicrotask(() =>
             setErr(`「${label}」已由 ${other} 勾選，同一獎項細項僅限一位學生，請先取消其中一方。`)
           );
@@ -341,7 +351,10 @@ const ExamSubmitPublicPage: React.FC = () => {
     const dup = findAwardKeysWithMultipleStudents(studentsPayload);
     if (dup.length > 0) {
       const detail = dup
-        .map((d) => `${awardKeyToDisplayLabel(d.key, awardsConfig)}：${d.labels.join('、')}`)
+        .map((d) => {
+          const masked = d.labels.map((s) => s.replace(/號\s+(.+)$/, (_m, n) => `號 ${displayStudentName(String(n))}`));
+          return `${awardKeyToDisplayLabel(d.key, awardsConfig)}：${masked.join('、')}`;
+        })
         .join('\n');
       setErr(`同一獎項細項不可重複勾選於多位學生，請調整後再送出：\n${detail}`);
       return;
@@ -352,7 +365,8 @@ const ExamSubmitPublicPage: React.FC = () => {
         .map((d) => {
           const catLabel = awardsConfig.categories.find((c) => c.id === d.categoryId)?.label ?? d.categoryId;
           const picked = d.awardKeys.map((k) => awardKeyToDisplayLabel(k, awardsConfig)).join('、');
-          return `${d.studentLabel}（${catLabel}）：${picked}`;
+          const maskedStudentLabel = d.studentLabel.replace(/號\s+(.+)$/, (_m, n) => `號 ${displayStudentName(String(n))}`);
+          return `${maskedStudentLabel}（${catLabel}）：${picked}`;
         })
         .join('\n');
       setErr(`同一學生在同一類別僅能勾選一項，請調整後再送出：\n${detail}`);
@@ -629,7 +643,7 @@ const ExamSubmitPublicPage: React.FC = () => {
                   >
                     <span className="min-w-0">
                       <span className="font-mono mr-2">{s.seat}</span>
-                      <span className="font-medium">{s.name}</span>
+                      <span className="font-medium">{displayStudentName(s.name)}</span>
                     </span>
                     <span className="text-slate-400 text-xs sm:text-sm shrink-0">{s.className}</span>
                   </button>
@@ -673,7 +687,9 @@ const ExamSubmitPublicPage: React.FC = () => {
                 {awardDuplicateConflicts.map((d) => (
                   <li key={d.key}>
                     <span className="font-medium">{awardKeyToDisplayLabel(d.key, awardsConfig)}</span>
-                    ：{d.labels.join('、')}
+                    ：{d.labels
+                      .map((s) => s.replace(/號\s+(.+)$/, (_m, n) => `號 ${displayStudentName(String(n))}`))
+                      .join('、')}
                   </li>
                 ))}
               </ul>
@@ -690,7 +706,9 @@ const ExamSubmitPublicPage: React.FC = () => {
                   const catLabel = awardsConfig.categories.find((c) => c.id === d.categoryId)?.label ?? d.categoryId;
                   return (
                     <li key={`${d.studentLabel}_${d.categoryId}_${idx}`}>
-                      <span className="font-medium">{d.studentLabel}</span>
+                      <span className="font-medium">
+                        {d.studentLabel.replace(/號\s+(.+)$/, (_m, n) => `號 ${displayStudentName(String(n))}`)}
+                      </span>
                       ：{catLabel}（{d.awardKeys.map((k) => awardKeyToDisplayLabel(k, awardsConfig)).join('、')}）
                     </li>
                   );
@@ -708,7 +726,7 @@ const ExamSubmitPublicPage: React.FC = () => {
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-slate-800">
                         <span className="font-mono mr-2">{stu.seat}</span>
-                        {stu.name}
+                        {displayStudentName(stu.name)}
                         <span className="text-slate-400 ml-2">{stu.className}</span>
                       </div>
                       <div className="text-xs text-slate-500 mt-1">
