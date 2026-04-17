@@ -75,6 +75,12 @@ service cloud.firestore {
       return !exists(/databases/$(database)/documents/edutrack_exam_campaigns/$(campaignId))
         || get(/databases/$(database)/documents/edutrack_exam_campaigns/$(campaignId)).data.lockedByDefault == true;
     }
+
+    // 段考填報公開模式：由 edutrack_exam_system/exam_awards.allowPublicSubmitNoLogin 控制
+    function isExamPublicSubmitEnabled() {
+      return exists(/databases/$(database)/documents/edutrack_exam_system/exam_awards)
+        && get(/databases/$(database)/documents/edutrack_exam_system/exam_awards).data.allowPublicSubmitNoLogin == true;
+    }
     
     // =========================================================
     // 代課系統 (Subteach)：白名單制；首次登入者自動取得權限並寫入白名單
@@ -217,11 +223,11 @@ service cloud.firestore {
     }
     // 段考提報：活動、獎項設定、提報資料
     match /edutrack_exam_campaigns/{id} {
-      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
+      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser() || isExamPublicSubmitEnabled();
       allow write: if isEduTrackAdmin();
     }
     match /edutrack_exam_system/{docId} {
-      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
+      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser() || docId == 'exam_awards';
       allow write: if isEduTrackAdmin();
     }
     match /edutrack_exam_submissions/{id} {
@@ -231,6 +237,13 @@ service cloud.firestore {
       allow create: if isExamSubmitAllowedUser()
         && request.resource.data.submittedByEmail == request.auth.token.email
         && request.resource.data.locked == examCampaignLockedByDefault(request.resource.data.campaignId);
+      // 公開填報（免登入）：僅在公開開關啟用時，允許匿名寫入
+      allow create: if isExamPublicSubmitEnabled()
+        && request.auth == null
+        && request.resource.data.submittedByEmail == 'public'
+        && request.resource.data.locked == examCampaignLockedByDefault(request.resource.data.campaignId)
+        && request.resource.data.className is string
+        && request.resource.data.className.size() > 0;
       // 導師修改：
       // - 活動預設鎖定=true：僅在已解鎖狀態下，且修改後需重新鎖定
       // - 活動預設鎖定=false：允許在未鎖定狀態下更新（仍需維持 locked=false）
@@ -244,6 +257,7 @@ service cloud.firestore {
       allow update: if isEduTrackAdmin()
         && request.resource.data.campaignId == resource.data.campaignId
         && request.resource.data.className == resource.data.className;
+      // 公開填報免登入不允許更新既有資料，僅允許建立（避免匿名覆寫）
       allow delete: if isEduTrackAdmin();
     }
     match /edutrack_allowed_users/{email} {

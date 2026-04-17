@@ -1578,6 +1578,7 @@ export async function getExamAwardsConfig(): Promise<ExamAwardsConfig> {
   return normalizeExamAwardsConfig({
     categories: data?.categories,
     teacherInstructions: data?.teacherInstructions,
+    allowPublicSubmitNoLogin: data?.allowPublicSubmitNoLogin === true,
     updatedAt: data?.updatedAt?.toDate?.()?.toISOString?.() ?? data?.updatedAt,
   });
 }
