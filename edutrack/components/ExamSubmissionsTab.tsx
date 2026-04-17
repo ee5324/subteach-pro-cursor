@@ -104,7 +104,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
   const [pendingHomeroomRows, setPendingHomeroomRows] = useState<HomeroomTeacherForExamWhitelistRow[]>([]);
   const [pendingHomeroomEmailInputs, setPendingHomeroomEmailInputs] = useState<Record<string, string>>({});
   /** 對外填報白名單區塊收合 */
-  const [whitelistSectionOpen, setWhitelistSectionOpen] = useState(true);
+  const [whitelistSectionOpen, setWhitelistSectionOpen] = useState(false);
 
   const whitelistSortedByGrade = useMemo(() => {
     return [...whitelist].sort((a, b) => {
@@ -136,9 +136,17 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const submissionsByClass = useMemo(
+    () =>
+      [...submissions].sort((a, b) =>
+        String(a.className ?? '').localeCompare(String(b.className ?? ''), undefined, { numeric: true })
+      ),
+    [submissions]
+  );
+
   const awardStudentsForSummary = useMemo<AwardStudent[]>(() => {
     const rows: AwardStudent[] = [];
-    for (const submission of submissions) {
+    for (const submission of submissionsByClass) {
       for (const stu of submission.students ?? []) {
         for (const key of stu.awards ?? []) {
           rows.push({
@@ -151,7 +159,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
       }
     }
     return rows;
-  }, [submissions]);
+  }, [submissionsByClass]);
 
   const publicSubmitUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -600,13 +608,9 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
         awardKey,
         awardLabel: formatAwardLabel(awardKey),
         count: rows.length,
-        rows: [...rows].sort((a, b) => {
-          const c = String(a.className ?? '').localeCompare(String(b.className ?? ''), undefined, { numeric: true });
-          if (c !== 0) return c;
-          return String(a.seat ?? '').localeCompare(String(b.seat ?? ''), undefined, { numeric: true });
-        }),
+        rows: [...rows],
       }))
-      .sort((a, b) => a.awardLabel.localeCompare(b.awardLabel, 'zh-Hant'));
+      ;
   }, [awardStudentsForSummary]);
 
   const exportSummaryToExcel = () => {
@@ -614,7 +618,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
       setErr('目前沒有可匯出的彙整資料。');
       return;
     }
-    const detailRows = submissions
+    const detailRows = submissionsByClass
       .flatMap((submission) =>
         (submission.students ?? []).flatMap((stu) => {
           const awards = Array.isArray(stu.awards) && stu.awards.length > 0 ? stu.awards : [''];
@@ -629,12 +633,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
             鎖定: submission.locked ? '是' : '否',
           }));
         })
-      )
-      .sort((a, b) => {
-        const c = String(a.班級).localeCompare(String(b.班級), undefined, { numeric: true });
-        if (c !== 0) return c;
-        return String(a.座號).localeCompare(String(b.座號), undefined, { numeric: true });
-      });
+      );
     const summaryRows = aggregatedAwards.flatMap((g) =>
       g.rows.map((r, idx) => ({
         獎項分類細項: g.awardLabel,
@@ -1170,11 +1169,9 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {submissions.map((s) => {
+                {submissionsByClass.map((s) => {
                   const isExpanded = expandedSubmissionId === s.id;
-                  const students = [...(s.students ?? [])].sort((a, b) =>
-                    String(a.seat ?? '').localeCompare(String(b.seat ?? ''), undefined, { numeric: true })
-                  );
+                  const students = [...(s.students ?? [])];
                   return (
                     <React.Fragment key={s.id}>
                       <tr>
