@@ -112,7 +112,7 @@ function useIsPublicExamSubmitHash(): boolean {
 }
 
 const App: React.FC = () => {
-  const { loading } = useAppStore();
+  const { loading, currentUser } = useAppStore();
   const isPublicExamSubmit = useIsPublicExamSubmitHash();
 
   if (loading && !isPublicExamSubmit) {
