@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Unlock, Save, UserPlus, Trash2, ExternalLink, Copy, Users, Pencil } from 'lucide-react';
+import {
+  Plus,
+  RefreshCw,
+  Unlock,
+  Save,
+  UserPlus,
+  Trash2,
+  ExternalLink,
+  Copy,
+  Users,
+  Pencil,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
 import type { HomeroomTeacherForExamWhitelistRow } from '../services/api';
 import {
@@ -19,6 +32,26 @@ import {
 interface Props {
   currentAccess: AllowedUser | null;
   currentUserEmail?: string | null;
+}
+
+/** 班級代碼如 301、701 → 年級（百位數）；無法解析則排最後 */
+function gradeFromClassName(className: string | undefined | null): number {
+  const s = (className || '').trim();
+  const m = s.match(/^(\d{1,2})(\d{2})$/);
+  if (m) return parseInt(m[1], 10);
+  const d = s.replace(/\D/g, '');
+  if (d.length >= 3) return parseInt(d.slice(0, 1), 10) || 999;
+  if (d.length > 0) return parseInt(d[0], 10) || 999;
+  return 999;
+}
+
+/** 同年級內依班級代碼數值排序 */
+function classNumericFromClassName(className: string | undefined | null): number {
+  const s = (className || '').trim();
+  const m = s.match(/^(\d{1,2})(\d{2})$/);
+  if (m) return parseInt(m[1] + m[2], 10);
+  const d = s.replace(/\D/g, '');
+  return d ? parseInt(d, 10) : 0;
 }
 
 const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }) => {
@@ -62,6 +95,32 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
   /** 匯入時教師主檔無 Email：帶入姓名／班級後，請在此手填 Email 再寫入白名單 */
   const [pendingHomeroomRows, setPendingHomeroomRows] = useState<HomeroomTeacherForExamWhitelistRow[]>([]);
   const [pendingHomeroomEmailInputs, setPendingHomeroomEmailInputs] = useState<Record<string, string>>({});
+  /** 對外填報白名單區塊收合 */
+  const [whitelistSectionOpen, setWhitelistSectionOpen] = useState(true);
+
+  const whitelistSortedByGrade = useMemo(() => {
+    return [...whitelist].sort((a, b) => {
+      const ga = gradeFromClassName(a.className);
+      const gb = gradeFromClassName(b.className);
+      if (ga !== gb) return ga - gb;
+      const ca = classNumericFromClassName(a.className);
+      const cb = classNumericFromClassName(b.className);
+      if (ca !== cb) return ca - cb;
+      return (a.email || '').localeCompare(b.email || '');
+    });
+  }, [whitelist]);
+
+  const pendingHomeroomSortedByGrade = useMemo(() => {
+    return [...pendingHomeroomRows].sort((a, b) => {
+      const ga = gradeFromClassName(a.className);
+      const gb = gradeFromClassName(b.className);
+      if (ga !== gb) return ga - gb;
+      const ca = classNumericFromClassName(a.className);
+      const cb = classNumericFromClassName(b.className);
+      if (ca !== cb) return ca - cb;
+      return (a.teacherName || '').localeCompare(b.teacherName || '', 'zh-Hant');
+    });
+  }, [pendingHomeroomRows]);
 
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
@@ -679,14 +738,29 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
 
       {/* 白名單管理 */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-800">對外填報白名單（導師）</h3>
-          {whitelistLoading && <span className="text-xs text-slate-500">載入中…</span>}
-        </div>
-        {!isAdmin ? (
-          <p className="text-xs text-slate-500">（僅管理者可管理白名單）</p>
-        ) : (
+        <button
+          type="button"
+          onClick={() => setWhitelistSectionOpen((o) => !o)}
+          className="w-full flex flex-wrap items-center justify-between gap-2 text-left rounded-lg -m-1 p-1 hover:bg-slate-50/80 transition-colors"
+          aria-expanded={whitelistSectionOpen}
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            {whitelistSectionOpen ? (
+              <ChevronDown className="shrink-0 text-slate-500" size={20} aria-hidden />
+            ) : (
+              <ChevronRight className="shrink-0 text-slate-500" size={20} aria-hidden />
+            )}
+            <span className="font-semibold text-slate-800">對外填報白名單（導師）</span>
+            <span className="text-xs text-slate-500 font-normal">（共 {whitelist.length} 筆，依年級排序）</span>
+          </span>
+          {whitelistLoading && <span className="text-xs text-slate-500 shrink-0">載入中…</span>}
+        </button>
+        {whitelistSectionOpen && (
           <>
+            {!isAdmin ? (
+              <p className="text-xs text-slate-500">（僅管理者可管理白名單）</p>
+            ) : (
+              <>
             <div className="text-sm font-medium text-slate-700">新增</div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end">
               <div className="lg:col-span-2">
@@ -839,7 +913,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-violet-100">
-                      {pendingHomeroomRows.map((r) => (
+                      {pendingHomeroomSortedByGrade.map((r) => (
                         <tr key={r.teacherId}>
                           <td className="px-2 py-2 font-medium">{r.teacherName}</td>
                           <td className="px-2 py-2">{r.className || '—'}</td>
@@ -909,7 +983,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {whitelist.map((u) => (
+                  {whitelistSortedByGrade.map((u) => (
                     <tr key={u.email}>
                       <td className="px-3 py-2 font-mono text-xs">{u.email}</td>
                       <td className="px-3 py-2">{u.className || '-'}</td>
@@ -948,7 +1022,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                       </td>
                     </tr>
                   ))}
-                  {whitelist.length === 0 && (
+                  {whitelistSortedByGrade.length === 0 && (
                     <tr>
                       <td className="px-3 py-3 text-slate-500 text-sm" colSpan={6}>
                         尚無白名單
@@ -958,6 +1032,8 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                 </tbody>
               </table>
             </div>
+          </>
+        )}
           </>
         )}
       </div>
