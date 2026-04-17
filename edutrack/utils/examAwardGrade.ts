@@ -133,3 +133,27 @@ export function findAwardKeysWithMultipleStudents(
   }
   return out;
 }
+
+/** 偵測：同一學生在同一分類是否勾選超過一個細項。 */
+export function findStudentCategoryMultiSelectConflicts(
+  students: Pick<ExamSubmissionStudent, 'awards' | 'seat' | 'name'>[]
+): { categoryId: string; studentLabel: string; awardKeys: string[] }[] {
+  const out: { categoryId: string; studentLabel: string; awardKeys: string[] }[] = [];
+  for (const stu of students) {
+    const uniq = dedupeAwardKeys(stu.awards);
+    const byCategory = new Map<string, string[]>();
+    for (const key of uniq) {
+      const idx = key.indexOf(':');
+      if (idx <= 0) continue;
+      const categoryId = key.slice(0, idx);
+      const arr = byCategory.get(categoryId) ?? [];
+      arr.push(key);
+      byCategory.set(categoryId, arr);
+    }
+    const studentLabel = `${String(stu.seat)}號 ${stu.name}`;
+    for (const [categoryId, awardKeys] of byCategory) {
+      if (awardKeys.length > 1) out.push({ categoryId, studentLabel, awardKeys });
+    }
+  }
+  return out;
+}

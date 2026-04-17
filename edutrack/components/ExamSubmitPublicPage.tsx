@@ -10,6 +10,7 @@ import {
   dedupeAwardKeys,
   filterExamAwardsConfigForGrade,
   findAwardKeysWithMultipleStudents,
+  findStudentCategoryMultiSelectConflicts,
   parseGradeFromClassName,
 } from '../utils/examAwardGrade';
 
@@ -140,6 +141,10 @@ const ExamSubmitPublicPage: React.FC = () => {
   /** 同一獎項細項被多位學生勾選（送出前須排除） */
   const awardDuplicateConflicts = useMemo(
     () => findAwardKeysWithMultipleStudents(selectedList),
+    [selectedList]
+  );
+  const studentCategoryConflicts = useMemo(
+    () => findStudentCategoryMultiSelectConflicts(selectedList),
     [selectedList]
   );
 
@@ -287,6 +292,20 @@ const ExamSubmitPublicPage: React.FC = () => {
           return prev;
         }
       }
+      const idx = awardKey.indexOf(':');
+      if (idx > 0) {
+        const categoryId = awardKey.slice(0, idx);
+        const existed = row.awards.find((k) => k.startsWith(`${categoryId}:`) && k !== awardKey);
+        if (existed) {
+          const catLabel = awardsConfig.categories.find((c) => c.id === categoryId)?.label ?? categoryId;
+          const existedLabel = awardKeyToDisplayLabel(existed, awardsConfig);
+          const newLabel = awardKeyToDisplayLabel(awardKey, awardsConfig);
+          queueMicrotask(() =>
+            setErr(`同一學生在「${catLabel}」類別僅能勾選一項（已選：${existedLabel}；欲選：${newLabel}）。`)
+          );
+          return prev;
+        }
+      }
       return { ...prev, [stuKey]: { ...row, awards: [...row.awards, awardKey] } };
     });
   };
@@ -322,6 +341,18 @@ const ExamSubmitPublicPage: React.FC = () => {
         .map((d) => `${awardKeyToDisplayLabel(d.key, awardsConfig)}：${d.labels.join('、')}`)
         .join('\n');
       setErr(`同一獎項細項不可重複勾選於多位學生，請調整後再送出：\n${detail}`);
+      return;
+    }
+    const categoryConflicts = findStudentCategoryMultiSelectConflicts(studentsPayload);
+    if (categoryConflicts.length > 0) {
+      const detail = categoryConflicts
+        .map((d) => {
+          const catLabel = awardsConfig.categories.find((c) => c.id === d.categoryId)?.label ?? d.categoryId;
+          const picked = d.awardKeys.map((k) => awardKeyToDisplayLabel(k, awardsConfig)).join('、');
+          return `${d.studentLabel}（${catLabel}）：${picked}`;
+        })
+        .join('\n');
+      setErr(`同一學生在同一類別僅能勾選一項，請調整後再送出：\n${detail}`);
       return;
     }
     const locked = campaign?.lockedByDefault !== false;
@@ -574,7 +605,8 @@ const ExamSubmitPublicPage: React.FC = () => {
                 !!classConfigError ||
                 rosterLoading ||
                 selectedList.length === 0 ||
-                awardDuplicateConflicts.length > 0
+                awardDuplicateConflicts.length > 0 ||
+                studentCategoryConflicts.length > 0
               }
               className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
             >
@@ -599,6 +631,25 @@ const ExamSubmitPublicPage: React.FC = () => {
               </ul>
             </div>
           )}
+          {studentCategoryConflicts.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 space-y-1"
+            >
+              <div className="font-semibold">偵測到同一學生於同類別重複勾選：每位學生每一類別僅限一項</div>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {studentCategoryConflicts.map((d, idx) => {
+                  const catLabel = awardsConfig.categories.find((c) => c.id === d.categoryId)?.label ?? d.categoryId;
+                  return (
+                    <li key={`${d.studentLabel}_${d.categoryId}_${idx}`}>
+                      <span className="font-medium">{d.studentLabel}</span>
+                      ：{catLabel}（{d.awardKeys.map((k) => awardKeyToDisplayLabel(k, awardsConfig)).join('、')}）
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-3">
             {selectedList.map((stu) => {
@@ -613,7 +664,7 @@ const ExamSubmitPublicPage: React.FC = () => {
                         <span className="text-slate-400 ml-2">{stu.className}</span>
                       </div>
                       <div className="text-xs text-slate-500 mt-1">
-                        同一學生可複選多個細項；同一細項於全班僅限一位學生（系統會阻擋重複）。
+                        同一學生可跨類別複選；同一學生於同一類別僅限一項，且同一細項於全班僅限一位學生。
                       </div>
                     </div>
                     <button type="button" onClick={() => removeStudent(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300">
