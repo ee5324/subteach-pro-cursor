@@ -2,10 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, LogIn, Save, Lock } from 'lucide-react';
 import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
+import { getAuthInstance } from '../services/firebase';
 import { getExamAwardsConfig, getExamCampaigns, getExamSubmitAllowedUser, getLanguageElectiveRoster, saveExamSubmission } from '../services/api';
 import {
+  awardKeyToDisplayLabel,
   buildVisibleAwardKeySet,
+  dedupeAwardKeys,
   filterExamAwardsConfigForGrade,
+  findAwardKeysWithMultipleStudents,
   parseGradeFromClassName,
 } from '../utils/examAwardGrade';
 
@@ -50,6 +54,10 @@ const ExamSubmitPublicPage: React.FC = () => {
   const [campaignId, setCampaignId] = useState('');
   const campaign = useMemo(() => campaigns.find((c) => c.id === campaignId) ?? null, [campaignId, campaigns]);
 
+  /** 段考活動／獎項設定自 Firestore 載入（失敗時不可靜默，否則會誤顯「主檔無班級」） */
+  const [examMetaLoading, setExamMetaLoading] = useState(true);
+  const [examMetaError, setExamMetaError] = useState<string | null>(null);
+
   const [awardsConfig, setAwardsConfig] = useState<ExamAwardsConfig>({ categories: [] });
 
   const [rosterLoading, setRosterLoading] = useState(false);
@@ -83,13 +91,24 @@ const ExamSubmitPublicPage: React.FC = () => {
     if (!allowedUser.className) {
       return '管理者尚未在白名單設定您的「班級」，無法填報。請聯絡教學組。';
     }
+    if (examMetaLoading) return null;
+    if (examMetaError) {
+      return `無法讀取段考活動或獎項設定：${examMetaError}。請重新整理頁面，或聯絡教學組檢查 Firebase 權限與網路。`;
+    }
     if (rosterLoading) return null;
+    /** 須先有「段考活動」且含學年度，才會載入該學年語言選修／學生主檔；否則 roster 為空，不可誤判為「主檔無此班」 */
+    if (!campaign?.academicYear?.trim()) {
+      if (campaigns.length === 0) {
+        return '尚未建立任何段考活動，無法依學年度載入學生名單。請聯絡教學組於管理端新增「段考活動」。';
+      }
+      return '所選段考活動缺少「學年度」，無法載入學生名單。請聯絡教學組修正活動設定。';
+    }
     if (teacherResolvedClass) return null;
     if (fuzzyClassHint) {
       return `白名單班級「${allowedUser.className}」與本學年度學生主檔班級字串不一致；請管理者將白名單改為「${fuzzyClassHint}」（須與主檔完全相同）。`;
     }
     return `本學年度學生主檔中找不到班級「${allowedUser.className}」。請管理者核對白名單班級與語言選修／學生主檔。`;
-  }, [allowedUser, rosterLoading, teacherResolvedClass, fuzzyClassHint]);
+  }, [allowedUser, examMetaLoading, examMetaError, rosterLoading, campaign, campaigns.length, teacherResolvedClass, fuzzyClassHint]);
 
   const classStudents = useMemo(() => roster.filter((s) => String(s.className) === String(className)), [roster, className]);
 
@@ -116,6 +135,12 @@ const ExamSubmitPublicPage: React.FC = () => {
         String(a.seat ?? '').localeCompare(String(b.seat ?? ''), undefined, { numeric: true })
       ),
     [selected]
+  );
+
+  /** 同一獎項細項被多位學生勾選（送出前須排除） */
+  const awardDuplicateConflicts = useMemo(
+    () => findAwardKeysWithMultipleStudents(selectedList),
+    [selectedList]
   );
 
   const [saving, setSaving] = useState(false);
@@ -154,15 +179,50 @@ const ExamSubmitPublicPage: React.FC = () => {
       .finally(() => setAllowedLoading(false));
   }, [userEmail]);
 
+  /**
+   * 須等登入身分就緒後再讀 Firestore。Google 登入跳轉回來時，若首屏即打段考／獎項 API，
+   * 常會在 Auth 尚未附加到請求時送出 → 權限錯誤；重新整理則 session 已還原故正常。
+   */
   useEffect(() => {
-    Promise.all([getExamCampaigns(), getExamAwardsConfig()])
-      .then(([camps, cfg]) => {
+    if (!userEmail) {
+      setCampaigns([]);
+      setCampaignId('');
+      setAwardsConfig({ categories: [] });
+      setExamMetaError(null);
+      setExamMetaLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setExamMetaLoading(true);
+    setExamMetaError(null);
+
+    (async () => {
+      try {
+        const auth = getAuthInstance();
+        await auth?.currentUser?.getIdToken();
+      } catch {
+        /* 仍嘗試讀取；失敗由 catch 顯示 */
+      }
+      if (cancelled) return;
+
+      try {
+        const [camps, cfg] = await Promise.all([getExamCampaigns(), getExamAwardsConfig()]);
+        if (cancelled) return;
         setCampaigns(camps);
         setAwardsConfig(cfg);
         if (camps.length > 0) setCampaignId(camps[0].id);
-      })
-      .catch(() => {});
-  }, []);
+      } catch (e: any) {
+        if (!cancelled) setExamMetaError(e?.message || '讀取失敗');
+      } finally {
+        if (!cancelled) setExamMetaLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userEmail]);
 
   useEffect(() => {
     if (!campaign?.academicYear) return;
@@ -188,9 +248,10 @@ const ExamSubmitPublicPage: React.FC = () => {
     setSelected((prev) => {
       let changed = false;
       const next: Record<string, ExamSubmissionStudent> = {};
-      for (const [k, stu] of Object.entries(prev)) {
-        const awards = stu.awards.filter((a) => visible.has(a));
-        if (awards.length !== stu.awards.length) changed = true;
+      for (const [k, stu] of Object.entries(prev) as [string, ExamSubmissionStudent][]) {
+        const filtered = stu.awards.filter((a) => visible.has(a));
+        const awards = dedupeAwardKeys(filtered);
+        if (filtered.length !== stu.awards.length || awards.length !== filtered.length) changed = true;
         next[k] = { ...stu, awards };
       }
       return changed ? next : prev;
@@ -211,8 +272,22 @@ const ExamSubmitPublicPage: React.FC = () => {
       const row = prev[stuKey];
       if (!row) return prev;
       const has = row.awards.includes(awardKey);
-      const awards = has ? row.awards.filter((x) => x !== awardKey) : [...row.awards, awardKey];
-      return { ...prev, [stuKey]: { ...row, awards } };
+      if (has) {
+        const awards = row.awards.filter((x) => x !== awardKey);
+        return { ...prev, [stuKey]: { ...row, awards } };
+      }
+      for (const [k, stu] of Object.entries(prev) as [string, ExamSubmissionStudent][]) {
+        if (k === stuKey) continue;
+        if (stu.awards.includes(awardKey)) {
+          const label = awardKeyToDisplayLabel(awardKey, awardsConfig);
+          const other = `${stu.seat}號 ${stu.name}`;
+          queueMicrotask(() =>
+            setErr(`「${label}」已由 ${other} 勾選，同一獎項細項僅限一位學生，請先取消其中一方。`)
+          );
+          return prev;
+        }
+      }
+      return { ...prev, [stuKey]: { ...row, awards: [...row.awards, awardKey] } };
     });
   };
 
@@ -236,16 +311,24 @@ const ExamSubmitPublicPage: React.FC = () => {
         return;
       }
     }
+    const visible = buildVisibleAwardKeySet(awardsConfig, teacherGrade);
+    const studentsPayload = selectedList.map((stu) => ({
+      ...stu,
+      awards: dedupeAwardKeys(stu.awards.filter((a) => visible.has(a))),
+    }));
+    const dup = findAwardKeysWithMultipleStudents(studentsPayload);
+    if (dup.length > 0) {
+      const detail = dup
+        .map((d) => `${awardKeyToDisplayLabel(d.key, awardsConfig)}：${d.labels.join('、')}`)
+        .join('\n');
+      setErr(`同一獎項細項不可重複勾選於多位學生，請調整後再送出：\n${detail}`);
+      return;
+    }
     const locked = campaign?.lockedByDefault !== false;
     setSaving(true);
     setErr(null);
     setMsg(null);
     try {
-      const visible = buildVisibleAwardKeySet(awardsConfig, teacherGrade);
-      const studentsPayload = selectedList.map((stu) => ({
-        ...stu,
-        awards: stu.awards.filter((a) => visible.has(a)),
-      }));
       await saveExamSubmission({
         campaignId,
         className,
@@ -401,17 +484,33 @@ const ExamSubmitPublicPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">段考活動</label>
-              <select className="w-full border rounded px-2 py-2 text-sm" value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
-                {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={campaignId}
+                onChange={(e) => setCampaignId(e.target.value)}
+                disabled={examMetaLoading || campaigns.length === 0}
+              >
+                {campaigns.length === 0 ? (
+                  <option value="" disabled>
+                    {examMetaLoading ? '載入中…' : '尚無段考活動'}
                   </option>
-                ))}
+                ) : (
+                  campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title || c.id}
+                    </option>
+                  ))
+                )}
               </select>
+              {!examMetaLoading && campaigns.length === 0 && !examMetaError && (
+                <p className="text-xs text-amber-800 mt-1">請聯絡教學組在管理端建立「段考活動」，並填寫學年度，才能載入學生名單。</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">班級</label>
-              {rosterLoading ? (
+              {examMetaLoading ? (
+                <div className="text-sm text-slate-500 py-2">載入段考活動與獎項設定中…</div>
+              ) : rosterLoading ? (
                 <div className="text-sm text-slate-500 py-2">載入學生名單中…</div>
               ) : classConfigError ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 whitespace-pre-wrap">{classConfigError}</div>
@@ -438,7 +537,7 @@ const ExamSubmitPublicPage: React.FC = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="例：12 或 小明"
-              disabled={!className || !!classConfigError || rosterLoading}
+              disabled={examMetaLoading || !className || !!classConfigError || rosterLoading}
             />
             {className && !classConfigError && suggestions.length > 0 && (
               <div className="border rounded-lg bg-white max-h-56 overflow-y-auto">
@@ -469,11 +568,13 @@ const ExamSubmitPublicPage: React.FC = () => {
               onClick={handleSave}
               disabled={
                 saving ||
+                examMetaLoading ||
                 !campaignId ||
                 !className ||
                 !!classConfigError ||
                 rosterLoading ||
-                selectedList.length === 0
+                selectedList.length === 0 ||
+                awardDuplicateConflicts.length > 0
               }
               className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
             >
@@ -481,6 +582,23 @@ const ExamSubmitPublicPage: React.FC = () => {
               {campaign?.lockedByDefault === false ? '送出（不鎖定）' : '送出並鎖定'}
             </button>
           </div>
+
+          {awardDuplicateConflicts.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 space-y-1"
+            >
+              <div className="font-semibold">偵測到獎項重複：同一細項僅限一位學生，請調整勾選後再送出</div>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {awardDuplicateConflicts.map((d) => (
+                  <li key={d.key}>
+                    <span className="font-medium">{awardKeyToDisplayLabel(d.key, awardsConfig)}</span>
+                    ：{d.labels.join('、')}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-3">
             {selectedList.map((stu) => {
@@ -494,7 +612,9 @@ const ExamSubmitPublicPage: React.FC = () => {
                         {stu.name}
                         <span className="text-slate-400 ml-2">{stu.className}</span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">依規定勾選符合之細項（可複選）</div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        同一學生可複選多個細項；同一細項於全班僅限一位學生（系統會阻擋重複）。
+                      </div>
                     </div>
                     <button type="button" onClick={() => removeStudent(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300">
                       移除

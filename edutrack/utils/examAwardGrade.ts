@@ -1,4 +1,4 @@
-import type { ExamAwardItem, ExamAwardsConfig } from '../types';
+import type { ExamAwardItem, ExamAwardsConfig, ExamSubmissionStudent } from '../types';
 
 function normalizeExamAwardItem(it: Record<string, unknown> | null | undefined): ExamAwardItem {
   const row = it ?? {};
@@ -90,4 +90,46 @@ export function formatGradesApplicableShort(grades?: number[] | null): string {
     .sort((a, b) => a - b)
     .map((g) => `${g}年級`)
     .join('、');
+}
+
+/** 單一學生 awards 去重（保留順序） */
+export function dedupeAwardKeys(keys: string[]): string[] {
+  return [...new Set(keys)];
+}
+
+/** `categoryId:itemId` → 顯示用「分類 · 細項」 */
+export function awardKeyToDisplayLabel(key: string, config: ExamAwardsConfig): string {
+  const idx = key.indexOf(':');
+  if (idx <= 0) return key;
+  const catId = key.slice(0, idx);
+  const itemId = key.slice(idx + 1);
+  const cat = config.categories.find((c) => c.id === catId);
+  const item = cat?.items?.find((i) => i.id === itemId);
+  const catL = cat?.label ?? catId;
+  const itemL = item?.label ?? itemId;
+  return `${catL} · ${itemL}`;
+}
+
+/**
+ * 偵測：同一獎項細項（key）是否被多位學生勾選。
+ * 每位學生內部先 dedupe awards 再統計。
+ */
+export function findAwardKeysWithMultipleStudents(
+  students: Pick<ExamSubmissionStudent, 'awards' | 'seat' | 'name'>[]
+): { key: string; labels: string[] }[] {
+  const map = new Map<string, string[]>();
+  for (const stu of students) {
+    const uniq = dedupeAwardKeys(stu.awards);
+    const label = `${String(stu.seat)}號 ${stu.name}`;
+    for (const k of uniq) {
+      const arr = map.get(k) ?? [];
+      arr.push(label);
+      map.set(k, arr);
+    }
+  }
+  const out: { key: string; labels: string[] }[] = [];
+  for (const [k, labels] of map) {
+    if (labels.length > 1) out.push({ key: k, labels });
+  }
+  return out;
 }
