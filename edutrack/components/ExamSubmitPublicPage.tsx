@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, LogIn, Save, Lock } from 'lucide-react';
-import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, LanguageElectiveStudent } from '../types';
+import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
 import { getExamAwardsConfig, getExamCampaigns, getExamSubmitAllowedUser, getLanguageElectiveRoster, saveExamSubmission } from '../services/api';
 
@@ -8,13 +8,38 @@ type Suggestion = { className: string; seat: string; name: string };
 
 const buildAwardKey = (categoryId: string, itemId: string) => `${categoryId}:${itemId}`;
 
+/** 白名單班級字串須與語言選修學生主檔「班級」欄完全一致（含空白需一致；建議管理者從名單複製）。 */
+function resolveTeacherClassInRoster(
+  whitelistClass: string | null | undefined,
+  roster: LanguageElectiveStudent[]
+): string | null {
+  const w = (whitelistClass ?? '').trim();
+  if (!w) return null;
+  const rosterClasses = [...new Set(roster.map((s) => String(s.className ?? '').trim()).filter(Boolean))];
+  if (rosterClasses.includes(w)) return w;
+  return null;
+}
+
+/** 白名單與主檔字串不同但班級代碼數字相同時，提示應改為的主檔班級字串 */
+function hintFuzzyClassMatch(whitelistClass: string | null | undefined, roster: LanguageElectiveStudent[]): string | null {
+  const w = (whitelistClass ?? '').trim();
+  if (!w) return null;
+  const rosterClasses = [...new Set(roster.map((s) => String(s.className ?? '').trim()).filter(Boolean))];
+  if (rosterClasses.includes(w)) return null;
+  const wDigits = w.replace(/\D/g, '');
+  if (!wDigits) return null;
+  const candidates = rosterClasses.filter((c) => c.replace(/\D/g, '') === wDigits);
+  if (candidates.length === 1) return candidates[0];
+  return null;
+}
+
 const ExamSubmitPublicPage: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [allowedLoading, setAllowedLoading] = useState(false);
-  const [allowed, setAllowed] = useState<boolean>(false);
+  const [allowedUser, setAllowedUser] = useState<ExamSubmitAllowedUser | null>(null);
 
   const [campaigns, setCampaigns] = useState<ExamCampaign[]>([]);
   const [campaignId, setCampaignId] = useState('');
@@ -24,10 +49,29 @@ const ExamSubmitPublicPage: React.FC = () => {
 
   const [rosterLoading, setRosterLoading] = useState(false);
   const [roster, setRoster] = useState<LanguageElectiveStudent[]>([]);
-  const classOptions = useMemo(() => {
-    const set = new Set(roster.map((s) => (s.className ?? '').trim()).filter(Boolean));
-    return Array.from(set).sort((a, b) => String(a).localeCompare(String(b), 'zh-TW', { numeric: true }));
-  }, [roster]);
+
+  const teacherResolvedClass = useMemo(
+    () => resolveTeacherClassInRoster(allowedUser?.className ?? null, roster),
+    [allowedUser?.className, roster]
+  );
+
+  const fuzzyClassHint = useMemo(
+    () => hintFuzzyClassMatch(allowedUser?.className ?? null, roster),
+    [allowedUser?.className, roster]
+  );
+
+  const classConfigError = useMemo(() => {
+    if (!allowedUser) return null;
+    if (!allowedUser.className) {
+      return '管理者尚未在白名單設定您的「班級」，無法填報。請聯絡教學組。';
+    }
+    if (rosterLoading) return null;
+    if (teacherResolvedClass) return null;
+    if (fuzzyClassHint) {
+      return `白名單班級「${allowedUser.className}」與本學年度學生主檔班級字串不一致；請管理者將白名單改為「${fuzzyClassHint}」（須與主檔完全相同）。`;
+    }
+    return `本學年度學生主檔中找不到班級「${allowedUser.className}」。請管理者核對白名單班級與語言選修／學生主檔。`;
+  }, [allowedUser, rosterLoading, teacherResolvedClass, fuzzyClassHint]);
 
   const [className, setClassName] = useState('');
 
@@ -72,7 +116,7 @@ const ExamSubmitPublicPage: React.FC = () => {
 
   useEffect(() => {
     if (!userEmail) {
-      setAllowed(false);
+      setAllowedUser(null);
       return;
     }
     setAllowedLoading(true);
@@ -80,14 +124,14 @@ const ExamSubmitPublicPage: React.FC = () => {
     getExamSubmitAllowedUser(userEmail)
       .then((doc) => {
         if (!doc?.enabled) {
-          setAllowed(false);
+          setAllowedUser(null);
           setAuthError(`帳號 ${userEmail} 未加入段考填報白名單，請聯絡管理者。`);
           return signOut();
         }
-        setAllowed(true);
+        setAllowedUser(doc);
       })
       .catch((e: any) => {
-        setAllowed(false);
+        setAllowedUser(null);
         setAuthError(e?.message || '無法驗證白名單');
         return signOut();
       })
@@ -118,6 +162,11 @@ const ExamSubmitPublicPage: React.FC = () => {
     setQuery('');
   }, [campaignId, className]);
 
+  useEffect(() => {
+    if (teacherResolvedClass) setClassName(teacherResolvedClass);
+    else setClassName('');
+  }, [teacherResolvedClass]);
+
   const addStudent = (s: Suggestion) => {
     const key = `${s.className}_${s.seat}`;
     setSelected((prev) => {
@@ -146,7 +195,17 @@ const ExamSubmitPublicPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!userEmail || !campaignId || !className) return;
+    if (!userEmail || !campaignId || !className || !teacherResolvedClass) return;
+    if (className !== teacherResolvedClass) {
+      setErr('班級與白名單不一致，無法送出。');
+      return;
+    }
+    for (const stu of selectedList) {
+      if (String(stu.className) !== String(className)) {
+        setErr('含有非本班學生，請移除後再送出。');
+        return;
+      }
+    }
     const locked = campaign?.lockedByDefault !== false;
     setSaving(true);
     setErr(null);
@@ -195,7 +254,7 @@ const ExamSubmitPublicPage: React.FC = () => {
     );
   }
 
-  if (allowedLoading || !allowed) {
+  if (allowedLoading || !allowedUser) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-3">
@@ -240,6 +299,9 @@ const ExamSubmitPublicPage: React.FC = () => {
               </p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
+                  <span className="font-semibold">班級與學生名單</span>：系統會依教學組白名單將你的 Google 帳號綁定一個班級；你只能搜尋、勾選該班學生，無法改選他班。
+                </li>
+                <li>
                   <span className="font-semibold">要修改怎麼辦？</span> 請聯絡管理者在管理端「提報總覽」按 <span className="font-semibold">解鎖</span>，你才可以重新送出更新資料。
                 </li>
                 <li>
@@ -273,22 +335,36 @@ const ExamSubmitPublicPage: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">班級</label>
-              <select className="w-full border rounded px-2 py-2 text-sm" value={className} onChange={(e) => setClassName(e.target.value)} disabled={rosterLoading}>
-                <option value="">請選擇</option>
-                {classOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              {rosterLoading && <div className="text-xs text-slate-500 mt-1">載入名單中…</div>}
+              {rosterLoading ? (
+                <div className="text-sm text-slate-500 py-2">載入學生名單中…</div>
+              ) : classConfigError ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 whitespace-pre-wrap">{classConfigError}</div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex-1 min-w-[120px] border rounded px-3 py-2 text-sm bg-slate-50 text-slate-900 font-medium">
+                      {teacherResolvedClass ?? '—'}
+                    </div>
+                    <span className="text-xs text-slate-500 shrink-0">依登入帳號白名單（僅能填報本班）</span>
+                  </div>
+                  {allowedUser?.teacherName ? (
+                    <div className="text-xs text-slate-500">導師：{allowedUser.teacherName}</div>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="border-t pt-3 space-y-2">
             <label className="block text-sm font-medium text-slate-700">加入學生（輸入座號或姓名任一字）</label>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="例：12 或 小明" disabled={!className} />
-            {className && suggestions.length > 0 && (
+            <input
+              className="w-full border rounded px-3 py-2 text-sm"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="例：12 或 小明"
+              disabled={!className || !!classConfigError || rosterLoading}
+            />
+            {className && !classConfigError && suggestions.length > 0 && (
               <div className="border rounded-lg bg-white max-h-56 overflow-y-auto">
                 {suggestions.map((s) => (
                   <button
@@ -315,7 +391,14 @@ const ExamSubmitPublicPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || !campaignId || !className || selectedList.length === 0}
+              disabled={
+                saving ||
+                !campaignId ||
+                !className ||
+                !!classConfigError ||
+                rosterLoading ||
+                selectedList.length === 0
+              }
               className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

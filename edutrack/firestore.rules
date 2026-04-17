@@ -61,6 +61,10 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/exam_submit_allowed_users/$(request.auth.token.email))
         && get(/databases/$(database)/documents/exam_submit_allowed_users/$(request.auth.token.email)).data.enabled == true;
     }
+    // 白名單內維護之導師班級（送出提報時 className 須與此一致）
+    function examSubmitTeacherWhitelistClassName() {
+      return get(/databases/$(database)/documents/exam_submit_allowed_users/$(request.auth.token.email)).data.className;
+    }
 
     // 取得活動的預設鎖定設定（找不到活動時，預設鎖定=true）
     function examCampaignLockedByDefault(campaignId) {
@@ -200,10 +204,13 @@ service cloud.firestore {
     match /edutrack_exam_submissions/{id} {
       // 管理端與導師白名單可讀
       allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
-      // 導師送出：新建（預設鎖定）
+      // 導師送出：新建（預設鎖定）；班級須與白名單一致（不可填報他班）
       allow create: if isExamSubmitAllowedUser()
         && request.resource.data.submittedByEmail == request.auth.token.email
-        && request.resource.data.locked == examCampaignLockedByDefault(request.resource.data.campaignId);
+        && request.resource.data.locked == examCampaignLockedByDefault(request.resource.data.campaignId)
+        && examSubmitTeacherWhitelistClassName() is string
+        && examSubmitTeacherWhitelistClassName().size() > 0
+        && request.resource.data.className == examSubmitTeacherWhitelistClassName();
       // 導師修改：
       // - 活動預設鎖定=true：僅在已解鎖狀態下，且修改後需重新鎖定
       // - 活動預設鎖定=false：允許在未鎖定狀態下更新（仍需維持 locked=false）
@@ -212,7 +219,8 @@ service cloud.firestore {
         && request.resource.data.locked == examCampaignLockedByDefault(resource.data.campaignId)
         && request.resource.data.submittedByEmail == request.auth.token.email
         && request.resource.data.campaignId == resource.data.campaignId
-        && request.resource.data.className == resource.data.className;
+        && request.resource.data.className == resource.data.className
+        && request.resource.data.className == examSubmitTeacherWhitelistClassName();
       // 管理者解鎖/管理（可將 locked 改 false）
       allow update: if isEduTrackAdmin()
         && request.resource.data.campaignId == resource.data.campaignId

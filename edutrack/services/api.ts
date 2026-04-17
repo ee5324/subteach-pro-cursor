@@ -1633,14 +1633,25 @@ export async function updateExamCampaign(id: string, patch: Partial<ExamCampaign
   await updateDoc(doc(db, COLLECTIONS.EXAM_CAMPAIGNS, id), clean);
 }
 
+function normalizeExamSubmitAllowedUser(doc: ExamSubmitAllowedUser | null): ExamSubmitAllowedUser | null {
+  if (!doc) return null;
+  const raw = doc.className;
+  const className =
+    raw == null || String(raw).trim() === '' ? null : String(raw).trim();
+  return { ...doc, className };
+}
+
 export async function getExamSubmitAllowedUsers(): Promise<ExamSubmitAllowedUser[]> {
-  if (isSandbox()) return sandboxGetExamSubmitAllowedUsers();
+  if (isSandbox()) {
+    const list = await sandboxGetExamSubmitAllowedUsers();
+    return list.map((d) => normalizeExamSubmitAllowedUser(d)!);
+  }
   const db = getDb();
   if (!db) return [];
   const snap = await getDocs(query(collection(db, 'exam_submit_allowed_users'), orderBy('updatedAt', 'desc')));
   return snap.docs.map((d) => {
     const data = d.data() as any;
-    return {
+    return normalizeExamSubmitAllowedUser({
       email: d.id,
       enabled: data.enabled === true,
       className: data.className ?? null,
@@ -1649,19 +1660,19 @@ export async function getExamSubmitAllowedUsers(): Promise<ExamSubmitAllowedUser
       note: data.note ?? null,
       createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt,
       updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() ?? data.updatedAt,
-    } as ExamSubmitAllowedUser;
-  });
+    } as ExamSubmitAllowedUser);
+  }) as ExamSubmitAllowedUser[];
 }
 
 export async function getExamSubmitAllowedUser(email: string): Promise<ExamSubmitAllowedUser | null> {
-  if (isSandbox()) return sandboxGetExamSubmitAllowedUser(email);
+  if (isSandbox()) return normalizeExamSubmitAllowedUser(await sandboxGetExamSubmitAllowedUser(email));
   const db = getDb();
   if (!db) return null;
   const id = (email ?? '').trim().toLowerCase();
   const snap = await getDoc(doc(db, 'exam_submit_allowed_users', id));
   if (!snap.exists()) return null;
   const data = snap.data() as any;
-  return {
+  return normalizeExamSubmitAllowedUser({
     email: id,
     enabled: data.enabled === true,
     className: data.className ?? null,
@@ -1670,7 +1681,7 @@ export async function getExamSubmitAllowedUser(email: string): Promise<ExamSubmi
     note: data.note ?? null,
     createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt,
     updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() ?? data.updatedAt,
-  } as ExamSubmitAllowedUser;
+  } as ExamSubmitAllowedUser);
 }
 
 export async function setExamSubmitAllowedUser(email: string, patch: Partial<ExamSubmitAllowedUser>): Promise<void> {
@@ -1679,9 +1690,12 @@ export async function setExamSubmitAllowedUser(email: string, patch: Partial<Exa
   if (!db) throw new Error('Firebase 未初始化');
   const id = (email ?? '').trim().toLowerCase();
   const ref = doc(db, 'exam_submit_allowed_users', id);
+  const cn = patch.className;
+  const className =
+    cn == null || String(cn).trim() === '' ? null : String(cn).trim();
   const row: any = {
     enabled: patch.enabled ?? true,
-    className: patch.className ?? null,
+    className,
     teacherName: patch.teacherName ?? null,
     displayName: patch.displayName ?? null,
     note: patch.note ?? null,
