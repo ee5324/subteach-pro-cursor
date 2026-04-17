@@ -65,6 +65,9 @@ const ExamSubmitPublicPage: React.FC = () => {
     [allowedUser?.className, roster]
   );
 
+  /** 須在 teacherGrade 之前宣告，否則 useMemo 依賴會觸發 TDZ（Cannot access before initialization） */
+  const [className, setClassName] = useState('');
+
   const teacherGrade = useMemo(
     () => parseGradeFromClassName(teacherResolvedClass ?? className),
     [teacherResolvedClass, className]
@@ -87,8 +90,6 @@ const ExamSubmitPublicPage: React.FC = () => {
     }
     return `本學年度學生主檔中找不到班級「${allowedUser.className}」。請管理者核對白名單班級與語言選修／學生主檔。`;
   }, [allowedUser, rosterLoading, teacherResolvedClass, fuzzyClassHint]);
-
-  const [className, setClassName] = useState('');
 
   const classStudents = useMemo(() => roster.filter((s) => String(s.className) === String(className)), [roster, className]);
 
