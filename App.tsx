@@ -1,5 +1,5 @@
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Layout from './Layout';
@@ -99,10 +99,23 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   return children;
 };
 
-const App: React.FC = () => {
-  const { loading, currentUser } = useAppStore();
+/** 段考對外填報頁：勿等待主站 AppContext 訂閱完成，否則 Hash 路由未掛載會長時間空白 */
+function useIsPublicExamSubmitHash(): boolean {
+  const [hash, setHash] = useState(() => (typeof window !== 'undefined' ? window.location.hash : ''));
+  useEffect(() => {
+    const sync = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+  const h = hash || '';
+  return h === '#/exam-submit' || h.startsWith('#/exam-submit');
+}
 
-  if (loading) {
+const App: React.FC = () => {
+  const { loading } = useAppStore();
+  const isPublicExamSubmit = useIsPublicExamSubmitHash();
+
+  if (loading && !isPublicExamSubmit) {
       return (
           <div className="h-screen flex items-center justify-center bg-slate-100 text-slate-400">
               載入中...
@@ -119,7 +132,14 @@ const App: React.FC = () => {
         <Route path="/public" element={<PublicBoard />} />
         <Route path="/teacher-request" element={<TeacherLeaveRequest />} />
         <Route path="/sub-weekly" element={<SubstituteWeeklyLookup />} />
-        <Route path="/exam-submit" element={<ExamSubmitPublicPage />} />
+        <Route
+          path="/exam-submit"
+          element={
+            <PageErrorBoundary fallbackTitle="段考填報頁面載入錯誤">
+              <ExamSubmitPublicPage />
+            </PageErrorBoundary>
+          }
+        />
 
         <Route path="/" element={
           <ProtectedRoute>
