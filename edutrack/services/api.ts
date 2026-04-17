@@ -109,6 +109,7 @@ import {
   sandboxSaveExamAwardsConfig,
   sandboxGetExamSubmitAllowedUsers,
   sandboxSetExamSubmitAllowedUser,
+  sandboxDeleteExamSubmitAllowedUser,
   sandboxGetExamSubmitAllowedUser,
   sandboxGetExamSubmissions,
   sandboxSaveExamSubmission,
@@ -155,12 +156,19 @@ export async function getSchoolTeacherNames(): Promise<string[]> {
   }
 }
 
-/** 段考填報白名單：從主系統 teachers 集合匯入「導師」；需已填 schoolEmail（或 email）且為有效 Google 帳號格式 */
+/** 段考填報白名單：從主系統 teachers 集合匯入「導師」姓名／班級；email 有則一併帶入，無則留空由管理員手填後再寫入 */
 export interface HomeroomTeacherForExamWhitelistRow {
+  /** 有學校信箱時為小寫 Email；無則空字串（白名單文件 ID 仍須以 Email 為準，需手動填寫後寫入） */
   email: string;
   teacherName: string;
   className: string | null;
   teacherId: string;
+}
+
+/** 讀取教師名單結果；若有 error，rows 通常為空 */
+export interface HomeroomTeachersImportResult {
+  rows: HomeroomTeacherForExamWhitelistRow[];
+  error?: string;
 }
 
 function isHomeroomTeacherDoc(data: Record<string, unknown>): boolean {
@@ -172,32 +180,50 @@ function isHomeroomTeacherDoc(data: Record<string, unknown>): boolean {
   return false;
 }
 
-export async function getHomeroomTeachersForExamWhitelist(): Promise<HomeroomTeacherForExamWhitelistRow[]> {
-  if (isSandbox()) return sandboxGetHomeroomTeachersForExamWhitelist();
+export async function getHomeroomTeachersForExamWhitelist(): Promise<HomeroomTeachersImportResult> {
+  if (isSandbox()) {
+    const rows = await sandboxGetHomeroomTeachersForExamWhitelist();
+    return { rows };
+  }
   const db = getDb();
-  if (!db) return [];
+  if (!db) {
+    return { rows: [], error: 'Firebase 未初始化，無法讀取「teachers」。請確認已登入且環境變數正確。' };
+  }
   try {
     const snap = await getDocs(collection(db, 'teachers'));
-    const byEmail = new Map<string, HomeroomTeacherForExamWhitelistRow>();
+    const byTeacherId = new Map<string, HomeroomTeacherForExamWhitelistRow>();
     for (const d of snap.docs) {
       const data = d.data() as Record<string, unknown>;
       if (!isHomeroomTeacherDoc(data)) continue;
       const raw = String(data.schoolEmail ?? data.email ?? '').trim().toLowerCase();
-      if (!raw || !raw.includes('@')) continue;
+      const email = raw.includes('@') ? raw : '';
       const teacherName = String(data.name ?? '').trim() || d.id;
       const tc = String(data.teachingClasses ?? '').trim();
       const className = tc.length > 0 ? tc : null;
       const row: HomeroomTeacherForExamWhitelistRow = {
-        email: raw,
+        email,
         teacherName,
         className,
         teacherId: d.id,
       };
-      byEmail.set(raw, row);
+      byTeacherId.set(d.id, row);
     }
-    return [...byEmail.values()].sort((a, b) => a.email.localeCompare(b.email));
-  } catch {
-    return [];
+    return {
+      rows: [...byTeacherId.values()].sort((a, b) =>
+        a.teacherName.localeCompare(b.teacherName, 'zh-Hant'),
+      ),
+    };
+  } catch (e: unknown) {
+    const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code?: string }).code) : '';
+    const msg = typeof e === 'object' && e !== null && 'message' in e ? String((e as { message?: string }).message) : String(e);
+    if (code === 'permission-denied' || /permission|insufficient/i.test(msg)) {
+      return {
+        rows: [],
+        error:
+          '無法讀取 Firestore「teachers」（權限不足）。目前規則僅允許「代課系統白名單」帳號讀取教師主檔；若您只有教學組／EduTrack 管理員身分，請改由具代課權限者操作匯入，或請管理者調整規則（例如允許 EduTrack 管理員 read teachers）。',
+      };
+    }
+    return { rows: [], error: `讀取教師名單失敗：${msg || code || '未知錯誤'}` };
   }
 }
 
@@ -1663,6 +1689,16 @@ export async function setExamSubmitAllowedUser(email: string, patch: Partial<Exa
   };
   // createdAt 僅在首次寫入時補
   await setDoc(ref, { ...row, createdAt: serverTimestamp() }, { merge: true });
+}
+
+/** 刪除段考填報白名單中的一筆（文件 ID = email 小寫） */
+export async function deleteExamSubmitAllowedUser(email: string): Promise<void> {
+  if (isSandbox()) return sandboxDeleteExamSubmitAllowedUser(email);
+  const db = getDb();
+  if (!db) throw new Error('Firebase 未初始化');
+  const id = (email ?? '').trim().toLowerCase();
+  if (!id) throw new Error('Email 不可為空');
+  await deleteDoc(doc(db, 'exam_submit_allowed_users', id));
 }
 
 const examSubmissionId = (campaignId: string, className: string) => `${campaignId}_${String(className ?? '').trim()}`;

@@ -852,6 +852,12 @@ export function sandboxSetExamSubmitAllowedUser(email: string, patch: Partial<Ex
   return Promise.resolve();
 }
 
+export function sandboxDeleteExamSubmitAllowedUser(email: string): Promise<void> {
+  const key = (email ?? '').trim().toLowerCase();
+  delete store.examSubmitAllowedUsers[key];
+  return Promise.resolve();
+}
+
 export function sandboxGetExamSubmitAllowedUser(email: string): Promise<ExamSubmitAllowedUser | null> {
   const key = (email ?? '').trim().toLowerCase();
   return Promise.resolve(store.examSubmitAllowedUsers[key] ?? null);
@@ -1045,8 +1051,9 @@ export function sandboxGetHomeroomTeachersForExamWhitelist(): Promise<
   { email: string; teacherName: string; className: string | null; teacherId: string }[]
 > {
   return Promise.resolve([
-    { email: 'homeroom.demo@school.edu.tw', teacherName: '王小明', className: '301', teacherId: '王小明' },
-    { email: 'homeroom.demo2@school.edu.tw', teacherName: '林雅婷', className: '302', teacherId: '林雅婷' },
+    { email: 'homeroom.demo@school.edu.tw', teacherName: '王小明', className: '301', teacherId: 't-demo-1' },
+    { email: 'homeroom.demo2@school.edu.tw', teacherName: '林雅婷', className: '302', teacherId: 't-demo-2' },
+    { email: '', teacherName: '陳無信箱', className: '303', teacherId: 't-demo-no-email' },
   ]);
 }
 

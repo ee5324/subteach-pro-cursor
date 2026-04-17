@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Unlock, Save, UserPlus, Trash2, ExternalLink, Copy, Users } from 'lucide-react';
+import { Plus, RefreshCw, Unlock, Save, UserPlus, Trash2, ExternalLink, Copy, Users, Pencil } from 'lucide-react';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
+import type { HomeroomTeacherForExamWhitelistRow } from '../services/api';
 import {
   createExamCampaign,
   getExamAwardsConfig,
@@ -10,6 +11,7 @@ import {
   getHomeroomTeachersForExamWhitelist,
   saveExamAwardsConfig,
   setExamSubmitAllowedUser,
+  deleteExamSubmitAllowedUser,
   unlockExamSubmission,
   updateExamCampaign,
 } from '../services/api';
@@ -46,9 +48,20 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [newWhitelistClassName, setNewWhitelistClassName] = useState('');
   const [newWhitelistTeacherName, setNewWhitelistTeacherName] = useState('');
+  const [newWhitelistNote, setNewWhitelistNote] = useState('');
+  /** 修改白名單：表單草稿（Email 不可改） */
+  const [editWhitelistDraft, setEditWhitelistDraft] = useState<ExamSubmitAllowedUser | null>(null);
   const [batchWhitelistText, setBatchWhitelistText] = useState('');
   const [whitelistLoading, setWhitelistLoading] = useState(false);
   const [homeroomImporting, setHomeroomImporting] = useState(false);
+  /** 匯入按鈕下方即時說明（讀取中／錯誤／成功），避免「點了沒反應」 */
+  const [importHomeroomFeedback, setImportHomeroomFeedback] = useState<{
+    tone: 'info' | 'error' | 'success';
+    text: string;
+  } | null>(null);
+  /** 匯入時教師主檔無 Email：帶入姓名／班級後，請在此手填 Email 再寫入白名單 */
+  const [pendingHomeroomRows, setPendingHomeroomRows] = useState<HomeroomTeacherForExamWhitelistRow[]>([]);
+  const [pendingHomeroomEmailInputs, setPendingHomeroomEmailInputs] = useState<Record<string, string>>({});
 
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
@@ -198,10 +211,12 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
         enabled: true,
         className: newWhitelistClassName.trim() || null,
         teacherName: newWhitelistTeacherName.trim() || null,
+        note: newWhitelistNote.trim() || null,
       });
       setNewWhitelistEmail('');
       setNewWhitelistClassName('');
       setNewWhitelistTeacherName('');
+      setNewWhitelistNote('');
       await reloadWhitelist();
       setMsg('已加入白名單');
     } catch (e: any) {
@@ -210,21 +225,53 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
   };
 
   const importHomeroomTeachersFromRoster = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      setImportHomeroomFeedback({
+        tone: 'error',
+        text: '目前帳號不是教學組管理者，無法匯入白名單。請以具 admin 身分之帳號登入。',
+      });
+      return;
+    }
     setErr(null);
     setMsg(null);
+    setPendingHomeroomRows([]);
+    setPendingHomeroomEmailInputs({});
+    setImportHomeroomFeedback({ tone: 'info', text: '正在讀取主系統「teachers」集合並篩選導師…' });
     setHomeroomImporting(true);
     try {
-      const rows = await getHomeroomTeachersForExamWhitelist();
-      if (rows.length === 0) {
-        setErr(
-          '沒有可匯入的導師：請在「教師管理」標註導師（導師身分／畢業班導師等），並填寫「學校 Google 帳號」欄位（schoolEmail），與登入段考填報的 Email 一致。',
-        );
+      const { rows, error } = await getHomeroomTeachersForExamWhitelist();
+      if (error) {
+        setImportHomeroomFeedback({ tone: 'error', text: error });
+        setErr(error);
         return;
       }
+      if (rows.length === 0) {
+        const hint =
+          '讀取成功，但沒有符合條件的導師。請在代課主系統「教師管理」標註導師身分（或畢業班導師／職稱含「導師」）、且非退休。';
+        setImportHomeroomFeedback({ tone: 'error', text: hint });
+        setErr(hint);
+        return;
+      }
+      const withEmail = rows.filter((r) => r.email.includes('@'));
+      const noEmail = rows.filter((r) => !r.email.includes('@'));
+      const emailInputs: Record<string, string> = {};
+      noEmail.forEach((r) => {
+        emailInputs[r.teacherId] = '';
+      });
+      setPendingHomeroomRows(noEmail);
+      setPendingHomeroomEmailInputs(emailInputs);
+
+      setImportHomeroomFeedback({
+        tone: 'info',
+        text:
+          withEmail.length > 0
+            ? `已讀取 ${rows.length} 位導師：其中 ${withEmail.length} 位有學校信箱，將自動寫入白名單…`
+            : `已讀取 ${rows.length} 位導師（皆無學校信箱）：請在下方表格手填 Email 後加入白名單。`,
+      });
+
       let ok = 0;
       let fail = 0;
-      for (const r of rows) {
+      for (const r of withEmail) {
         try {
           await setExamSubmitAllowedUser(r.email, {
             enabled: true,
@@ -237,12 +284,98 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
         }
       }
       await reloadWhitelist();
-      setMsg(`已從教師名單匯入導師 ${ok} 筆${fail > 0 ? `（${fail} 筆寫入失敗）` : ''}。`);
+
+      let doneText = '';
+      if (withEmail.length > 0) {
+        doneText = `已自動寫入有信箱者 ${ok} 筆${fail > 0 ? `（${fail} 筆失敗）` : ''}。`;
+      }
+      if (noEmail.length > 0) {
+        doneText += `${doneText ? ' ' : ''}另有 ${noEmail.length} 位無學校信箱：已帶入姓名與班級，請在下方「手填 Email」欄位輸入後按「加入白名單」。`;
+      }
+      if (!doneText) {
+        doneText = '未寫入任何筆（請檢查資料）。';
+      }
+      setImportHomeroomFeedback({
+        tone: fail > 0 ? 'error' : 'success',
+        text: doneText,
+      });
+      if (withEmail.length > 0) {
+        setMsg(`已從教師名單寫入 ${ok} 筆${fail > 0 ? `（${fail} 筆失敗）` : ''}${noEmail.length > 0 ? `；${noEmail.length} 筆待手填 Email。` : ''}`);
+      } else if (noEmail.length > 0) {
+        setMsg(`已帶入 ${noEmail.length} 位導師之姓名與班級，請手填 Email 後加入白名單。`);
+      }
     } catch (e: any) {
-      setErr(e?.message || '從教師名單匯入失敗');
+      const m = e?.message || '從教師名單匯入失敗';
+      setImportHomeroomFeedback({ tone: 'error', text: `發生錯誤：${m}` });
+      setErr(m);
     } finally {
       setHomeroomImporting(false);
     }
+  };
+
+  const addPendingHomeroomToWhitelist = async (row: HomeroomTeacherForExamWhitelistRow) => {
+    if (!isAdmin) return;
+    const raw = (pendingHomeroomEmailInputs[row.teacherId] ?? '').trim().toLowerCase();
+    if (!raw || !raw.includes('@')) {
+      setErr('請輸入有效的 Google 帳號（Email），與導師登入段考填報時一致。');
+      return;
+    }
+    setErr(null);
+    setMsg(null);
+    try {
+      await setExamSubmitAllowedUser(raw, {
+        enabled: true,
+        className: row.className,
+        teacherName: row.teacherName,
+      });
+      setPendingHomeroomRows((prev) => prev.filter((x) => x.teacherId !== row.teacherId));
+      setPendingHomeroomEmailInputs((prev) => {
+        const next = { ...prev };
+        delete next[row.teacherId];
+        return next;
+      });
+      await reloadWhitelist();
+      setMsg(`已加入白名單：${row.teacherName}（${raw}）`);
+    } catch (e: any) {
+      setErr(e?.message || '加入失敗');
+    }
+  };
+
+  const addAllPendingHomeroomWithFilledEmails = async () => {
+    if (!isAdmin || pendingHomeroomRows.length === 0) return;
+    setErr(null);
+    setMsg(null);
+    let ok = 0;
+    let skip = 0;
+    let fail = 0;
+    const stillPending: HomeroomTeacherForExamWhitelistRow[] = [];
+    for (const r of pendingHomeroomRows) {
+      const raw = (pendingHomeroomEmailInputs[r.teacherId] ?? '').trim().toLowerCase();
+      if (!raw.includes('@')) {
+        stillPending.push(r);
+        skip += 1;
+        continue;
+      }
+      try {
+        await setExamSubmitAllowedUser(raw, {
+          enabled: true,
+          className: r.className,
+          teacherName: r.teacherName,
+        });
+        ok += 1;
+      } catch {
+        fail += 1;
+        stillPending.push(r);
+      }
+    }
+    setPendingHomeroomRows(stillPending);
+    const nextInputs: Record<string, string> = {};
+    stillPending.forEach((r) => {
+      nextInputs[r.teacherId] = pendingHomeroomEmailInputs[r.teacherId] ?? '';
+    });
+    setPendingHomeroomEmailInputs(nextInputs);
+    await reloadWhitelist();
+    setMsg(`批次加入：成功 ${ok} 筆${skip > 0 ? `，略過未填 Email ${skip} 筆` : ''}${fail > 0 ? `，失敗 ${fail} 筆` : ''}。`);
   };
 
   const addWhitelistBatch = async () => {
@@ -289,6 +422,47 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
       await reloadWhitelist();
     } catch (e: any) {
       setErr(e?.message || '更新白名單失敗');
+    }
+  };
+
+  const startEditWhitelist = (u: ExamSubmitAllowedUser) => {
+    setEditWhitelistDraft({ ...u });
+    setErr(null);
+    setMsg(null);
+  };
+
+  const saveWhitelistEdit = async () => {
+    if (!isAdmin || !editWhitelistDraft) return;
+    setErr(null);
+    setMsg(null);
+    try {
+      await setExamSubmitAllowedUser(editWhitelistDraft.email, {
+        enabled: editWhitelistDraft.enabled,
+        className: editWhitelistDraft.className?.trim() || null,
+        teacherName: editWhitelistDraft.teacherName?.trim() || null,
+        note: editWhitelistDraft.note?.trim() || null,
+        displayName: editWhitelistDraft.displayName?.trim() || null,
+      });
+      setEditWhitelistDraft(null);
+      await reloadWhitelist();
+      setMsg('已更新白名單');
+    } catch (e: any) {
+      setErr(e?.message || '更新失敗');
+    }
+  };
+
+  const removeWhitelist = async (email: string) => {
+    if (!isAdmin) return;
+    if (!confirm(`確定從段考填報白名單刪除 ${email}？`)) return;
+    setErr(null);
+    setMsg(null);
+    try {
+      await deleteExamSubmitAllowedUser(email);
+      if (editWhitelistDraft?.email === email) setEditWhitelistDraft(null);
+      await reloadWhitelist();
+      setMsg('已刪除白名單');
+    } catch (e: any) {
+      setErr(e?.message || '刪除失敗');
     }
   };
 
@@ -513,19 +687,117 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
           <p className="text-xs text-slate-500">（僅管理者可管理白名單）</p>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-              <input className="border rounded px-2 py-1.5 text-sm" placeholder="teacher@example.com" value={newWhitelistEmail} onChange={(e) => setNewWhitelistEmail(e.target.value)} />
-              <input className="border rounded px-2 py-1.5 text-sm" placeholder="班級（例：301）" value={newWhitelistClassName} onChange={(e) => setNewWhitelistClassName(e.target.value)} />
-              <input className="border rounded px-2 py-1.5 text-sm" placeholder="導師姓名（例：王小明）" value={newWhitelistTeacherName} onChange={(e) => setNewWhitelistTeacherName(e.target.value)} />
-              <button type="button" onClick={addWhitelist} className="px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-2">
-                <UserPlus size={16} /> 加入
-              </button>
+            <div className="text-sm font-medium text-slate-700">新增</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end">
+              <div className="lg:col-span-2">
+                <label className="block text-xs text-slate-500 mb-0.5">Google 帳號（Email）</label>
+                <input
+                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  placeholder="teacher@example.com"
+                  value={newWhitelistEmail}
+                  onChange={(e) => setNewWhitelistEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-0.5">班級</label>
+                <input
+                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  placeholder="例：301"
+                  value={newWhitelistClassName}
+                  onChange={(e) => setNewWhitelistClassName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-0.5">導師姓名</label>
+                <input
+                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  placeholder="例：王小明"
+                  value={newWhitelistTeacherName}
+                  onChange={(e) => setNewWhitelistTeacherName(e.target.value)}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-xs text-slate-500 mb-0.5">備註（選填）</label>
+                <input
+                  className="w-full border rounded px-2 py-1.5 text-sm"
+                  placeholder="內部註記"
+                  value={newWhitelistNote}
+                  onChange={(e) => setNewWhitelistNote(e.target.value)}
+                />
+              </div>
+              <div>
+                <button type="button" onClick={addWhitelist} className="w-full md:w-auto px-3 py-1.5 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center gap-2">
+                  <UserPlus size={16} /> 新增
+                </button>
+              </div>
             </div>
+
+            {editWhitelistDraft && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-4 space-y-3">
+                <div className="text-sm font-semibold text-slate-800">修改</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-0.5">Email（不可變更）</label>
+                    <input readOnly className="w-full border rounded px-2 py-1.5 text-sm bg-slate-100 font-mono" value={editWhitelistDraft.email} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-0.5">班級</label>
+                    <input
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={editWhitelistDraft.className ?? ''}
+                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, className: e.target.value } : null))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-0.5">導師姓名</label>
+                    <input
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={editWhitelistDraft.teacherName ?? ''}
+                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, teacherName: e.target.value } : null))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-0.5">顯示名稱（選填）</label>
+                    <input
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={editWhitelistDraft.displayName ?? ''}
+                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, displayName: e.target.value } : null))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-slate-600 mb-0.5">備註</label>
+                    <input
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={editWhitelistDraft.note ?? ''}
+                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, note: e.target.value } : null))}
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editWhitelistDraft.enabled}
+                        onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, enabled: e.target.checked } : null))}
+                      />
+                      啟用（可登入段考填報）
+                    </label>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void saveWhitelistEdit()} className="px-3 py-1.5 rounded text-sm bg-amber-700 text-white hover:bg-amber-800 inline-flex items-center gap-2">
+                    <Save size={16} /> 儲存修改
+                  </button>
+                  <button type="button" onClick={() => setEditWhitelistDraft(null)} className="px-3 py-1.5 rounded text-sm border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
+                    取消
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={importHomeroomTeachersFromRoster}
+                onClick={() => void importHomeroomTeachersFromRoster()}
                 disabled={homeroomImporting || whitelistLoading}
                 className="px-3 py-1.5 rounded text-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-2"
               >
@@ -533,9 +805,82 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                 {homeroomImporting ? '匯入中…' : '從教師名單匯入導師'}
               </button>
               <span className="text-xs text-slate-500">
-                依主系統「教師管理」：導師身分且已填學校 Google 帳號者；班級帶入「任課班級」。
+                依「教師管理」篩選導師；班級取自「任課班級」。有學校信箱者自動寫入白名單；無信箱者帶入姓名與班級，請在下方手填 Email。
               </span>
             </div>
+            {importHomeroomFeedback && (
+              <div
+                role="status"
+                className={`rounded-lg border px-3 py-2 text-sm whitespace-pre-wrap ${
+                  importHomeroomFeedback.tone === 'info'
+                    ? 'bg-sky-50 border-sky-200 text-sky-900'
+                    : importHomeroomFeedback.tone === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-red-50 border-red-200 text-red-800'
+                }`}
+              >
+                {importHomeroomFeedback.text}
+              </div>
+            )}
+
+            {pendingHomeroomRows.length > 0 && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-3">
+                <div className="text-sm font-semibold text-violet-950">
+                  手填 Email（教師主檔無學校信箱）：已帶入姓名與班級，請輸入與段考登入一致的 Google 帳號後加入白名單
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-violet-100 rounded-lg bg-white">
+                    <thead className="bg-violet-100/80">
+                      <tr>
+                        <th className="px-2 py-2 text-left">導師姓名</th>
+                        <th className="px-2 py-2 text-left">班級</th>
+                        <th className="px-2 py-2 text-left min-w-[220px]">Email（手填）</th>
+                        <th className="px-2 py-2 text-left w-28"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-violet-100">
+                      {pendingHomeroomRows.map((r) => (
+                        <tr key={r.teacherId}>
+                          <td className="px-2 py-2 font-medium">{r.teacherName}</td>
+                          <td className="px-2 py-2">{r.className || '—'}</td>
+                          <td className="px-2 py-2">
+                            <input
+                              type="email"
+                              autoComplete="off"
+                              className="w-full border rounded px-2 py-1.5 text-sm font-mono"
+                              placeholder="teacher@school.edu.tw"
+                              value={pendingHomeroomEmailInputs[r.teacherId] ?? ''}
+                              onChange={(e) =>
+                                setPendingHomeroomEmailInputs((p) => ({ ...p, [r.teacherId]: e.target.value }))
+                              }
+                            />
+                          </td>
+                          <td className="px-2 py-2">
+                            <button
+                              type="button"
+                              onClick={() => void addPendingHomeroomToWhitelist(r)}
+                              className="px-2 py-1 rounded text-xs bg-violet-600 text-white hover:bg-violet-700 whitespace-nowrap"
+                            >
+                              加入白名單
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void addAllPendingHomeroomWithFilledEmails()}
+                    className="px-3 py-1.5 rounded text-sm bg-violet-700 text-white hover:bg-violet-800"
+                  >
+                    批次加入（僅寫入已填 Email 的列）
+                  </button>
+                  <span className="text-xs text-violet-900/80">未填 Email 的列會略過；失敗列會保留在表中。</span>
+                </div>
+              </div>
+            )}
 
             <div className="border rounded-lg p-3 bg-slate-50 space-y-2">
               <div className="text-sm font-medium text-slate-700">批次新增</div>
@@ -558,7 +903,9 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                     <th className="px-3 py-2 text-left">Email</th>
                     <th className="px-3 py-2 text-left">班級</th>
                     <th className="px-3 py-2 text-left">導師</th>
+                    <th className="px-3 py-2 text-left">備註</th>
                     <th className="px-3 py-2 text-left">啟用</th>
+                    <th className="px-3 py-2 text-left w-36">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -567,6 +914,9 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                       <td className="px-3 py-2 font-mono text-xs">{u.email}</td>
                       <td className="px-3 py-2">{u.className || '-'}</td>
                       <td className="px-3 py-2">{u.teacherName || u.displayName || '-'}</td>
+                      <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate" title={u.note ?? ''}>
+                        {u.note || '-'}
+                      </td>
                       <td className="px-3 py-2">
                         <button
                           type="button"
@@ -576,11 +926,31 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                           {u.enabled ? '啟用' : '停用'}
                         </button>
                       </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEditWhitelist(u)}
+                            className="px-2 py-1 rounded text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1"
+                            title="修改"
+                          >
+                            <Pencil size={12} /> 修改
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void removeWhitelist(u.email)}
+                            className="px-2 py-1 rounded text-xs bg-white border border-red-200 text-red-700 hover:bg-red-50 inline-flex items-center gap-1"
+                            title="刪除"
+                          >
+                            <Trash2 size={12} /> 刪除
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {whitelist.length === 0 && (
                     <tr>
-                      <td className="px-3 py-3 text-slate-500 text-sm" colSpan={4}>
+                      <td className="px-3 py-3 text-slate-500 text-sm" colSpan={6}>
                         尚無白名單
                       </td>
                     </tr>
