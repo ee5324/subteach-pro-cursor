@@ -122,6 +122,8 @@ export interface CalendarSettings {
 export interface ExamAwardItem {
   id: string; // 唯一 key（如 chi, math, total）
   label: string; // 顯示名稱
+  /** 僅這些年級會出現此細項；未設定或空陣列＝全部年級皆需／可填 */
+  gradesApplicable?: number[] | null;
 }
 
 export interface ExamAwardCategory {

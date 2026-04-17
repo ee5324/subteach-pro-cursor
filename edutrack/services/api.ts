@@ -118,6 +118,7 @@ import {
   sandboxGetHomeroomTeachersForExamWhitelist,
 } from './sandboxStore';
 import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission } from '../types';
+import { normalizeExamAwardsConfig } from '../utils/examAwardGrade';
 
 const GAS_API_URL = import.meta.env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbzWyYHtUbAMIFGBtMtXGvdXuAIiml1pAdf0qKykQ3vzCY5QFdAsMjCoyZ_Znam7oxRC/exec';
 
@@ -1565,19 +1566,19 @@ export async function getCalendarSettings(academicYear: string, semester: string
 const EXAM_AWARDS_DOC_ID = 'exam_awards';
 
 export async function getExamAwardsConfig(): Promise<ExamAwardsConfig> {
-  if (isSandbox()) return sandboxGetExamAwardsConfig();
+  if (isSandbox()) {
+    const raw = await sandboxGetExamAwardsConfig();
+    return normalizeExamAwardsConfig(raw);
+  }
   const db = getDb();
   if (!db) return { categories: [] };
   const snap = await getDoc(doc(db, COLLECTIONS.EXAM_SYSTEM, EXAM_AWARDS_DOC_ID));
   const data = snap.exists() ? (snap.data() as any) : {};
-  const rawTi = data?.teacherInstructions;
-  const teacherInstructions =
-    typeof rawTi === 'string' && rawTi.trim() !== '' ? rawTi.trim() : null;
-  return {
-    categories: Array.isArray(data?.categories) ? data.categories : [],
-    teacherInstructions,
+  return normalizeExamAwardsConfig({
+    categories: data?.categories,
+    teacherInstructions: data?.teacherInstructions,
     updatedAt: data?.updatedAt?.toDate?.()?.toISOString?.() ?? data?.updatedAt,
-  };
+  });
 }
 
 export async function saveExamAwardsConfig(config: ExamAwardsConfig): Promise<void> {

@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
+import ExamAwardSettingsEditor from './ExamAwardSettingsEditor';
 import type { HomeroomTeacherForExamWhitelistRow } from '../services/api';
 import {
   createExamCampaign,
@@ -591,7 +592,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
           <div className="mt-3 text-sm text-slate-700 space-y-2">
             <ul className="list-disc pl-5 space-y-1">
               <li>
-                <span className="font-semibold">獎項分類 / 細項是什麼？</span> 例如「優異 / 進步」是分類；分類底下的「國語、數學…」等為細項。導師在對外填報時可依學生勾選一或多個細項（可複選）。
+                <span className="font-semibold">獎項分類 / 細項 / 年級</span>：例如「優異／進步」是分類；底下的「國語、數學…」為細項。各細項可設定「僅限特定年級」，導師畫面會依班級代碼之年級只顯示該年級適用的細項。後台可用「預覽」下拉選單檢查。
               </li>
               <li>
                 <span className="font-semibold">活動的「預設鎖定 / 不鎖定」差異</span>：此設定是活動層級的規則，代表系統希望導師送出後是否以「鎖定」為主流程。
@@ -664,86 +665,14 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
       {/* 獎項設定 */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-800">獎項設定（優異 / 進步 細項）</h3>
+          <h3 className="font-semibold text-slate-800">獎項設定（分類／細項／年級）</h3>
           {isAdmin && (
             <button type="button" onClick={saveAwards} disabled={awardsSaving} className="px-3 py-1.5 rounded text-sm bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50 inline-flex items-center gap-2">
               <Save size={16} /> {awardsSaving ? '儲存中…' : '儲存'}
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-500">格式：每行一個細項（例：國語、數學…）。</p>
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-slate-600">給導師的填報說明（顯示於對外填報頁）</label>
-          <textarea
-            className="w-full border rounded p-2 text-sm min-h-[88px]"
-            placeholder="例：優異／進步之認定依教務處公告；名額與成績標準請見校網連結…（可寫標準、連結、洽詢方式）"
-            value={awardsConfig.teacherInstructions ?? ''}
-            onChange={(e) => setAwardsConfig((p) => ({ ...p, teacherInstructions: e.target.value }))}
-            disabled={!isAdmin}
-          />
-          <p className="text-xs text-slate-500">導師在對外頁會看到「有哪些獎項細項」與本段文字；實際該勾選哪幾項請在此寫清楚或請導師依校內規定辦理。</p>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {awardsConfig.categories.map((cat, idx) => (
-            <div key={cat.id} className="border rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <input
-                  className="border rounded px-2 py-1 text-sm font-medium"
-                  value={cat.label}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setAwardsConfig((p) => {
-                      const next = { ...p, categories: [...p.categories] };
-                      next.categories[idx] = { ...next.categories[idx], label: v };
-                      return next;
-                    });
-                  }}
-                  disabled={!isAdmin}
-                />
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setAwardsConfig((p) => ({ ...p, categories: p.categories.filter((_, i) => i !== idx) }))}
-                    className="text-slate-400 hover:text-red-600"
-                    title="刪除分類"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-              <textarea
-                className="w-full border rounded p-2 text-sm min-h-[120px]"
-                value={(cat.items ?? []).map((x) => x.label).join('\n')}
-                onChange={(e) => {
-                  const lines = e.target.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
-                  setAwardsConfig((p) => {
-                    const next = { ...p, categories: [...p.categories] };
-                    next.categories[idx] = {
-                      ...next.categories[idx],
-                      items: lines.map((label) => ({ id: label, label })),
-                    };
-                    return next;
-                  });
-                }}
-                disabled={!isAdmin}
-              />
-            </div>
-          ))}
-        </div>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() =>
-              setAwardsConfig((p) => ({
-                ...p,
-                categories: [...p.categories, { id: `cat-${Date.now()}`, label: '新分類', items: [] }],
-              }))
-            }
-            className="px-3 py-1.5 rounded text-sm bg-slate-200 text-slate-700 hover:bg-slate-300 inline-flex items-center gap-2"
-          >
-            <Plus size={16} /> 新增分類
-          </button>
-        )}
+        <ExamAwardSettingsEditor awardsConfig={awardsConfig} setAwardsConfig={setAwardsConfig} isAdmin={isAdmin} />
         {!isAdmin && <p className="text-xs text-slate-500">（僅管理者可編輯獎項設定）</p>}
       </div>
 

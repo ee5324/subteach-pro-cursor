@@ -3,6 +3,11 @@ import { Loader2, LogIn, Save, Lock } from 'lucide-react';
 import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
 import { getExamAwardsConfig, getExamCampaigns, getExamSubmitAllowedUser, getLanguageElectiveRoster, saveExamSubmission } from '../services/api';
+import {
+  buildVisibleAwardKeySet,
+  filterExamAwardsConfigForGrade,
+  parseGradeFromClassName,
+} from '../utils/examAwardGrade';
 
 type Suggestion = { className: string; seat: string; name: string };
 
@@ -58,6 +63,16 @@ const ExamSubmitPublicPage: React.FC = () => {
   const fuzzyClassHint = useMemo(
     () => hintFuzzyClassMatch(allowedUser?.className ?? null, roster),
     [allowedUser?.className, roster]
+  );
+
+  const teacherGrade = useMemo(
+    () => parseGradeFromClassName(teacherResolvedClass ?? className),
+    [teacherResolvedClass, className]
+  );
+
+  const displayAwardsConfig = useMemo(
+    () => filterExamAwardsConfigForGrade(awardsConfig, teacherGrade),
+    [awardsConfig, teacherGrade]
   );
 
   const classConfigError = useMemo(() => {
@@ -167,6 +182,20 @@ const ExamSubmitPublicPage: React.FC = () => {
     else setClassName('');
   }, [teacherResolvedClass]);
 
+  useEffect(() => {
+    const visible = buildVisibleAwardKeySet(awardsConfig, teacherGrade);
+    setSelected((prev) => {
+      let changed = false;
+      const next: Record<string, ExamSubmissionStudent> = {};
+      for (const [k, stu] of Object.entries(prev)) {
+        const awards = stu.awards.filter((a) => visible.has(a));
+        if (awards.length !== stu.awards.length) changed = true;
+        next[k] = { ...stu, awards };
+      }
+      return changed ? next : prev;
+    });
+  }, [awardsConfig, teacherGrade]);
+
   const addStudent = (s: Suggestion) => {
     const key = `${s.className}_${s.seat}`;
     setSelected((prev) => {
@@ -211,10 +240,15 @@ const ExamSubmitPublicPage: React.FC = () => {
     setErr(null);
     setMsg(null);
     try {
+      const visible = buildVisibleAwardKeySet(awardsConfig, teacherGrade);
+      const studentsPayload = selectedList.map((stu) => ({
+        ...stu,
+        awards: stu.awards.filter((a) => visible.has(a)),
+      }));
       await saveExamSubmission({
         campaignId,
         className,
-        students: selectedList,
+        students: studentsPayload,
         locked,
         submittedByEmail: userEmail,
         submittedAt: new Date().toISOString(),
@@ -338,17 +372,22 @@ const ExamSubmitPublicPage: React.FC = () => {
             </div>
           ) : null}
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-            <div className="text-xs font-semibold text-slate-700 mb-2">本次開放勾選之分類與細項</div>
-            {awardsConfig.categories.length === 0 ? (
-              <p className="text-slate-500">尚未設定獎項，請聯絡教學組。</p>
+            <div className="text-xs font-semibold text-slate-700 mb-2">
+              本次開放勾選之分類與細項
+              {teacherGrade != null && (
+                <span className="font-normal text-slate-500">（依您班級之年級：{teacherGrade} 年級）</span>
+              )}
+            </div>
+            {displayAwardsConfig.categories.length === 0 ? (
+              <p className="text-slate-500">尚未設定獎項，或此年級尚無適用細項，請聯絡教學組。</p>
             ) : (
               <ul className="space-y-2 list-none pl-0">
-                {awardsConfig.categories.map((cat) => (
+                {displayAwardsConfig.categories.map((cat) => (
                   <li key={cat.id}>
                     <span className="font-medium text-slate-800">{cat.label}</span>
                     <span className="text-slate-600">
                       ：
-                      {(cat.items ?? []).length > 0 ? (cat.items ?? []).map((it) => it.label).join('、') : '（尚無細項）'}
+                      {(cat.items ?? []).length > 0 ? (cat.items ?? []).map((it) => it.label).join('、') : '（此年級無細項）'}
                     </span>
                   </li>
                 ))}
@@ -461,7 +500,7 @@ const ExamSubmitPublicPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {awardsConfig.categories.map((cat) => (
+                    {displayAwardsConfig.categories.map((cat) => (
                       <div key={cat.id} className="border rounded p-2">
                         <div className="text-sm font-semibold text-slate-700 mb-1">{cat.label}</div>
                         <div className="flex flex-wrap gap-2">
@@ -475,12 +514,12 @@ const ExamSubmitPublicPage: React.FC = () => {
                               </label>
                             );
                           })}
-                          {(cat.items ?? []).length === 0 && <span className="text-xs text-slate-400">（尚無細項）</span>}
+                          {(cat.items ?? []).length === 0 && <span className="text-xs text-slate-400">（此年級無適用細項）</span>}
                         </div>
                       </div>
                     ))}
-                    {awardsConfig.categories.length === 0 && (
-                      <div className="text-sm text-slate-500">尚未設定獎項，請聯絡管理者。</div>
+                    {displayAwardsConfig.categories.length === 0 && (
+                      <div className="text-sm text-slate-500">此年級尚無可勾選之獎項細項，請聯絡教學組。</div>
                     )}
                   </div>
                 </div>
