@@ -114,6 +114,7 @@ import {
   sandboxGetExamSubmissions,
   sandboxSaveExamSubmission,
   sandboxUnlockExamSubmission,
+  sandboxDeleteExamSubmission,
   sandboxGetSchoolTeacherNames,
   sandboxGetHomeroomTeachersForExamWhitelist,
 } from './sandboxStore';
@@ -1782,6 +1783,13 @@ export async function unlockExamSubmission(id: string, unlockedByEmail: string):
     unlockedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function deleteExamSubmission(id: string): Promise<void> {
+  if (isSandbox()) return sandboxDeleteExamSubmission(id);
+  const db = getDb();
+  if (!db) throw new Error('Firebase 未初始化');
+  await deleteDoc(doc(db, COLLECTIONS.EXAM_SUBMISSIONS, id));
 }
 
 /** 依學號繼承：從名單取得「學號 → 選修語言」（後出現覆蓋先出現） */

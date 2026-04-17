@@ -880,6 +880,11 @@ export function sandboxUnlockExamSubmission(id: string, unlockedByEmail: string)
   return Promise.resolve();
 }
 
+export function sandboxDeleteExamSubmission(id: string): Promise<void> {
+  delete store.examSubmissions[id];
+  return Promise.resolve();
+}
+
 // --- 系統設定（選修語言類別）---
 function collectLanguageOptionsFromRosters(): string[] {
   const set = new Set<string>(DEFAULT_LANGUAGE_OPTIONS);

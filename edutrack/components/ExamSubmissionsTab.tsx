@@ -13,7 +13,9 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
+import type { AwardStudent } from '../types';
 import ExamAwardSettingsEditor from './ExamAwardSettingsEditor';
 import type { HomeroomTeacherForExamWhitelistRow } from '../services/api';
 import {
@@ -26,6 +28,7 @@ import {
   saveExamAwardsConfig,
   setExamSubmitAllowedUser,
   deleteExamSubmitAllowedUser,
+  deleteExamSubmission,
   unlockExamSubmission,
   updateExamCampaign,
 } from '../services/api';
@@ -33,6 +36,7 @@ import {
 interface Props {
   currentAccess: AllowedUser | null;
   currentUserEmail?: string | null;
+  onNavigateToTab?: (tabId: string) => void;
 }
 
 /** 班級代碼如 301、701 → 年級（百位數）；無法解析則排最後 */
@@ -55,7 +59,9 @@ function classNumericFromClassName(className: string | undefined | null): number
   return d ? parseInt(d, 10) : 0;
 }
 
-const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }) => {
+const EXAM_TO_AWARDS_DRAFT_KEY = 'edutrack.examSubmissions.awardsDraft';
+
+const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, onNavigateToTab }) => {
   const isAdmin = currentAccess?.role === 'admin';
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
 
@@ -129,6 +135,23 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
 
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const awardStudentsForSummary = useMemo<AwardStudent[]>(() => {
+    const rows: AwardStudent[] = [];
+    for (const submission of submissions) {
+      for (const stu of submission.students ?? []) {
+        for (const key of stu.awards ?? []) {
+          rows.push({
+            className: String(stu.className ?? submission.className ?? '').trim(),
+            name: String(stu.name ?? '').trim(),
+            seat: String(stu.seat ?? '').trim() || undefined,
+            awardName: key,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [submissions]);
 
   const publicSubmitUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -540,6 +563,20 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
     }
   };
 
+  const deleteOneSubmission = async (s: ExamSubmission) => {
+    if (!isAdmin) return;
+    if (!confirm(`確定刪除 ${s.className} 的提報資料？刪除後無法復原。`)) return;
+    setErr(null);
+    setMsg(null);
+    try {
+      await deleteExamSubmission(s.id);
+      if (selectedCampaignId) await reloadSubmissions(selectedCampaignId);
+      setMsg(`已刪除 ${s.className} 的提報資料`);
+    } catch (e: any) {
+      setErr(e?.message || '刪除提報資料失敗');
+    }
+  };
+
   const formatAwardLabel = (awardKey: string) => {
     const idx = awardKey.indexOf(':');
     if (idx <= 0) return awardKey;
@@ -548,6 +585,97 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
     const cat = awardsConfig.categories.find((c) => c.id === catId);
     const item = cat?.items?.find((it) => it.id === itemId);
     return `${cat?.label ?? catId}・${item?.label ?? itemId}`;
+  };
+
+  const aggregatedAwards = useMemo(() => {
+    const byAward = new Map<string, AwardStudent[]>();
+    for (const row of awardStudentsForSummary) {
+      const awardKey = row.awardName;
+      const arr = byAward.get(awardKey) ?? [];
+      arr.push(row);
+      byAward.set(awardKey, arr);
+    }
+    return [...byAward.entries()]
+      .map(([awardKey, rows]) => ({
+        awardKey,
+        awardLabel: formatAwardLabel(awardKey),
+        count: rows.length,
+        rows: [...rows].sort((a, b) => {
+          const c = String(a.className ?? '').localeCompare(String(b.className ?? ''), undefined, { numeric: true });
+          if (c !== 0) return c;
+          return String(a.seat ?? '').localeCompare(String(b.seat ?? ''), undefined, { numeric: true });
+        }),
+      }))
+      .sort((a, b) => a.awardLabel.localeCompare(b.awardLabel, 'zh-Hant'));
+  }, [awardStudentsForSummary]);
+
+  const exportSummaryToExcel = () => {
+    if (aggregatedAwards.length === 0) {
+      setErr('目前沒有可匯出的彙整資料。');
+      return;
+    }
+    const detailRows = submissions
+      .flatMap((submission) =>
+        (submission.students ?? []).flatMap((stu) => {
+          const awards = Array.isArray(stu.awards) && stu.awards.length > 0 ? stu.awards : [''];
+          return awards.map((key) => ({
+            活動: selectedCampaign?.title || '',
+            班級: stu.className || submission.className || '',
+            座號: stu.seat ?? '',
+            姓名: stu.name ?? '',
+            獎項分類細項: key ? formatAwardLabel(key) : '未勾選獎項',
+            提報時間: submission.submittedAt || '',
+            送出者: submission.submittedByEmail || '',
+            鎖定: submission.locked ? '是' : '否',
+          }));
+        })
+      )
+      .sort((a, b) => {
+        const c = String(a.班級).localeCompare(String(b.班級), undefined, { numeric: true });
+        if (c !== 0) return c;
+        return String(a.座號).localeCompare(String(b.座號), undefined, { numeric: true });
+      });
+    const summaryRows = aggregatedAwards.flatMap((g) =>
+      g.rows.map((r, idx) => ({
+        獎項分類細項: g.awardLabel,
+        人數: idx === 0 ? g.count : '',
+        班級: r.className,
+        座號: r.seat ?? '',
+        姓名: r.name,
+      }))
+    );
+    const wsDetail = XLSX.utils.json_to_sheet(detailRows);
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsDetail, '彙整清冊');
+    XLSX.utils.book_append_sheet(wb, wsSummary, '獎項彙整');
+    const fileName = `${selectedCampaign?.title || 'exam-submissions'}_彙整.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    setMsg(`已匯出 Excel：${fileName}`);
+    setErr(null);
+  };
+
+  const pushToAwards = () => {
+    if (awardStudentsForSummary.length === 0) {
+      setErr('目前沒有可帶入頒獎通知的資料。');
+      return;
+    }
+    const payload = {
+      title: selectedCampaign?.title ? `${selectedCampaign.title} 段考頒獎` : '段考頒獎',
+      students: awardStudentsForSummary.map((r) => ({
+        className: r.className,
+        name: r.name,
+        awardName: formatAwardLabel(r.awardName),
+        seat: r.seat ?? '',
+      })),
+      source: 'exam-submissions',
+      campaignId: selectedCampaignId,
+      createdAt: new Date().toISOString(),
+    };
+    localStorage.setItem(EXAM_TO_AWARDS_DRAFT_KEY, JSON.stringify(payload));
+    onNavigateToTab?.('awards');
+    setMsg('已帶入頒獎通知（請到「頒獎通知」頁確認後儲存/輸出）。');
+    setErr(null);
   };
 
   return (
@@ -1068,6 +1196,15 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                                 <Unlock size={14} /> 解鎖
                               </button>
                             )}
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => void deleteOneSubmission(s)}
+                                className="px-2 py-1 rounded text-xs bg-white border border-red-200 text-red-700 hover:bg-red-50 inline-flex items-center gap-1"
+                              >
+                                <Trash2 size={12} /> 刪除
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1107,6 +1244,52 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* 彙整結果 */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold text-slate-800">彙整結果（依獎項）</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={pushToAwards}
+              disabled={aggregatedAwards.length === 0}
+              className="px-3 py-1.5 rounded text-sm bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+            >
+              帶入頒獎通知
+            </button>
+            <button
+              type="button"
+              onClick={exportSummaryToExcel}
+              disabled={aggregatedAwards.length === 0}
+              className="px-3 py-1.5 rounded text-sm bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              匯出 Excel
+            </button>
+          </div>
+        </div>
+        {aggregatedAwards.length === 0 ? (
+          <p className="text-sm text-slate-500">目前無可彙整資料（請先有班級提報且學生有勾選獎項）。</p>
+        ) : (
+          <div className="space-y-2">
+            {aggregatedAwards.map((g) => (
+              <details key={g.awardKey} className="border border-slate-200 rounded-lg bg-slate-50/60">
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-slate-800 flex items-center justify-between">
+                  <span>{g.awardLabel}</span>
+                  <span className="text-xs text-slate-500">{g.count} 人</span>
+                </summary>
+                <div className="px-3 pb-3 text-xs text-slate-700 space-y-1">
+                  {g.rows.map((r, idx) => (
+                    <div key={`${g.awardKey}_${idx}`} className="bg-white border border-slate-200 rounded px-2 py-1">
+                      {r.className} {r.seat ? `${r.seat}號` : ''} {r.name}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
           </div>
         )}
       </div>

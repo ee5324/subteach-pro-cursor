@@ -676,7 +676,13 @@ const App: React.FC<{ embedded?: boolean; mobileHub?: boolean }> = ({ embedded, 
       case 'exam-papers':
         return <ExamPapersTab user={user} />;
       case 'exam-submissions':
-        return <ExamSubmissionsTab currentAccess={accessUser} currentUserEmail={user?.email ?? null} />;
+        return (
+          <ExamSubmissionsTab
+            currentAccess={accessUser}
+            currentUserEmail={user?.email ?? null}
+            onNavigateToTab={setActiveTab}
+          />
+        );
       case 'archive':
         return <ArchiveManager onTasksChange={setArchiveCount} />;
       case 'settings':

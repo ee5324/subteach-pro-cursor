@@ -8,6 +8,7 @@ import { getAllKnownStudents, getAwardHistory, saveAwardRecord, createAwardDocs,
 import RosterStudentSource, { ROSTER_DRAG_TYPE } from './components/RosterStudentSource';
 
 const AWARD_SUGGESTION_LIMIT = 25;
+const EXAM_TO_AWARDS_DRAFT_KEY = 'edutrack.examSubmissions.awardsDraft';
 
 type AwardKnownStudent = { className: string; name: string };
 
@@ -100,6 +101,25 @@ const AwardGenerator: React.FC = () => {
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(EXAM_TO_AWARDS_DRAFT_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as { title?: string; students?: AwardStudent[] };
+            const incoming = Array.isArray(parsed.students) ? parsed.students : [];
+            if (incoming.length === 0) {
+                localStorage.removeItem(EXAM_TO_AWARDS_DRAFT_KEY);
+                return;
+            }
+            if (parsed.title && parsed.title.trim()) setTitle(parsed.title.trim());
+            setParsedStudents(incoming);
+            showModal('已載入段考提報彙整', `已帶入 ${incoming.length} 筆獲獎資料，請確認後再儲存或輸出。`, 'success');
+            localStorage.removeItem(EXAM_TO_AWARDS_DRAFT_KEY);
+        } catch {
+            localStorage.removeItem(EXAM_TO_AWARDS_DRAFT_KEY);
+        }
     }, []);
 
     // --- Logic ---
