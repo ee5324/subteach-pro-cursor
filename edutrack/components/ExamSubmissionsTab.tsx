@@ -746,68 +746,6 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
               </div>
             </div>
 
-            {editWhitelistDraft && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-4 space-y-3">
-                <div className="text-sm font-semibold text-slate-800">修改</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-slate-600 mb-0.5">Email（不可變更）</label>
-                    <input readOnly className="w-full border rounded px-2 py-1.5 text-sm bg-slate-100 font-mono" value={editWhitelistDraft.email} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-600 mb-0.5">班級</label>
-                    <input
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={editWhitelistDraft.className ?? ''}
-                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, className: e.target.value } : null))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-600 mb-0.5">導師姓名</label>
-                    <input
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={editWhitelistDraft.teacherName ?? ''}
-                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, teacherName: e.target.value } : null))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-600 mb-0.5">顯示名稱（選填）</label>
-                    <input
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={editWhitelistDraft.displayName ?? ''}
-                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, displayName: e.target.value } : null))}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs text-slate-600 mb-0.5">備註</label>
-                    <input
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={editWhitelistDraft.note ?? ''}
-                      onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, note: e.target.value } : null))}
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex items-center gap-2">
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editWhitelistDraft.enabled}
-                        onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, enabled: e.target.checked } : null))}
-                      />
-                      啟用（可登入段考填報）
-                    </label>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void saveWhitelistEdit()} className="px-3 py-1.5 rounded text-sm bg-amber-700 text-white hover:bg-amber-800 inline-flex items-center gap-2">
-                    <Save size={16} /> 儲存修改
-                  </button>
-                  <button type="button" onClick={() => setEditWhitelistDraft(null)} className="px-3 py-1.5 rounded text-sm border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
-                    取消
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -926,30 +864,103 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail }
                   {whitelistSortedByGrade.map((u) => (
                     <tr key={u.email}>
                       <td className="px-3 py-2 font-mono text-xs">{u.email}</td>
-                      <td className="px-3 py-2">{u.className || '-'}</td>
-                      <td className="px-3 py-2">{u.teacherName || u.displayName || '-'}</td>
-                      <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate" title={u.note ?? ''}>
-                        {u.note || '-'}
+                      <td className="px-3 py-2">
+                        {editWhitelistDraft?.email === u.email ? (
+                          <input
+                            className="w-full border rounded px-2 py-1 text-xs"
+                            value={editWhitelistDraft.className ?? ''}
+                            onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, className: e.target.value } : null))}
+                            placeholder="例：301"
+                          />
+                        ) : (
+                          u.className || '-'
+                        )}
                       </td>
                       <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setWhitelistEnabled(u.email, !u.enabled)}
-                          className={`px-2 py-1 rounded text-xs ${u.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}
-                        >
-                          {u.enabled ? '啟用' : '停用'}
-                        </button>
+                        {editWhitelistDraft?.email === u.email ? (
+                          <div className="space-y-1">
+                            <input
+                              className="w-full border rounded px-2 py-1 text-xs"
+                              value={editWhitelistDraft.teacherName ?? ''}
+                              onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, teacherName: e.target.value } : null))}
+                              placeholder="導師姓名"
+                            />
+                            <input
+                              className="w-full border rounded px-2 py-1 text-xs"
+                              value={editWhitelistDraft.displayName ?? ''}
+                              onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, displayName: e.target.value } : null))}
+                              placeholder="顯示名稱（選填）"
+                            />
+                          </div>
+                        ) : (
+                          u.teacherName || u.displayName || '-'
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600 max-w-[220px]">
+                        {editWhitelistDraft?.email === u.email ? (
+                          <input
+                            className="w-full border rounded px-2 py-1 text-xs"
+                            value={editWhitelistDraft.note ?? ''}
+                            onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, note: e.target.value } : null))}
+                            placeholder="備註（選填）"
+                          />
+                        ) : (
+                          <span className="block truncate" title={u.note ?? ''}>
+                            {u.note || '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {editWhitelistDraft?.email === u.email ? (
+                          <label className="inline-flex items-center gap-1 text-xs text-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editWhitelistDraft.enabled}
+                              onChange={(e) => setEditWhitelistDraft((d) => (d ? { ...d, enabled: e.target.checked } : null))}
+                            />
+                            啟用
+                          </label>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setWhitelistEnabled(u.email, !u.enabled)}
+                            className={`px-2 py-1 rounded text-xs ${u.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}
+                          >
+                            {u.enabled ? '啟用' : '停用'}
+                          </button>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
-                          <button
-                            type="button"
-                            onClick={() => startEditWhitelist(u)}
-                            className="px-2 py-1 rounded text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1"
-                            title="修改"
-                          >
-                            <Pencil size={12} /> 修改
-                          </button>
+                          {editWhitelistDraft?.email === u.email ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void saveWhitelistEdit()}
+                                className="px-2 py-1 rounded text-xs bg-amber-700 text-white hover:bg-amber-800 inline-flex items-center gap-1"
+                                title="儲存修改"
+                              >
+                                <Save size={12} /> 儲存
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditWhitelistDraft(null)}
+                                className="px-2 py-1 rounded text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                                title="取消"
+                              >
+                                取消
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEditWhitelist(u)}
+                              className="px-2 py-1 rounded text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1"
+                              title="修改"
+                            >
+                              <Pencil size={12} /> 修改
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => void removeWhitelist(u.email)}
