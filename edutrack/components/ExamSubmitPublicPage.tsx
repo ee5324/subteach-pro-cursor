@@ -387,6 +387,20 @@ const ExamSubmitPublicPage: React.FC = () => {
     );
   }
 
+  // 未登入時需先讀到段考設定（含 allowPublicSubmitNoLogin），避免重新整理瞬間誤判成「必須登入」。
+  if (!userEmail && examMetaLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-3">
+          <h1 className="text-lg font-bold text-slate-800">段考名單填報</h1>
+          <div className="flex items-center gap-2 text-slate-600 text-sm">
+            <Loader2 size={18} className="animate-spin" /> 載入填報設定中…
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!userEmail && !allowPublicSubmitNoLogin) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
