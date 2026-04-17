@@ -59,6 +59,23 @@ function classNumericFromClassName(className: string | undefined | null): number
   return d ? parseInt(d, 10) : 0;
 }
 
+function formatDateTimeInTaipei(value: string | undefined | null): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return new Intl.DateTimeFormat('zh-TW', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
 const EXAM_TO_AWARDS_DRAFT_KEY = 'edutrack.examSubmissions.awardsDraft';
 
 const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, onNavigateToTab }) => {
@@ -1176,7 +1193,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                     <React.Fragment key={s.id}>
                       <tr>
                         <td className="px-3 py-2 font-medium">{s.className}</td>
-                        <td className="px-3 py-2 font-mono text-xs">{s.submittedAt}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{formatDateTimeInTaipei(s.submittedAt)}</td>
                         <td className="px-3 py-2 font-mono text-xs">{s.submittedByEmail}</td>
                         <td className="px-3 py-2">{s.locked ? '是' : '否'}</td>
                         <td className="px-3 py-2 text-right">
