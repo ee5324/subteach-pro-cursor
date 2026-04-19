@@ -12,6 +12,7 @@ import {
   Pencil,
   ChevronDown,
   ChevronRight,
+  AlertCircle,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
@@ -75,6 +76,8 @@ function formatDateTimeInTaipei(value: string | undefined | null): string {
     hour12: false,
   }).format(d);
 }
+
+const normalizeExamClassKey = (s: string | undefined | null) => String(s ?? '').trim();
 
 const EXAM_TO_AWARDS_DRAFT_KEY = 'edutrack.examSubmissions.awardsDraft';
 
@@ -160,6 +163,119 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
       ),
     [submissions]
   );
+
+  /** 白名單應填班級 vs 實際提報：找出尚未送出或送出但無學生明細者 */
+  const examSubmissionFillMonitor = useMemo(() => {
+    if (!selectedCampaignId) {
+      return {
+        expectedCount: 0,
+        notSubmitted: [] as { classKey: string; className: string; teachers: { email: string; label: string }[] }[],
+        emptyDetail: [] as {
+          classKey: string;
+          className: string;
+          teachers: { email: string; label: string }[];
+          submission: ExamSubmission;
+        }[],
+        noAwardFilled: [] as {
+          classKey: string;
+          className: string;
+          teachers: { email: string; label: string }[];
+          submission: ExamSubmission;
+        }[],
+      };
+    }
+
+    const submittedByKey = new Map<string, ExamSubmission>();
+    for (const s of submissions) {
+      const k = normalizeExamClassKey(s.className);
+      if (!k) continue;
+      submittedByKey.set(k, s);
+    }
+
+    const expected = new Map<string, { className: string; teachers: { email: string; label: string }[] }>();
+    for (const u of whitelist) {
+      if (!u.enabled) continue;
+      const cn = normalizeExamClassKey(u.className);
+      if (!cn) continue;
+      const email = String(u.email ?? '').trim().toLowerCase();
+      if (!email) continue;
+      const label = String(u.teacherName || u.displayName || u.email || '').trim() || email;
+      if (!expected.has(cn)) expected.set(cn, { className: cn, teachers: [] });
+      const row = expected.get(cn)!;
+      if (!row.teachers.some((t) => t.email === email)) row.teachers.push({ email, label });
+    }
+
+    const notSubmitted: { classKey: string; className: string; teachers: { email: string; label: string }[] }[] = [];
+    const emptyDetail: {
+      classKey: string;
+      className: string;
+      teachers: { email: string; label: string }[];
+      submission: ExamSubmission;
+    }[] = [];
+    const noAwardFilled: {
+      classKey: string;
+      className: string;
+      teachers: { email: string; label: string }[];
+      submission: ExamSubmission;
+    }[] = [];
+
+    function sortByClassName<T extends { className: string }>(rows: T[]): T[] {
+      return [...rows].sort((a, b) => {
+        const ga = gradeFromClassName(a.className);
+        const gb = gradeFromClassName(b.className);
+        if (ga !== gb) return ga - gb;
+        const ca = classNumericFromClassName(a.className);
+        const cb = classNumericFromClassName(b.className);
+        if (ca !== cb) return ca - cb;
+        return a.className.localeCompare(b.className, 'zh-Hant', { numeric: true });
+      });
+    }
+
+    for (const [classKey, meta] of expected) {
+      const sub = submittedByKey.get(classKey);
+      if (!sub) {
+        notSubmitted.push({ classKey, className: meta.className, teachers: meta.teachers });
+        continue;
+      }
+      const students = sub.students ?? [];
+      if (students.length === 0) {
+        emptyDetail.push({ classKey, className: meta.className, teachers: meta.teachers, submission: sub });
+        continue;
+      }
+      const hasAward = students.some((stu) => Array.isArray(stu.awards) && stu.awards.length > 0);
+      if (!hasAward) {
+        noAwardFilled.push({ classKey, className: meta.className, teachers: meta.teachers, submission: sub });
+      }
+    }
+
+    return {
+      expectedCount: expected.size,
+      notSubmitted: sortByClassName(notSubmitted),
+      emptyDetail: sortByClassName(emptyDetail),
+      noAwardFilled: sortByClassName(noAwardFilled),
+    };
+  }, [selectedCampaignId, submissions, whitelist]);
+
+  const copyMissingClassesText = async () => {
+    const parts = [
+      ...examSubmissionFillMonitor.notSubmitted.map((r) => r.className),
+      ...examSubmissionFillMonitor.emptyDetail.map((r) => `${r.className}（已送出但無學生明細）`),
+      ...examSubmissionFillMonitor.noAwardFilled.map((r) => `${r.className}（已送出名單但無人勾選獎項）`),
+    ];
+    const text = parts.join('\n');
+    if (!text) {
+      setMsg('目前沒有可複製的缺漏班級');
+      setErr(null);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setMsg('已複製缺漏班級清單（含狀態備註）');
+      setErr(null);
+    } catch {
+      setErr('無法複製，請手動選取清單文字');
+    }
+  };
 
   const awardStudentsForSummary = useMemo<AwardStudent[]>(() => {
     const rows: AwardStudent[] = [];
@@ -1159,8 +1275,8 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                 </tbody>
               </table>
             </div>
-          </>
-        )}
+              </>
+            )}
           </>
         )}
       </div>
@@ -1174,7 +1290,103 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
         {!selectedCampaignId ? (
           <p className="text-sm text-slate-500">請先選擇段考活動</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {(() => {
+              const { expectedCount, notSubmitted, emptyDetail, noAwardFilled } = examSubmissionFillMonitor;
+              const issueCount = notSubmitted.length + emptyDetail.length + noAwardFilled.length;
+              const allClear = expectedCount > 0 && issueCount === 0;
+              const noExpected = expectedCount === 0;
+              return (
+                <div
+                  className={`rounded-lg border p-3 text-sm ${
+                    noExpected
+                      ? 'border-slate-200 bg-slate-50 text-slate-600'
+                      : allClear
+                        ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900'
+                        : 'border-amber-300 bg-amber-50/80 text-amber-950'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <AlertCircle className="shrink-0 mt-0.5" size={18} />
+                      <div className="min-w-0">
+                        <div className="font-semibold">缺漏監控（對照「對外填報白名單」已啟用且有班級者）</div>
+                        <p className="text-xs mt-1 opacity-90">
+                          {noExpected
+                            ? '白名單中尚無「已啟用且已填班級」的導師列，無法自動比對缺漏。請先維護白名單班級或改以提報總表人工檢視。'
+                            : allClear
+                              ? `應填 ${expectedCount} 班均已送出且有名單並至少一人勾選獎項。`
+                              : `應填 ${expectedCount} 班中，尚有 ${issueCount} 班需處理（未送出、送出但無學生、或無人勾選獎項）。`}
+                        </p>
+                      </div>
+                    </div>
+                    {!noExpected && issueCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void copyMissingClassesText()}
+                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-white border border-amber-400 text-amber-900 hover:bg-amber-100"
+                      >
+                        <Copy size={14} />
+                        複製缺漏清單
+                      </button>
+                    )}
+                  </div>
+                  {!noExpected && issueCount > 0 && (
+                    <div className="mt-3 space-y-3 text-xs">
+                      {notSubmitted.length > 0 && (
+                        <div>
+                          <div className="font-semibold text-amber-950 mb-1">尚未送出（{notSubmitted.length}）</div>
+                          <ul className="list-disc pl-4 space-y-1">
+                            {notSubmitted.map((r) => (
+                              <li key={r.classKey}>
+                                <span className="font-mono font-medium">{r.className}</span>
+                                <span className="text-slate-700">
+                                  {' '}
+                                  — 導師：{r.teachers.map((t) => t.label).join('、')}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {emptyDetail.length > 0 && (
+                        <div>
+                          <div className="font-semibold text-amber-950 mb-1">已送出但無學生明細（{emptyDetail.length}）</div>
+                          <ul className="list-disc pl-4 space-y-1">
+                            {emptyDetail.map((r) => (
+                              <li key={r.classKey}>
+                                <span className="font-mono font-medium">{r.className}</span>
+                                <span className="text-slate-700">
+                                  {' '}
+                                  — 最後送出 {formatDateTimeInTaipei(r.submission.submittedAt)}（{r.submission.submittedByEmail}）
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {noAwardFilled.length > 0 && (
+                        <div>
+                          <div className="font-semibold text-amber-950 mb-1">已送出名單但無人勾選獎項（{noAwardFilled.length}）</div>
+                          <ul className="list-disc pl-4 space-y-1">
+                            {noAwardFilled.map((r) => (
+                              <li key={r.classKey}>
+                                <span className="font-mono font-medium">{r.className}</span>
+                                <span className="text-slate-700">
+                                  {' '}
+                                  — 最後送出 {formatDateTimeInTaipei(r.submission.submittedAt)}（{r.submission.submittedByEmail}）
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            <div className="overflow-x-auto">
             <table className="w-full text-sm border border-slate-200 rounded-lg">
               <thead className="bg-slate-50">
                 <tr>
@@ -1259,6 +1471,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
