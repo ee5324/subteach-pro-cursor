@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx';
 import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
 import type { AwardStudent } from '../types';
 import ExamAwardSettingsEditor from './ExamAwardSettingsEditor';
+import Modal from './Modal';
 import type { HomeroomTeacherForExamWhitelistRow } from '../services/api';
 import {
   createExamCampaign,
@@ -154,6 +155,8 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
 
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  /** 提報總覽：刪除前 Modal 確認 */
+  const [submissionToDelete, setSubmissionToDelete] = useState<ExamSubmission | null>(null);
 
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -710,18 +713,22 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
     }
   };
 
-  const deleteOneSubmission = async (s: ExamSubmission) => {
-    if (!isAdmin) return;
-    if (!confirm(`確定刪除 ${s.className} 的提報資料？刪除後無法復原。`)) return;
+  const confirmDeleteSubmissionFromModal = () => {
+    const s = submissionToDelete;
+    if (!isAdmin || !s) return;
     setErr(null);
     setMsg(null);
-    try {
-      await deleteExamSubmission(s.id);
-      if (selectedCampaignId) await reloadSubmissions(selectedCampaignId);
-      setMsg(`已刪除 ${s.className} 的提報資料`);
-    } catch (e: any) {
-      setErr(e?.message || '刪除提報資料失敗');
-    }
+    return (async () => {
+      try {
+        await deleteExamSubmission(s.id);
+        if (expandedSubmissionId === s.id) setExpandedSubmissionId(null);
+        if (selectedCampaignId) await reloadSubmissions(selectedCampaignId);
+        setMsg(`已刪除 ${s.className} 的提報資料`);
+      } catch (e: any) {
+        setErr(e?.message || '刪除提報資料失敗');
+        throw e;
+      }
+    })();
   };
 
   const formatAwardLabel = (awardKey: string) => {
@@ -1451,7 +1458,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                             {isAdmin && (
                               <button
                                 type="button"
-                                onClick={() => void deleteOneSubmission(s)}
+                                onClick={() => setSubmissionToDelete(s)}
                                 className="px-2 py-1 rounded text-xs bg-white border border-red-200 text-red-700 hover:bg-red-50 inline-flex items-center gap-1"
                               >
                                 <Trash2 size={12} /> 刪除
@@ -1546,6 +1553,34 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={!!submissionToDelete}
+        type="danger"
+        title="確定刪除此班提報資料？"
+        content={
+          submissionToDelete ? (
+            <div className="space-y-2">
+              <p>
+                即將刪除以下提報，<strong className="text-red-700">刪除後無法復原</strong>。
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-gray-700">
+                <li>
+                  班級：<span className="font-mono font-semibold">{submissionToDelete.className}</span>
+                </li>
+                <li>最後送出：{formatDateTimeInTaipei(submissionToDelete.submittedAt)}</li>
+                <li>送出者：{submissionToDelete.submittedByEmail || '—'}</li>
+                <li>學生筆數：{submissionToDelete.students?.length ?? 0}</li>
+                <li>鎖定狀態：{submissionToDelete.locked ? '已鎖定' : '未鎖定'}</li>
+              </ul>
+            </div>
+          ) : null
+        }
+        confirmText="確定刪除"
+        cancelText="取消"
+        onCancel={() => setSubmissionToDelete(null)}
+        onConfirm={confirmDeleteSubmissionFromModal}
+      />
     </div>
   );
 };
