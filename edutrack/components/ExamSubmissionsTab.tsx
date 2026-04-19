@@ -125,6 +125,8 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
   const [pendingHomeroomEmailInputs, setPendingHomeroomEmailInputs] = useState<Record<string, string>>({});
   /** 對外填報白名單區塊收合 */
   const [whitelistSectionOpen, setWhitelistSectionOpen] = useState(false);
+  /** 提報總覽「缺漏監控」預設收合 */
+  const [fillMonitorExpanded, setFillMonitorExpanded] = useState(false);
 
   const whitelistSortedByGrade = useMemo(() => {
     return [...whitelist].sort((a, b) => {
@@ -373,6 +375,10 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
 
   useEffect(() => {
     if (selectedCampaignId) reloadSubmissions(selectedCampaignId);
+  }, [selectedCampaignId]);
+
+  useEffect(() => {
+    setFillMonitorExpanded(false);
   }, [selectedCampaignId]);
 
   const addCampaign = async () => {
@@ -1296,9 +1302,14 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
               const issueCount = notSubmitted.length + emptyDetail.length + noAwardFilled.length;
               const allClear = expectedCount > 0 && issueCount === 0;
               const noExpected = expectedCount === 0;
+              const summaryLine = noExpected
+                ? '白名單尚無可比對班級。點開可看說明。'
+                : allClear
+                  ? `應填 ${expectedCount} 班皆已完成。點開可看說明。`
+                  : `應填 ${expectedCount} 班 · 待處理 ${issueCount} 班。點開看明細。`;
               return (
                 <div
-                  className={`rounded-lg border p-3 text-sm ${
+                  className={`rounded-lg border text-sm overflow-hidden ${
                     noExpected
                       ? 'border-slate-200 bg-slate-50 text-slate-600'
                       : allClear
@@ -1306,79 +1317,94 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                         : 'border-amber-300 bg-amber-50/80 text-amber-950'
                   }`}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 min-w-0">
+                  <div className="flex flex-wrap items-stretch gap-2 p-2 sm:p-3">
+                    <button
+                      type="button"
+                      onClick={() => setFillMonitorExpanded((o) => !o)}
+                      className="flex flex-1 min-w-0 items-start gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-black/[0.04] transition-colors"
+                      aria-expanded={fillMonitorExpanded}
+                    >
+                      {fillMonitorExpanded ? (
+                        <ChevronDown className="shrink-0 mt-0.5 text-slate-500" size={18} aria-hidden />
+                      ) : (
+                        <ChevronRight className="shrink-0 mt-0.5 text-slate-500" size={18} aria-hidden />
+                      )}
                       <AlertCircle className="shrink-0 mt-0.5" size={18} />
-                      <div className="min-w-0">
-                        <div className="font-semibold">缺漏監控（對照「對外填報白名單」已啟用且有班級者）</div>
-                        <p className="text-xs mt-1 opacity-90">
-                          {noExpected
-                            ? '白名單中尚無「已啟用且已填班級」的導師列，無法自動比對缺漏。請先維護白名單班級或改以提報總表人工檢視。'
-                            : allClear
-                              ? `應填 ${expectedCount} 班均已送出且有名單並至少一人勾選獎項。`
-                              : `應填 ${expectedCount} 班中，尚有 ${issueCount} 班需處理（未送出、送出但無學生、或無人勾選獎項）。`}
-                        </p>
-                      </div>
-                    </div>
+                      <span className="min-w-0 flex-1">
+                        <span className="font-semibold block">缺漏監控（對照白名單）</span>
+                        <span className="text-xs mt-0.5 block opacity-90">{summaryLine}</span>
+                      </span>
+                    </button>
                     {!noExpected && issueCount > 0 && (
                       <button
                         type="button"
                         onClick={() => void copyMissingClassesText()}
-                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-white border border-amber-400 text-amber-900 hover:bg-amber-100"
+                        className="shrink-0 self-center inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-white border border-amber-400 text-amber-900 hover:bg-amber-100"
                       >
                         <Copy size={14} />
                         複製缺漏清單
                       </button>
                     )}
                   </div>
-                  {!noExpected && issueCount > 0 && (
-                    <div className="mt-3 space-y-3 text-xs">
-                      {notSubmitted.length > 0 && (
-                        <div>
-                          <div className="font-semibold text-amber-950 mb-1">尚未送出（{notSubmitted.length}）</div>
-                          <ul className="list-disc pl-4 space-y-1">
-                            {notSubmitted.map((r) => (
-                              <li key={r.classKey}>
-                                <span className="font-mono font-medium">{r.className}</span>
-                                <span className="text-slate-700">
-                                  {' '}
-                                  — 導師：{r.teachers.map((t) => t.label).join('、')}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {emptyDetail.length > 0 && (
-                        <div>
-                          <div className="font-semibold text-amber-950 mb-1">已送出但無學生明細（{emptyDetail.length}）</div>
-                          <ul className="list-disc pl-4 space-y-1">
-                            {emptyDetail.map((r) => (
-                              <li key={r.classKey}>
-                                <span className="font-mono font-medium">{r.className}</span>
-                                <span className="text-slate-700">
-                                  {' '}
-                                  — 最後送出 {formatDateTimeInTaipei(r.submission.submittedAt)}（{r.submission.submittedByEmail}）
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {noAwardFilled.length > 0 && (
-                        <div>
-                          <div className="font-semibold text-amber-950 mb-1">已送出名單但無人勾選獎項（{noAwardFilled.length}）</div>
-                          <ul className="list-disc pl-4 space-y-1">
-                            {noAwardFilled.map((r) => (
-                              <li key={r.classKey}>
-                                <span className="font-mono font-medium">{r.className}</span>
-                                <span className="text-slate-700">
-                                  {' '}
-                                  — 最後送出 {formatDateTimeInTaipei(r.submission.submittedAt)}（{r.submission.submittedByEmail}）
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
+                  {fillMonitorExpanded && (
+                    <div className="px-3 pb-3 pt-0 border-t border-black/10 space-y-3 text-xs">
+                      <p className="opacity-90 pt-2">
+                        {noExpected
+                          ? '白名單中尚無「已啟用且已填班級」的導師列，無法自動比對缺漏。請先維護白名單班級或改以提報總表人工檢視。'
+                          : allClear
+                            ? `應填 ${expectedCount} 班均已送出且有名單並至少一人勾選獎項。`
+                            : `應填 ${expectedCount} 班中，尚有 ${issueCount} 班需處理（未送出、送出但無學生、或無人勾選獎項）。`}
+                      </p>
+                      {!noExpected && issueCount > 0 && (
+                        <div className="space-y-3">
+                          {notSubmitted.length > 0 && (
+                            <div>
+                              <div className="font-semibold text-amber-950 mb-1">尚未送出（{notSubmitted.length}）</div>
+                              <ul className="list-disc pl-4 space-y-1">
+                                {notSubmitted.map((r) => (
+                                  <li key={r.classKey}>
+                                    <span className="font-mono font-medium">{r.className}</span>
+                                    <span className="text-slate-700">
+                                      {' '}
+                                      — 導師：{r.teachers.map((t) => t.label).join('、')}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {emptyDetail.length > 0 && (
+                            <div>
+                              <div className="font-semibold text-amber-950 mb-1">已送出但無學生明細（{emptyDetail.length}）</div>
+                              <ul className="list-disc pl-4 space-y-1">
+                                {emptyDetail.map((r) => (
+                                  <li key={r.classKey}>
+                                    <span className="font-mono font-medium">{r.className}</span>
+                                    <span className="text-slate-700">
+                                      {' '}
+                                      — 最後送出 {formatDateTimeInTaipei(r.submission.submittedAt)}（{r.submission.submittedByEmail}）
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {noAwardFilled.length > 0 && (
+                            <div>
+                              <div className="font-semibold text-amber-950 mb-1">已送出名單但無人勾選獎項（{noAwardFilled.length}）</div>
+                              <ul className="list-disc pl-4 space-y-1">
+                                {noAwardFilled.map((r) => (
+                                  <li key={r.classKey}>
+                                    <span className="font-mono font-medium">{r.className}</span>
+                                    <span className="text-slate-700">
+                                      {' '}
+                                      — 最後送出 {formatDateTimeInTaipei(r.submission.submittedAt)}（{r.submission.submittedByEmail}）
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
