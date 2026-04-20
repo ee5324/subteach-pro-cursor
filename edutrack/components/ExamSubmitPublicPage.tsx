@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, LogIn, Save, Lock } from 'lucide-react';
+import Modal from './Modal';
 import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
 import { getAuthInstance } from '../services/firebase';
@@ -170,6 +171,8 @@ const ExamSubmitPublicPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /** 送出成功後以 Modal 明確提示（避免僅頂部綠條時教師以為無反應） */
+  const [submitSuccessText, setSubmitSuccessText] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged((u) => {
@@ -376,6 +379,7 @@ const ExamSubmitPublicPage: React.FC = () => {
     setSaving(true);
     setErr(null);
     setMsg(null);
+    setSubmitSuccessText(null);
     try {
       await saveExamSubmission({
         campaignId,
@@ -385,7 +389,11 @@ const ExamSubmitPublicPage: React.FC = () => {
         submittedByEmail: userEmail || 'public',
         submittedAt: new Date().toISOString(),
       } as any);
-      setMsg(locked ? '已送出（已鎖定）。如需修改請聯絡管理者解鎖。' : '已送出（未鎖定，可再次送出更新）。');
+      const successCopy = locked
+        ? '已送出（已鎖定）。如需修改請聯絡管理者解鎖。'
+        : '已送出（未鎖定，可再次送出更新）。';
+      setMsg(successCopy);
+      setSubmitSuccessText(successCopy);
     } catch (e: any) {
       setErr(e?.message || '送出失敗');
     } finally {
@@ -454,6 +462,16 @@ const ExamSubmitPublicPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-4">
+      <Modal
+        isOpen={submitSuccessText != null}
+        title="送出成功"
+        type="success"
+        content={<p className="text-slate-700">{submitSuccessText}</p>}
+        onConfirm={() => setSubmitSuccessText(null)}
+        onCancel={() => setSubmitSuccessText(null)}
+        confirmText="知道了"
+        cancelText="關閉"
+      />
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div>
