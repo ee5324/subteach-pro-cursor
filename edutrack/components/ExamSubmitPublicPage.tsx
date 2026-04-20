@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, LogIn, Save, Lock } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, LogIn, Save, Lock, CheckCircle2 } from 'lucide-react';
 import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
 import { getAuthInstance } from '../services/firebase';
@@ -15,6 +15,13 @@ import {
 } from '../utils/examAwardGrade';
 
 type Suggestion = { className: string; seat: string; name: string };
+type SubmitSuccessMeta = {
+  className: string;
+  submittedAt: string;
+  submittedByEmail: string;
+  studentCount: number;
+  locked: boolean;
+};
 
 const buildAwardKey = (categoryId: string, itemId: string) => `${categoryId}:${itemId}`;
 
@@ -170,6 +177,8 @@ const ExamSubmitPublicPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [submitSuccessMeta, setSubmitSuccessMeta] = useState<SubmitSuccessMeta | null>(null);
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged((u) => {
@@ -275,6 +284,11 @@ const ExamSubmitPublicPage: React.FC = () => {
     });
   }, [awardsConfig, teacherGrade]);
 
+  useEffect(() => {
+    if (!msg && !err && !submitSuccessMeta) return;
+    feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [msg, err, submitSuccessMeta]);
+
   const addStudent = (s: Suggestion) => {
     const key = `${s.className}_${s.seat}`;
     setSelected((prev) => {
@@ -376,6 +390,8 @@ const ExamSubmitPublicPage: React.FC = () => {
     setSaving(true);
     setErr(null);
     setMsg(null);
+    setSubmitSuccessMeta(null);
+    const submittedAtIso = new Date().toISOString();
     try {
       await saveExamSubmission({
         campaignId,
@@ -383,9 +399,16 @@ const ExamSubmitPublicPage: React.FC = () => {
         students: studentsPayload,
         locked,
         submittedByEmail: userEmail || 'public',
-        submittedAt: new Date().toISOString(),
+        submittedAt: submittedAtIso,
       } as any);
       setMsg(locked ? '已送出（已鎖定）。如需修改請聯絡管理者解鎖。' : '已送出（未鎖定，可再次送出更新）。');
+      setSubmitSuccessMeta({
+        className,
+        submittedAt: submittedAtIso,
+        submittedByEmail: userEmail || 'public',
+        studentCount: studentsPayload.length,
+        locked,
+      });
     } catch (e: any) {
       setErr(e?.message || '送出失敗');
     } finally {
@@ -513,9 +536,34 @@ const ExamSubmitPublicPage: React.FC = () => {
           </details>
         </div>
 
-        {(err || msg) && (
-          <div className={`rounded-lg border p-3 text-sm ${err ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-            {err ?? msg}
+        <div ref={feedbackRef} />
+        {(err || msg || submitSuccessMeta) && (
+          <div className="space-y-3">
+            {submitSuccessMeta && (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 sm:p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 size={22} className="text-emerald-700 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-bold text-emerald-800">名單已成功送出</h3>
+                    <p className="text-sm text-emerald-900 mt-1">
+                      系統已收到本次段考提報。若需修改，請聯絡管理者於提報總覽解鎖後再重新送出。
+                    </p>
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs sm:text-sm text-slate-700 space-y-1">
+                      <div>班級：<span className="font-mono font-semibold">{submitSuccessMeta.className}</span></div>
+                      <div>送出時間：{new Date(submitSuccessMeta.submittedAt).toLocaleString('zh-TW', { hour12: false })}</div>
+                      <div>送出者：<span className="font-mono">{submitSuccessMeta.submittedByEmail}</span></div>
+                      <div>提報筆數：{submitSuccessMeta.studentCount} 人</div>
+                      <div>狀態：{submitSuccessMeta.locked ? '已鎖定（需管理者解鎖才能改）' : '未鎖定（可再次送出更新）'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {(err || msg) && (
+              <div className={`rounded-lg border p-3 text-sm ${err ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                {err ?? msg}
+              </div>
+            )}
           </div>
         )}
 
@@ -672,8 +720,14 @@ const ExamSubmitPublicPage: React.FC = () => {
               }
               className="w-full sm:w-auto px-3 py-2.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              {campaign?.lockedByDefault === false ? '送出（不鎖定）' : '送出並鎖定'}
+              {saving ? <Loader2 size={16} className="animate-spin" /> : submitSuccessMeta ? <CheckCircle2 size={16} /> : <Save size={16} />}
+              {saving
+                ? '送出中...'
+                : submitSuccessMeta
+                  ? '已送出'
+                  : campaign?.lockedByDefault === false
+                    ? '送出（不鎖定）'
+                    : '送出並鎖定'}
             </button>
           </div>
 
