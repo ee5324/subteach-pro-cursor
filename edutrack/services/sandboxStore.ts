@@ -19,6 +19,7 @@ import type {
   ExamAwardsConfig,
   ExamSubmitAllowedUser,
   ExamSubmission,
+  ExamSubmitProgressRow,
   BudgetPlan,
   BudgetPlanPeriodKind,
   BudgetPlanAdvance,
@@ -866,6 +867,25 @@ export function sandboxGetExamSubmitAllowedUser(email: string): Promise<ExamSubm
 export function sandboxGetExamSubmissions(campaignId: string): Promise<ExamSubmission[]> {
   const list = Object.values(store.examSubmissions).filter((s) => s.campaignId === campaignId);
   return Promise.resolve(list.sort((a, b) => (b.submittedAt ?? '').localeCompare(a.submittedAt ?? '')));
+}
+
+/** 對外進度頁：由提報主檔推導（不含學生細項） */
+export function sandboxGetExamSubmitProgress(campaignId: string): Promise<ExamSubmitProgressRow[]> {
+  const list = Object.values(store.examSubmissions).filter((s) => s.campaignId === campaignId);
+  const byClass = new Map<string, string>();
+  for (const s of list) {
+    const c = String(s.className ?? '').trim();
+    if (!c) continue;
+    const at = String(s.submittedAt ?? '');
+    const prev = byClass.get(c) ?? '';
+    if (!prev || at > prev) byClass.set(c, at);
+  }
+  const rows: ExamSubmitProgressRow[] = [...byClass.entries()].map(([className, lastSubmittedAt]) => ({
+    className,
+    lastSubmittedAt,
+  }));
+  rows.sort((a, b) => b.lastSubmittedAt.localeCompare(a.lastSubmittedAt));
+  return Promise.resolve(rows);
 }
 
 export function sandboxSaveExamSubmission(submission: ExamSubmission): Promise<void> {

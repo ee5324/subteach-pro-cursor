@@ -7,6 +7,14 @@
         { "fieldPath": "campaignId", "order": "ASCENDING" },
         { "fieldPath": "submittedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "edutrack_exam_submit_progress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "campaignId", "order": "ASCENDING" },
+        { "fieldPath": "lastSubmittedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

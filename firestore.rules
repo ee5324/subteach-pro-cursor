@@ -262,6 +262,28 @@ service cloud.firestore {
       // 公開填報免登入不允許更新既有資料，僅允許建立（避免匿名覆寫）
       allow delete: if isEduTrackAdmin();
     }
+    // 段考提報進度（僅班級／時間，供對外頁顯示；不含學生個資）
+    match /edutrack_exam_submit_progress/{id} {
+      allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser() || isExamPublicSubmitEnabled();
+      allow create: if isExamSubmitAllowedUser()
+        && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt'])
+        && request.resource.data.campaignId is string
+        && request.resource.data.className is string
+        && request.resource.data.campaignId.size() > 0
+        && request.resource.data.className.size() > 0;
+      allow create: if isExamPublicSubmitEnabled()
+        && request.auth == null
+        && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt'])
+        && request.resource.data.campaignId is string
+        && request.resource.data.className is string
+        && request.resource.data.campaignId.size() > 0
+        && request.resource.data.className.size() > 0;
+      allow update: if isExamSubmitAllowedUser()
+        && resource.data.campaignId == request.resource.data.campaignId
+        && resource.data.className == request.resource.data.className
+        && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt']);
+      allow delete: if isEduTrackAdmin();
+    }
     match /edutrack_allowed_users/{email} {
       allow read: if isEduTrackAdmin() || (isSignedIn() && request.auth.token.email == email);
       allow create, update, delete: if isEduTrackAdmin();

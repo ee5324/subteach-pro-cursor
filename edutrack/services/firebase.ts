@@ -70,6 +70,8 @@ export const COLLECTIONS = {
   CALENDAR_SETTINGS: `${COLLECTION_PREFIX}calendar_settings`,
   EXAM_CAMPAIGNS: `${COLLECTION_PREFIX}exam_campaigns`,
   EXAM_SUBMISSIONS: `${COLLECTION_PREFIX}exam_submissions`,
+  /** 僅 campaignId／班級／最後送出時間，供對外顯示提報進度（不含學生個資） */
+  EXAM_SUBMIT_PROGRESS: `${COLLECTION_PREFIX}exam_submit_progress`,
   EXAM_SYSTEM: `${COLLECTION_PREFIX}exam_system`,
   BUDGET_PLANS: `${COLLECTION_PREFIX}budget_plans`,
   BUDGET_PLAN_ADVANCES: `${COLLECTION_PREFIX}budget_plan_advances`,

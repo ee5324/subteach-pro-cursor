@@ -191,6 +191,12 @@ export interface ExamSubmission {
   updatedAt?: string;
 }
 
+/** 對外「已提報班級」清單用（不含學生個資）；文件 id 與提報主檔相同 */
+export interface ExamSubmitProgressRow {
+  className: string;
+  lastSubmittedAt: string;
+}
+
 // 聯絡人資訊
 export interface Contact {
   name: string;
