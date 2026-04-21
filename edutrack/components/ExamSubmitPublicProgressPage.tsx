@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ExternalLink, Loader2, LogIn } from 'lucide-react';
 import type { ExamCampaign, ExamSubmitProgressRow } from '../types';
 import { onAuthStateChanged, signInWithGoogle } from '../services/auth';
-import { getExamAwardsConfig, getExamCampaigns, getExamSubmitProgressForCampaign } from '../services/api';
+import { getExamCampaigns, getExamSubmitProgressForCampaign } from '../services/api';
 import { buildExamSubmitFormHashUrl } from '../utils/publicExamRoutes';
 
 function formatSubmittedAtTw(iso: string): string {
@@ -17,17 +18,20 @@ function formatSubmittedAtTw(iso: string): string {
 }
 
 const ExamSubmitPublicProgressPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [examMetaLoading, setExamMetaLoading] = useState(true);
   const [examMetaError, setExamMetaError] = useState<string | null>(null);
-  const [awardsConfig, setAwardsConfig] = useState<{ allowPublicSubmitNoLogin?: boolean }>({});
-  const allowPublicSubmitNoLogin = awardsConfig.allowPublicSubmitNoLogin === true;
 
   const [campaigns, setCampaigns] = useState<ExamCampaign[]>([]);
   const [campaignId, setCampaignId] = useState('');
+  const campaignFromUrl = useMemo(
+    () => String(searchParams.get('campaignId') ?? searchParams.get('campaign') ?? '').trim(),
+    [searchParams]
+  );
   const campaign = useMemo(() => campaigns.find((c) => c.id === campaignId) ?? null, [campaignId, campaigns]);
 
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -46,10 +50,9 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
     let cancelled = false;
     setExamMetaLoading(true);
     setExamMetaError(null);
-    Promise.all([getExamAwardsConfig(), getExamCampaigns()])
-      .then(([cfg, list]) => {
+    getExamCampaigns()
+      .then((list) => {
         if (cancelled) return;
-        setAwardsConfig(cfg ?? {});
         setCampaigns(Array.isArray(list) ? list : []);
       })
       .catch((e: any) => {
@@ -65,10 +68,6 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
 
   useEffect(() => {
     if (!campaignId) {
-      setRows([]);
-      return;
-    }
-    if (!userEmail && !allowPublicSubmitNoLogin) {
       setRows([]);
       return;
     }
@@ -88,58 +87,23 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [campaignId, userEmail, allowPublicSubmitNoLogin]);
+  }, [campaignId]);
 
   useEffect(() => {
+    if (campaignFromUrl) setCampaignId(campaignFromUrl);
+  }, [campaignFromUrl]);
+
+  useEffect(() => {
+    if (campaignFromUrl) return;
     if (campaigns.length === 0 || campaignId) return;
     const first = campaigns[0]?.id;
     if (first) setCampaignId(first);
-  }, [campaigns, campaignId]);
+  }, [campaigns, campaignId, campaignFromUrl]);
 
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <Loader2 size={32} className="animate-spin text-slate-600" />
-      </div>
-    );
-  }
-
-  if (!userEmail && examMetaLoading) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-3">
-          <h1 className="text-lg font-bold text-slate-800">段考提報進度</h1>
-          <div className="flex items-center gap-2 text-slate-600 text-sm">
-            <Loader2 size={18} className="animate-spin" /> 載入中…
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!userEmail && !allowPublicSubmitNoLogin) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-4">
-          <h1 className="text-lg font-bold text-slate-800">段考提報進度</h1>
-          <p className="text-sm text-slate-600">
-            教學組未開放免登入填報時，請使用 Google 登入（段考填報白名單或教學組 EduTrack 帳號）以檢視各班提報進度。
-          </p>
-          {authError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{authError}</div>}
-          <button
-            type="button"
-            onClick={() => signInWithGoogle().catch((e: any) => setAuthError(e?.message || 'Google 登入失敗'))}
-            className="w-full py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 inline-flex items-center justify-center gap-2"
-          >
-            <LogIn size={18} /> 使用 Google 登入
-          </button>
-          <a
-            href={buildExamSubmitFormHashUrl()}
-            className="block text-center text-sm text-blue-700 hover:underline"
-          >
-            前往段考名單填報
-          </a>
-        </div>
       </div>
     );
   }
@@ -152,8 +116,8 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
             <div>
               <h1 className="text-lg sm:text-xl font-bold text-slate-800">段考提報進度</h1>
               <p className="text-xs text-slate-500 mt-1">僅顯示班級與最後送出時間（畫面不列出學生）。</p>
-              {!userEmail && allowPublicSubmitNoLogin ? (
-                <p className="text-xs text-emerald-700 mt-1">您未登入；目前僅顯示各班是否已送出（無學生個資）。</p>
+              {!userEmail ? (
+                <p className="text-xs text-emerald-700 mt-1">您未登入；本頁僅顯示各班是否已送出之彙整（無學生個資）。</p>
               ) : null}
             </div>
             <a
@@ -163,6 +127,21 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
               <ExternalLink size={16} /> 前往填報
             </a>
           </div>
+          {!userEmail ? (
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between pt-2 border-t border-slate-100">
+              <p className="text-xs text-slate-600">
+                需導師填報、或教學組完整權限時，請使用 Google 登入（段考填報白名單／EduTrack）。
+              </p>
+              <button
+                type="button"
+                onClick={() => signInWithGoogle().catch((e: any) => setAuthError(e?.message || 'Google 登入失敗'))}
+                className="shrink-0 text-sm px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 inline-flex items-center justify-center gap-2"
+              >
+                <LogIn size={16} /> Google 登入
+              </button>
+            </div>
+          ) : null}
+          {authError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{authError}</div>}
           {examMetaError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{examMetaError}</div>
           )}

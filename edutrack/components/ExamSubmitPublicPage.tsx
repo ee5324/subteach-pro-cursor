@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, LogIn, Save, Lock, CheckCircle2 } from 'lucide-react';
+import { Loader2, LogIn, Save, Lock, CheckCircle2, ExternalLink } from 'lucide-react';
 import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
 import { getAuthInstance } from '../services/firebase';
 import { getExamAwardsConfig, getExamCampaigns, getExamSubmitAllowedUser, getLanguageElectiveRoster, saveExamSubmission } from '../services/api';
+import { buildExamSubmitProgressHashUrl } from '../utils/publicExamRoutes';
 import {
   awardKeyToDisplayLabel,
   buildVisibleAwardKeySet,
@@ -70,6 +71,11 @@ const ExamSubmitPublicPage: React.FC = () => {
   const [campaigns, setCampaigns] = useState<ExamCampaign[]>([]);
   const [campaignId, setCampaignId] = useState('');
   const campaign = useMemo(() => campaigns.find((c) => c.id === campaignId) ?? null, [campaignId, campaigns]);
+  const progressUrl = useMemo(() => {
+    const base = buildExamSubmitProgressHashUrl();
+    if (!campaignId) return base;
+    return `${base}?campaignId=${encodeURIComponent(campaignId)}`;
+  }, [campaignId]);
 
   /** 段考活動／獎項設定自 Firestore 載入（失敗時不可靜默，否則會誤顯「主檔無班級」） */
   const [examMetaLoading, setExamMetaLoading] = useState(true);
@@ -483,19 +489,27 @@ const ExamSubmitPublicPage: React.FC = () => {
             <h1 className="text-lg sm:text-xl font-bold text-slate-800">段考名單填報</h1>
             <p className="text-xs text-slate-500 mt-1 font-mono">{userEmail || 'public (免登入模式)'}</p>
           </div>
-          {userEmail ? (
-            <button
-              type="button"
-              onClick={() => signOut().then(() => window.location.reload())}
-              className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+          <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2">
+            <a
+              href={progressUrl}
+              className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-slate-800 text-white hover:bg-slate-900 inline-flex items-center justify-center gap-2"
             >
-              登出
-            </button>
-          ) : (
-            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
-              目前為免登入填報模式
+              <ExternalLink size={16} /> 查看已填報名單
+            </a>
+            {userEmail ? (
+              <button
+                type="button"
+                onClick={() => signOut().then(() => window.location.reload())}
+                className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+              >
+                登出
+              </button>
+            ) : (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                目前為免登入填報模式
+              </div>
+            )}
             </div>
-          )}
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
