@@ -179,7 +179,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
             {campaigns.length === 0 ? <option value="">尚無活動</option> : null}
             {campaigns.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name || c.id}
+                {c.title || c.id}
               </option>
             ))}
           </select>
