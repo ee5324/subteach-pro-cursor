@@ -15,8 +15,6 @@ import ExamSubmissionsTab from './components/ExamSubmissionsTab';
 import BudgetPlansTab from './components/BudgetPlansTab';
 import BudgetAdvancesTab from './components/BudgetAdvancesTab';
 import ExamSubmitPublicPage from './components/ExamSubmitPublicPage';
-import ExamSubmitPublicProgressPage from './components/ExamSubmitPublicProgressPage';
-import { getPublicExamStandaloneMode } from './utils/publicExamRoutes';
 import LanguageHomeroomNotice from './components/LanguageHomeroomNotice';
 import { Settings, Database, CheckCircle, AlertTriangle, Loader2, Archive, Copy, ShieldCheck, KeyRound, BookOpen, Plus, Trash2, Upload, FileSpreadsheet, HelpCircle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -537,11 +535,13 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ currentUser, currentAccess })
 };
 
 const App: React.FC<{ embedded?: boolean; mobileHub?: boolean }> = ({ embedded, mobileHub }) => {
-  // 對外填報／提報進度頁（獨立開啟時；主站 Hash 路由由根目錄 App.tsx 處理）
-  if (!embedded && typeof window !== 'undefined') {
-    const mode = getPublicExamStandaloneMode();
-    if (mode === 'progress') return <ExamSubmitPublicProgressPage />;
-    if (mode === 'submit') return <ExamSubmitPublicPage />;
+  // 對外填報頁（獨立開啟時；主站 Hash 路由由 App.tsx 的 /exam-submit 處理）
+  if (
+    !embedded &&
+    typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/exam-submit') || window.location.hash.includes('exam-submit'))
+  ) {
+    return <ExamSubmitPublicPage />;
   }
 
   const [activeTab, setActiveTab] = useState('calendar');
