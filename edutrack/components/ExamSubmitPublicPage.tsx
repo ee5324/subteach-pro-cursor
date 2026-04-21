@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, LogIn, Save, Lock, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Loader2, LogIn, Save, Lock, CheckCircle2 } from 'lucide-react';
 import type { ExamAwardsConfig, ExamCampaign, ExamSubmissionStudent, ExamSubmitAllowedUser, LanguageElectiveStudent } from '../types';
 import { onAuthStateChanged, signInWithGoogle, signOut } from '../services/auth';
 import { getAuthInstance } from '../services/firebase';
@@ -13,7 +13,6 @@ import {
   findStudentCategoryMultiSelectConflicts,
   parseGradeFromClassName,
 } from '../utils/examAwardGrade';
-import { buildExamSubmitProgressHashUrl } from '../utils/publicExamRoutes';
 
 type Suggestion = { className: string; seat: string; name: string };
 type SubmitSuccessMeta = {
@@ -484,31 +483,19 @@ const ExamSubmitPublicPage: React.FC = () => {
             <h1 className="text-lg sm:text-xl font-bold text-slate-800">段考名單填報</h1>
             <p className="text-xs text-slate-500 mt-1 font-mono">{userEmail || 'public (免登入模式)'}</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:items-center sm:justify-end">
-            <a
-              href={buildExamSubmitProgressHashUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto text-sm px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-800 hover:bg-slate-50 inline-flex items-center justify-center gap-2"
-              title="須 Google 登入（白名單）後可檢視各班提報班級與時間"
+          {userEmail ? (
+            <button
+              type="button"
+              onClick={() => signOut().then(() => window.location.reload())}
+              className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
             >
-              <ExternalLink size={16} />
-              已提報班級清單（另開）
-            </a>
-            {userEmail ? (
-              <button
-                type="button"
-                onClick={() => signOut().then(() => window.location.reload())}
-                className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
-              >
-                登出
-              </button>
-            ) : (
-              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 text-center sm:text-left">
-                目前為免登入填報模式
-              </div>
-            )}
-          </div>
+              登出
+            </button>
+          ) : (
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+              目前為免登入填報模式
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
