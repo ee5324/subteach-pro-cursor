@@ -191,6 +191,12 @@ export interface ExamSubmission {
   updatedAt?: string;
 }
 
+/** 提報進度頁僅顯示班級＋時間（由 getExamSubmissions 於前端彙整，不落第二份集合） */
+export interface ExamSubmitProgressRow {
+  className: string;
+  lastSubmittedAt: string;
+}
+
 // 聯絡人資訊
 export interface Contact {
   name: string;

@@ -118,7 +118,7 @@ import {
   sandboxGetSchoolTeacherNames,
   sandboxGetHomeroomTeachersForExamWhitelist,
 } from './sandboxStore';
-import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission } from '../types';
+import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission, ExamSubmitProgressRow } from '../types';
 import { normalizeExamAwardsConfig } from '../utils/examAwardGrade';
 import { stripUndefinedDeep } from '../utils/stripUndefinedDeep';
 
@@ -1750,6 +1750,25 @@ export async function getExamSubmissions(campaignId: string): Promise<ExamSubmis
       updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() ?? data.updatedAt,
     } as ExamSubmission;
   });
+}
+
+/**
+ * 已提報班級清單（僅班級＋最後送出時間）：沿用既有 `getExamSubmissions` 讀取權限，於前端彙整，不另建 Firestore 集合、不改規則。
+ * 注意：免登入模式無法讀取提報主檔，進度頁須登入（段考白名單或 EduTrack 白名單）才會有資料。
+ */
+export async function getExamSubmitProgressForCampaign(campaignId: string): Promise<ExamSubmitProgressRow[]> {
+  const list = await getExamSubmissions(campaignId);
+  const byClass = new Map<string, string>();
+  for (const s of list) {
+    const c = String(s.className ?? '').trim();
+    if (!c) continue;
+    const at = String(s.submittedAt ?? '');
+    const prev = byClass.get(c) ?? '';
+    if (!prev || at > prev) byClass.set(c, at);
+  }
+  return [...byClass.entries()]
+    .map(([className, lastSubmittedAt]) => ({ className, lastSubmittedAt }))
+    .sort((a, b) => b.lastSubmittedAt.localeCompare(a.lastSubmittedAt));
 }
 
 export async function saveExamSubmission(payload: Omit<ExamSubmission, 'id' | 'updatedAt'>): Promise<void> {

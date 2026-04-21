@@ -33,6 +33,8 @@ import TeacherLeavePortal from './pages/TeacherLeavePortal';
 import EduTrackPage from './pages/EduTrackPage';
 import SystemDashboard from './pages/SystemDashboard';
 import ExamSubmitPublicPage from './edutrack/components/ExamSubmitPublicPage';
+import ExamSubmitPublicProgressPage from './edutrack/components/ExamSubmitPublicProgressPage';
+import { isPublicExamSubmitRelatedHash } from './edutrack/utils/publicExamRoutes';
 import { useAppStore } from './store/useAppStore';
 import { signOut } from 'firebase/auth';
 import { auth } from './src/lib/firebase';
@@ -108,7 +110,7 @@ function useIsPublicExamSubmitHash(): boolean {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
   const h = hash || '';
-  return h === '#/exam-submit' || h.startsWith('#/exam-submit');
+  return isPublicExamSubmitRelatedHash(h);
 }
 
 const App: React.FC = () => {
@@ -137,6 +139,14 @@ const App: React.FC = () => {
           element={
             <PageErrorBoundary fallbackTitle="段考填報頁面載入錯誤">
               <ExamSubmitPublicPage />
+            </PageErrorBoundary>
+          }
+        />
+        <Route
+          path="/exam-submit-progress"
+          element={
+            <PageErrorBoundary fallbackTitle="段考提報進度載入錯誤">
+              <ExamSubmitPublicProgressPage />
             </PageErrorBoundary>
           }
         />
