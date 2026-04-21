@@ -115,6 +115,7 @@ import {
   sandboxSaveExamSubmission,
   sandboxUnlockExamSubmission,
   sandboxDeleteExamSubmission,
+  sandboxGetExamSubmitProgress,
   sandboxGetSchoolTeacherNames,
   sandboxGetHomeroomTeachersForExamWhitelist,
 } from './sandboxStore';
@@ -1753,32 +1754,37 @@ export async function getExamSubmissions(campaignId: string): Promise<ExamSubmis
 }
 
 /**
- * 已提報班級清單（僅班級＋最後送出時間）：沿用既有 `getExamSubmissions` 讀取權限，於前端彙整，不另建 Firestore 集合、不改規則。
- * 注意：免登入模式無法讀取提報主檔，進度頁須登入（段考白名單或 EduTrack 白名單）才會有資料。
+ * 已提報班級清單（僅班級＋最後送出時間）：讀取 `exam_submit_progress`，免登入時與提報主檔分離以避免下載學生個資。
  */
 export async function getExamSubmitProgressForCampaign(campaignId: string): Promise<ExamSubmitProgressRow[]> {
-  const list = await getExamSubmissions(campaignId);
-  const byClass = new Map<string, string>();
-  for (const s of list) {
-    const c = String(s.className ?? '').trim();
-    if (!c) continue;
-    const at = String(s.submittedAt ?? '');
-    const prev = byClass.get(c) ?? '';
-    if (!prev || at > prev) byClass.set(c, at);
-  }
-  return [...byClass.entries()]
-    .map(([className, lastSubmittedAt]) => ({ className, lastSubmittedAt }))
-    .sort((a, b) => b.lastSubmittedAt.localeCompare(a.lastSubmittedAt));
+  if (isSandbox()) return sandboxGetExamSubmitProgress(campaignId);
+  const db = getDb();
+  if (!db) return [];
+  const snap = await getDocs(
+    query(
+      collection(db, COLLECTIONS.EXAM_SUBMIT_PROGRESS),
+      where('campaignId', '==', campaignId),
+      orderBy('lastSubmittedAt', 'desc')
+    )
+  );
+  return snap.docs.map((d) => {
+    const data = d.data() as any;
+    return {
+      className: String(data.className ?? ''),
+      lastSubmittedAt: data.lastSubmittedAt?.toDate?.()?.toISOString?.() ?? String(data.lastSubmittedAt ?? ''),
+    };
+  });
 }
 
 export async function saveExamSubmission(payload: Omit<ExamSubmission, 'id' | 'updatedAt'>): Promise<void> {
-  if (isSandbox()) return sandboxSaveExamSubmission({ ...(payload as any), id: examSubmissionId(payload.campaignId, payload.className) });
+  const id = examSubmissionId(payload.campaignId, payload.className);
+  if (isSandbox()) return sandboxSaveExamSubmission({ ...(payload as any), id });
   const db = getDb();
   if (!db) throw new Error('Firebase 未初始化');
-  const id = examSubmissionId(payload.campaignId, payload.className);
-  const ref = doc(db, COLLECTIONS.EXAM_SUBMISSIONS, id);
-  await setDoc(
-    ref,
+  const batch = writeBatch(db);
+  const subRef = doc(db, COLLECTIONS.EXAM_SUBMISSIONS, id);
+  batch.set(
+    subRef,
     {
       campaignId: payload.campaignId,
       className: payload.className,
@@ -1790,6 +1796,17 @@ export async function saveExamSubmission(payload: Omit<ExamSubmission, 'id' | 'u
     },
     { merge: true }
   );
+  const progRef = doc(db, COLLECTIONS.EXAM_SUBMIT_PROGRESS, id);
+  batch.set(
+    progRef,
+    {
+      campaignId: payload.campaignId,
+      className: payload.className,
+      lastSubmittedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+  await batch.commit();
 }
 
 export async function unlockExamSubmission(id: string, unlockedByEmail: string): Promise<void> {
@@ -1808,7 +1825,10 @@ export async function deleteExamSubmission(id: string): Promise<void> {
   if (isSandbox()) return sandboxDeleteExamSubmission(id);
   const db = getDb();
   if (!db) throw new Error('Firebase 未初始化');
-  await deleteDoc(doc(db, COLLECTIONS.EXAM_SUBMISSIONS, id));
+  const batch = writeBatch(db);
+  batch.delete(doc(db, COLLECTIONS.EXAM_SUBMISSIONS, id));
+  batch.delete(doc(db, COLLECTIONS.EXAM_SUBMIT_PROGRESS, id));
+  await batch.commit();
 }
 
 /** 依學號繼承：從名單取得「學號 → 選修語言」（後出現覆蓋先出現） */

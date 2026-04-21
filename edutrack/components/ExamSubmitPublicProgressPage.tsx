@@ -64,7 +64,11 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!campaignId || !userEmail) {
+    if (!campaignId) {
+      setRows([]);
+      return;
+    }
+    if (!userEmail && !allowPublicSubmitNoLogin) {
       setRows([]);
       return;
     }
@@ -76,7 +80,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
         if (!cancelled) setRows(list);
       })
       .catch((e: any) => {
-        if (!cancelled) setRowsError(e?.message || '無法讀取提報進度（可能無讀取權限）');
+        if (!cancelled) setRowsError(e?.message || '無法讀取提報進度');
       })
       .finally(() => {
         if (!cancelled) setRowsLoading(false);
@@ -84,7 +88,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [campaignId, userEmail]);
+  }, [campaignId, userEmail, allowPublicSubmitNoLogin]);
 
   useEffect(() => {
     if (campaigns.length === 0 || campaignId) return;
@@ -113,14 +117,13 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
     );
   }
 
-  if (!userEmail) {
+  if (!userEmail && !allowPublicSubmitNoLogin) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-6 space-y-4">
           <h1 className="text-lg font-bold text-slate-800">段考提報進度</h1>
           <p className="text-sm text-slate-600">
-            各班清單係由提報主檔彙整；依目前 Firebase 權限，須以 Google 登入（段考填報白名單或教學組 EduTrack 帳號）始可讀取。
-            {allowPublicSubmitNoLogin ? ' 免登入僅能填報，無法讀取他班提報紀錄。' : ''}
+            教學組未開放免登入填報時，請使用 Google 登入（段考填報白名單或教學組 EduTrack 帳號）以檢視各班提報進度。
           </p>
           {authError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{authError}</div>}
           <button
@@ -149,6 +152,9 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
             <div>
               <h1 className="text-lg sm:text-xl font-bold text-slate-800">段考提報進度</h1>
               <p className="text-xs text-slate-500 mt-1">僅顯示班級與最後送出時間（畫面不列出學生）。</p>
+              {!userEmail && allowPublicSubmitNoLogin ? (
+                <p className="text-xs text-emerald-700 mt-1">您未登入；目前僅顯示各班是否已送出（無學生個資）。</p>
+              ) : null}
             </div>
             <a
               href={buildExamSubmitFormHashUrl()}
@@ -191,7 +197,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
               <Loader2 size={18} className="animate-spin" /> 讀取中…
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-sm text-slate-500 py-2">所選活動尚無提報紀錄，或您的帳號無法讀取提報資料。</p>
+            <p className="text-sm text-slate-500 py-2">所選活動尚無提報紀錄，或尚無班級於本功能上線後成功送出。</p>
           ) : (
             <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
               {rows.map((r) => (
