@@ -53,11 +53,6 @@ export interface SandboxCourseRecord {
 
 const uid = () => crypto.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-/** 本地 Sandbox 段考示範：與 examSubmissions／進度頁測試一致 */
-const SANDBOX_EXAM_CAMPAIGN_ID = 'sandbox-exam-campaign-1';
-const sandboxExamSubmittedAt = (minutesAgo: number) =>
-  new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
-
 // --- In-memory store (seed 一些範例資料) ---
 const store = {
   courses: [
@@ -140,73 +135,15 @@ const store = {
   examPapers: [] as ExamPaper[],
   examPaperFolders: [] as ExamPaperFolder[],
   examPaperChecks: [] as ExamPaperCheck[],
-  languageElective: {
-    '114': {
-      academicYear: '114',
-      semester: '下學期',
-      studentRosterVersion: STUDENT_ROSTER_VERSION,
-      students: [
-        { className: '701', seat: '01', name: '沙盒仁一', language: '閩南語' },
-        { className: '701', seat: '02', name: '沙盒仁二', language: '閩南語' },
-        { className: '702', seat: '01', name: '沙盒義一', language: '客語' },
-        { className: '803', seat: '05', name: '沙盒禮一', language: '排灣語' },
-      ],
-      updatedAt: new Date().toISOString(),
-    },
-  } as Record<string, LanguageElectiveRosterDoc>,
+  languageElective: {} as Record<string, LanguageElectiveRosterDoc>,
   /** B 方案：學生主檔（記憶體） */
   languageElectiveProfiles: {} as Record<string, Record<string, unknown>>,
   systemSettings: { languageOptions: [] as string[] },
   calendarSettings: {} as Record<string, CalendarSettings>,
-  examCampaigns: [
-    {
-      id: SANDBOX_EXAM_CAMPAIGN_ID,
-      title: '114下 第1次段考（Sandbox 示範）',
-      academicYear: '114',
-      semester: '下學期',
-      examNo: '1',
-      lockedByDefault: true,
-    },
-  ] as ExamCampaign[],
-  examAwardsConfig: {
-    allowPublicSubmitNoLogin: true,
-    teacherInstructions:
-      '【Sandbox 本地】此為示範提報資料；進度頁應列出 701、702、803 班（示範已送出）。',
-    categories: [
-      { id: 'excellent', label: '優異', items: [{ id: 'chi', label: '國語' }, { id: 'math', label: '數學' }] },
-      { id: 'improved', label: '進步', items: [{ id: 'eng', label: '英語' }] },
-    ],
-  } as ExamAwardsConfig,
+  examCampaigns: [] as ExamCampaign[],
+  examAwardsConfig: { categories: [] } as ExamAwardsConfig,
   examSubmitAllowedUsers: {} as Record<string, ExamSubmitAllowedUser>,
-  examSubmissions: {
-    [`${SANDBOX_EXAM_CAMPAIGN_ID}_701`]: {
-      id: `${SANDBOX_EXAM_CAMPAIGN_ID}_701`,
-      campaignId: SANDBOX_EXAM_CAMPAIGN_ID,
-      className: '701',
-      students: [],
-      locked: true,
-      submittedByEmail: 'sandbox-teacher@example.edu.tw',
-      submittedAt: sandboxExamSubmittedAt(180),
-    },
-    [`${SANDBOX_EXAM_CAMPAIGN_ID}_702`]: {
-      id: `${SANDBOX_EXAM_CAMPAIGN_ID}_702`,
-      campaignId: SANDBOX_EXAM_CAMPAIGN_ID,
-      className: '702',
-      students: [],
-      locked: true,
-      submittedByEmail: 'public',
-      submittedAt: sandboxExamSubmittedAt(90),
-    },
-    [`${SANDBOX_EXAM_CAMPAIGN_ID}_803`]: {
-      id: `${SANDBOX_EXAM_CAMPAIGN_ID}_803`,
-      campaignId: SANDBOX_EXAM_CAMPAIGN_ID,
-      className: '803',
-      students: [],
-      locked: true,
-      submittedByEmail: 'sandbox-teacher@example.edu.tw',
-      submittedAt: sandboxExamSubmittedAt(15),
-    },
-  } as Record<string, ExamSubmission>,
+  examSubmissions: {} as Record<string, ExamSubmission>,
   budgetPlans: [
     {
       id: 'sandbox-bp-1',
