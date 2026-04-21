@@ -265,6 +265,12 @@ service cloud.firestore {
         && resource.data.className == request.resource.data.className
         && request.resource.data.className == examSubmitTeacherWhitelistClassName()
         && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt']);
+      allow create, update: if isEduTrackAdmin()
+        && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt'])
+        && request.resource.data.campaignId is string
+        && request.resource.data.className is string
+        && request.resource.data.campaignId.size() > 0
+        && request.resource.data.className.size() > 0;
       allow delete: if isEduTrackAdmin();
     }
     match /edutrack_allowed_users/{email} {

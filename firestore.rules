@@ -282,6 +282,13 @@ service cloud.firestore {
         && resource.data.campaignId == request.resource.data.campaignId
         && resource.data.className == request.resource.data.className
         && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt']);
+      // 教學組：自提報主檔補寫進度列（舊資料回填）
+      allow create, update: if isEduTrackAdmin()
+        && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt'])
+        && request.resource.data.campaignId is string
+        && request.resource.data.className is string
+        && request.resource.data.campaignId.size() > 0
+        && request.resource.data.className.size() > 0;
       allow delete: if isEduTrackAdmin();
     }
     match /edutrack_allowed_users/{email} {

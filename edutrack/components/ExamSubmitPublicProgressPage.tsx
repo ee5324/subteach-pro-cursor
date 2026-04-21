@@ -197,7 +197,9 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
               <Loader2 size={18} className="animate-spin" /> 讀取中…
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-sm text-slate-500 py-2">所選活動尚無提報紀錄，或尚無班級於本功能上線後成功送出。</p>
+            <p className="text-sm text-slate-500 py-2">
+              所選活動尚無可顯示的提報紀錄。若教學組確認主檔已有舊資料，請於管理端「段考提報」按「同步進度列」補寫進度後再重新整理本頁。
+            </p>
           ) : (
             <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
               {rows.map((r) => (

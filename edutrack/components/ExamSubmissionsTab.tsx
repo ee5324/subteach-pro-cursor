@@ -33,6 +33,7 @@ import {
   deleteExamSubmission,
   unlockExamSubmission,
   updateExamCampaign,
+  syncExamSubmitProgressFromSubmissions,
 } from '../services/api';
 
 interface Props {
@@ -84,6 +85,7 @@ const EXAM_TO_AWARDS_DRAFT_KEY = 'edutrack.examSubmissions.awardsDraft';
 
 const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, onNavigateToTab }) => {
   const isAdmin = currentAccess?.role === 'admin';
+  const [syncingExamProgress, setSyncingExamProgress] = useState(false);
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
 
   const [campaigns, setCampaigns] = useState<ExamCampaign[]>([]);
@@ -863,6 +865,37 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
           >
             <RefreshCw size={16} /> 重新整理
           </button>
+          {isAdmin && selectedCampaignId ? (
+            <button
+              type="button"
+              disabled={syncingExamProgress}
+              title="自提報主檔補寫進度列（僅班級／時間），供對外「已提報班級」頁顯示既有送出紀錄"
+              onClick={async () => {
+                if (
+                  !confirm(
+                    '自本活動既有「提報主檔」補寫進度列（僅班級與最後送出時間）？完成後免登入進度頁即可顯示舊提報。'
+                  )
+                ) {
+                  return;
+                }
+                setSyncingExamProgress(true);
+                setErr(null);
+                try {
+                  const r = await syncExamSubmitProgressFromSubmissions(selectedCampaignId);
+                  setMsg(`已同步進度列 ${r.written} 筆。`);
+                  await reloadSubmissions(selectedCampaignId);
+                } catch (e: any) {
+                  setErr(e?.message || '同步進度列失敗');
+                } finally {
+                  setSyncingExamProgress(false);
+                }
+              }}
+              className="px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-950 text-sm inline-flex items-center gap-2 disabled:opacity-60"
+            >
+              <RefreshCw size={16} className={syncingExamProgress ? 'animate-spin' : ''} />
+              {syncingExamProgress ? '同步中…' : '同步進度列'}
+            </button>
+          ) : null}
         </div>
       </div>
 

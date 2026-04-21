@@ -17,6 +17,7 @@ import {
   orderBy,
   where,
   serverTimestamp,
+  Timestamp,
   writeBatch,
   type DocumentData,
 } from 'firebase/firestore';
@@ -1731,6 +1732,38 @@ export async function deleteExamSubmitAllowedUser(email: string): Promise<void> 
 
 const examSubmissionId = (campaignId: string, className: string) => `${campaignId}_${String(className ?? '').trim()}`;
 
+function mergeExamProgressRows(a: ExamSubmitProgressRow[], b: ExamSubmitProgressRow[]): ExamSubmitProgressRow[] {
+  const map = new Map<string, string>();
+  const ingest = (rows: ExamSubmitProgressRow[]) => {
+    for (const r of rows) {
+      const c = String(r.className ?? '').trim();
+      if (!c) continue;
+      const t = String(r.lastSubmittedAt ?? '');
+      const prev = map.get(c) ?? '';
+      if (!prev || t > prev) map.set(c, t);
+    }
+  };
+  ingest(a);
+  ingest(b);
+  return [...map.entries()]
+    .map(([className, lastSubmittedAt]) => ({ className, lastSubmittedAt }))
+    .sort((x, y) => y.lastSubmittedAt.localeCompare(x.lastSubmittedAt));
+}
+
+function examSubmissionsToProgressRows(list: ExamSubmission[]): ExamSubmitProgressRow[] {
+  const map = new Map<string, string>();
+  for (const s of list) {
+    const c = String(s.className ?? '').trim();
+    if (!c) continue;
+    const t = String(s.submittedAt ?? '');
+    const prev = map.get(c) ?? '';
+    if (!prev || t > prev) map.set(c, t);
+  }
+  return [...map.entries()]
+    .map(([className, lastSubmittedAt]) => ({ className, lastSubmittedAt }))
+    .sort((a, b) => b.lastSubmittedAt.localeCompare(a.lastSubmittedAt));
+}
+
 export async function getExamSubmissions(campaignId: string): Promise<ExamSubmission[]> {
   if (isSandbox()) return sandboxGetExamSubmissions(campaignId);
   const db = getDb();
@@ -1754,26 +1787,94 @@ export async function getExamSubmissions(campaignId: string): Promise<ExamSubmis
 }
 
 /**
- * 已提報班級清單（僅班級＋最後送出時間）：讀取 `exam_submit_progress`，免登入時與提報主檔分離以避免下載學生個資。
+ * 已提報班級清單（僅班級＋最後送出時間）：
+ * - 先讀 `exam_submit_progress`（免登入可讀、無學生個資）；
+ * - 若目前帳號可讀提報主檔，再從主檔彙整並合併（補齊「上線前已送出、尚無進度列」的舊資料）。
  */
 export async function getExamSubmitProgressForCampaign(campaignId: string): Promise<ExamSubmitProgressRow[]> {
-  if (isSandbox()) return sandboxGetExamSubmitProgress(campaignId);
+  const cid = String(campaignId ?? '').trim();
+  if (isSandbox()) return sandboxGetExamSubmitProgress(cid);
+
   const db = getDb();
   if (!db) return [];
-  const snap = await getDocs(
-    query(
-      collection(db, COLLECTIONS.EXAM_SUBMIT_PROGRESS),
-      where('campaignId', '==', campaignId),
-      orderBy('lastSubmittedAt', 'desc')
-    )
-  );
-  return snap.docs.map((d) => {
-    const data = d.data() as any;
-    return {
-      className: String(data.className ?? ''),
-      lastSubmittedAt: data.lastSubmittedAt?.toDate?.()?.toISOString?.() ?? String(data.lastSubmittedAt ?? ''),
-    };
-  });
+
+  let fromProg: ExamSubmitProgressRow[] = [];
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, COLLECTIONS.EXAM_SUBMIT_PROGRESS),
+        where('campaignId', '==', cid),
+        orderBy('lastSubmittedAt', 'desc')
+      )
+    );
+    fromProg = snap.docs.map((d) => {
+      const data = d.data() as any;
+      return {
+        className: String(data.className ?? ''),
+        lastSubmittedAt: data.lastSubmittedAt?.toDate?.()?.toISOString?.() ?? String(data.lastSubmittedAt ?? ''),
+      };
+    });
+  } catch {
+    fromProg = [];
+  }
+
+  let fromSubs: ExamSubmitProgressRow[] = [];
+  try {
+    const subs = await getExamSubmissions(cid);
+    fromSubs = examSubmissionsToProgressRows(subs);
+  } catch {
+    /* 免登入或未授權讀取主檔時略過 */
+  }
+
+  return mergeExamProgressRows(fromProg, fromSubs);
+}
+
+/**
+ * 由既有提報主檔補寫進度列（僅 campaign／班級／時間），供管理端一次性同步舊資料。
+ */
+export async function syncExamSubmitProgressFromSubmissions(campaignId: string): Promise<{ written: number }> {
+  const cid = String(campaignId ?? '').trim();
+  if (!cid) throw new Error('未指定段考活動');
+  if (isSandbox()) {
+    const list = await getExamSubmissions(cid);
+    return { written: list.length };
+  }
+  const list = await getExamSubmissions(cid);
+  const db = getDb();
+  if (!db) throw new Error('Firebase 未初始化');
+
+  let batch = writeBatch(db);
+  let ops = 0;
+  let written = 0;
+  const flush = async () => {
+    if (ops <= 0) return;
+    await batch.commit();
+    batch = writeBatch(db);
+    ops = 0;
+  };
+
+  for (const s of list) {
+    const id = examSubmissionId(s.campaignId, s.className);
+    const progRef = doc(db, COLLECTIONS.EXAM_SUBMIT_PROGRESS, id);
+    const submittedIso = String(s.submittedAt ?? '').trim();
+    const lastSubmittedAt = submittedIso
+      ? Timestamp.fromDate(new Date(submittedIso))
+      : serverTimestamp();
+    batch.set(
+      progRef,
+      {
+        campaignId: s.campaignId,
+        className: s.className,
+        lastSubmittedAt,
+      },
+      { merge: true }
+    );
+    ops += 1;
+    written += 1;
+    if (ops >= 400) await flush();
+  }
+  await flush();
+  return { written };
 }
 
 export async function saveExamSubmission(payload: Omit<ExamSubmission, 'id' | 'updatedAt'>): Promise<void> {
