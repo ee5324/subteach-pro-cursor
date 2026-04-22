@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ExternalLink, Loader2, LogIn } from 'lucide-react';
 import type { ExamCampaign, ExamSubmitProgressRow } from '../types';
 import { onAuthStateChanged, signInWithGoogle } from '../services/auth';
-import { getExamCampaigns, getExamSubmitProgressForCampaign } from '../services/api';
+import { getExamCampaigns, getExamSubmitAllowedUsers, getExamSubmitProgressForCampaign } from '../services/api';
 import { buildExamSubmitFormHashUrl } from '../utils/publicExamRoutes';
 
 function gradeFromClassName(className: string): number | null {
@@ -52,9 +52,28 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rows, setRows] = useState<ExamSubmitProgressRow[]>([]);
   const [rowsError, setRowsError] = useState<string | null>(null);
+  const [expectedClassNames, setExpectedClassNames] = useState<string[]>([]);
+  const [expectedClassHint, setExpectedClassHint] = useState<string | null>(null);
+  const gradeSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const mergedRows = useMemo<ExamSubmitProgressRow[]>(() => {
+    const byClass = new Map<string, ExamSubmitProgressRow>();
+    rows.forEach((r) => {
+      const cls = String(r.className ?? '').trim();
+      if (!cls) return;
+      byClass.set(cls, { className: cls, lastSubmittedAt: String(r.lastSubmittedAt ?? '') });
+    });
+    expectedClassNames.forEach((cls) => {
+      if (!byClass.has(cls)) {
+        byClass.set(cls, { className: cls, lastSubmittedAt: '' });
+      }
+    });
+    return [...byClass.values()];
+  }, [rows, expectedClassNames]);
+
   const groupedRows = useMemo(() => {
     const groups = new Map<string, ExamSubmitProgressRow[]>();
-    rows.forEach((r) => {
+    mergedRows.forEach((r) => {
       const grade = gradeFromClassName(r.className);
       const key = grade == null ? '未分類' : `${grade}年級`;
       if (!groups.has(key)) groups.set(key, []);
@@ -70,7 +89,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
         gradeLabel,
         list: [...list].sort((a, b) => classSortNumber(a.className) - classSortNumber(b.className)),
       }));
-  }, [rows]);
+  }, [mergedRows]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged((u) => {
@@ -122,6 +141,34 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
       cancelled = true;
     };
   }, [campaignId]);
+
+  useEffect(() => {
+    if (!userEmail) {
+      setExpectedClassNames([]);
+      setExpectedClassHint('未登入時僅顯示已上傳進度，無法比對完整應填班級。');
+      return;
+    }
+    let cancelled = false;
+    setExpectedClassHint(null);
+    getExamSubmitAllowedUsers()
+      .then((list) => {
+        if (cancelled) return;
+        const classes = [...new Set(
+          (Array.isArray(list) ? list : [])
+            .filter((x) => x.enabled && String(x.className ?? '').trim().length > 0)
+            .map((x) => String(x.className ?? '').trim()),
+        )].sort((a, b) => classSortNumber(a) - classSortNumber(b));
+        setExpectedClassNames(classes);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setExpectedClassNames([]);
+        setExpectedClassHint('目前帳號無法讀取白名單班級，未填報班級可能無法完整顯示。');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userEmail]);
 
   useEffect(() => {
     if (campaignFromUrl) setCampaignId(campaignFromUrl);
@@ -211,6 +258,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
             <div>
               <span className="font-medium text-slate-400">灰色文字</span>：未填報（尚無送出時間）
             </div>
+            {expectedClassHint && <div className="text-amber-700">{expectedClassHint}</div>}
           </div>
           {rowsError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{rowsError}</div>}
           {rowsLoading ? (
@@ -223,14 +271,37 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
             </p>
           ) : (
             <div className="space-y-3">
+              {groupedRows.length > 1 && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-xs font-semibold text-slate-700 mb-2">跳轉至年級</div>
+                  <div className="flex flex-wrap gap-2">
+                    {groupedRows.map((group) => (
+                      <button
+                        key={`jump_${group.gradeLabel}`}
+                        type="button"
+                        className="px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        onClick={() => gradeSectionRefs.current[group.gradeLabel]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      >
+                        {group.gradeLabel}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {groupedRows.map((group) => (
-                <div key={group.gradeLabel} className="border border-slate-100 rounded-lg overflow-hidden">
+                <div
+                  key={group.gradeLabel}
+                  ref={(el) => {
+                    gradeSectionRefs.current[group.gradeLabel] = el;
+                  }}
+                  className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50"
+                >
                   <div className="px-3 py-2 bg-slate-50 text-sm font-semibold text-slate-700">{group.gradeLabel}</div>
                   <ul className="divide-y divide-slate-100">
                     {group.list.map((r) => {
                       const submitted = !!String(r.lastSubmittedAt ?? '').trim();
                       return (
-                        <li key={`${group.gradeLabel}_${r.className}`} className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 bg-white">
+                        <li key={`${group.gradeLabel}_${r.className}`} className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 bg-slate-50">
                           <span className={`font-medium ${submitted ? 'text-slate-900' : 'text-slate-400'}`}>{r.className}</span>
                           <span className={`text-xs sm:text-right tabular-nums ${submitted ? 'text-slate-600' : 'text-slate-400'}`}>
                             {submitted ? `最後送出：${formatSubmittedAtTw(r.lastSubmittedAt)}` : '尚未填報'}
