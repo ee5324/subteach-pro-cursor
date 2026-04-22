@@ -6,6 +6,21 @@ import { onAuthStateChanged, signInWithGoogle } from '../services/auth';
 import { getExamCampaigns, getExamSubmitProgressForCampaign } from '../services/api';
 import { buildExamSubmitFormHashUrl } from '../utils/publicExamRoutes';
 
+function gradeFromClassName(className: string): number | null {
+  const s = String(className ?? '').trim();
+  const m = s.match(/^(\d{1,2})\d{2}$/);
+  if (m) return Number(m[1]);
+  const digits = s.replace(/\D/g, '');
+  if (digits.length >= 3) return Number(digits.slice(0, digits.length - 2));
+  if (digits.length === 1) return Number(digits);
+  return null;
+}
+
+function classSortNumber(className: string): number {
+  const digits = String(className ?? '').replace(/\D/g, '');
+  return digits ? Number(digits) : Number.MAX_SAFE_INTEGER;
+}
+
 function formatSubmittedAtTw(iso: string): string {
   if (!iso) return '—';
   try {
@@ -37,6 +52,25 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rows, setRows] = useState<ExamSubmitProgressRow[]>([]);
   const [rowsError, setRowsError] = useState<string | null>(null);
+  const groupedRows = useMemo(() => {
+    const groups = new Map<string, ExamSubmitProgressRow[]>();
+    rows.forEach((r) => {
+      const grade = gradeFromClassName(r.className);
+      const key = grade == null ? '未分類' : `${grade}年級`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(r);
+    });
+    return [...groups.entries()]
+      .sort((a, b) => {
+        if (a[0] === '未分類') return 1;
+        if (b[0] === '未分類') return -1;
+        return Number(a[0].replace('年級', '')) - Number(b[0].replace('年級', ''));
+      })
+      .map(([gradeLabel, list]) => ({
+        gradeLabel,
+        list: [...list].sort((a, b) => classSortNumber(a.className) - classSortNumber(b.className)),
+      }));
+  }, [rows]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged((u) => {
@@ -169,7 +203,15 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
           <h2 className="font-semibold text-slate-800">已提報班級</h2>
-          <p className="text-xs text-slate-500">依「最後送出時間」新到舊排序。</p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
+            <div className="font-semibold text-slate-800">狀態說明</div>
+            <div>
+              <span className="font-medium text-slate-900">黑色文字</span>：已填報（有最後送出時間）
+            </div>
+            <div>
+              <span className="font-medium text-slate-400">灰色文字</span>：未填報（尚無送出時間）
+            </div>
+          </div>
           {rowsError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{rowsError}</div>}
           {rowsLoading ? (
             <div className="flex items-center gap-2 text-slate-600 text-sm py-4">
@@ -180,14 +222,26 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
               所選活動尚無可顯示的提報紀錄。若教學組確認主檔已有舊資料，請於管理端「段考提報」按「同步進度列」補寫進度後再重新整理本頁。
             </p>
           ) : (
-            <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
-              {rows.map((r) => (
-                <li key={r.className} className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 bg-white">
-                  <span className="font-medium text-slate-800">{r.className}</span>
-                  <span className="text-xs text-slate-500 sm:text-right tabular-nums">最後送出：{formatSubmittedAtTw(r.lastSubmittedAt)}</span>
-                </li>
+            <div className="space-y-3">
+              {groupedRows.map((group) => (
+                <div key={group.gradeLabel} className="border border-slate-100 rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-50 text-sm font-semibold text-slate-700">{group.gradeLabel}</div>
+                  <ul className="divide-y divide-slate-100">
+                    {group.list.map((r) => {
+                      const submitted = !!String(r.lastSubmittedAt ?? '').trim();
+                      return (
+                        <li key={`${group.gradeLabel}_${r.className}`} className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 bg-white">
+                          <span className={`font-medium ${submitted ? 'text-slate-900' : 'text-slate-400'}`}>{r.className}</span>
+                          <span className={`text-xs sm:text-right tabular-nums ${submitted ? 'text-slate-600' : 'text-slate-400'}`}>
+                            {submitted ? `最後送出：${formatSubmittedAtTw(r.lastSubmittedAt)}` : '尚未填報'}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>
