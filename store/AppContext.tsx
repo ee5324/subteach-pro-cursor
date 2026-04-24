@@ -199,6 +199,12 @@ function maskPhone(raw: string | undefined): string {
   return `${s.slice(0, 1)}***${s.slice(-1)}`;
 }
 
+function maskTeacherName(raw: string | undefined): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  return `${s.slice(0, 1)}**`;
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -251,7 +257,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const teachersForView = useMemo(() => {
     if (!isViewOnlyMode) return teachers;
-    return teachers.map((t) => ({ ...t, phone: maskPhone(t.phone) }));
+    return teachers.map((t) => ({ ...t, name: maskTeacherName(t.name), phone: maskPhone(t.phone) }));
   }, [teachers, isViewOnlyMode]);
 
   const publicBoardApplicationsForView = useMemo(() => {
