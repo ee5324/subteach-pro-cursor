@@ -122,6 +122,8 @@ interface AppContextType {
   subteachAllowedUsers: SubteachAllowedUser[];
   /** 是否為代課系統管理員（可管理白名單） */
   isSubteachAdmin: boolean;
+  /** 參觀模式：僅可檢視，不可修改任何資料 */
+  isViewOnlyMode: boolean;
   addSubteachAllowedUser: (email: string, role: 'admin' | 'user', displayName?: string) => Promise<void>;
   updateSubteachAllowedUser: (email: string, data: Partial<Pick<SubteachAllowedUser, 'enabled' | 'role' | 'displayName' | 'linkedTeacherId'>>) => Promise<void>;
   removeSubteachAllowedUser: (email: string) => Promise<void>;
@@ -186,6 +188,17 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function maskPhone(raw: string | undefined): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  const digits = s.replace(/\D/g, '');
+  if (digits.length >= 8) {
+    return `${s.slice(0, 3)}****${s.slice(-3)}`;
+  }
+  if (s.length <= 2) return '*'.repeat(s.length);
+  return `${s.slice(0, 1)}***${s.slice(-1)}`;
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -230,6 +243,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentUser.email === 'y.chengju@gmail.com' // 指定管理員，規則與 firestore.rules 一致
     )
   );
+  const isViewOnlyMode = Boolean(
+    currentUser?.email &&
+      !isSubteachAdmin &&
+      subteachAllowedUsers.find((u) => u.email === currentUser.email)?.role === 'user'
+  );
+
+  const teachersForView = useMemo(() => {
+    if (!isViewOnlyMode) return teachers;
+    return teachers.map((t) => ({ ...t, phone: maskPhone(t.phone) }));
+  }, [teachers, isViewOnlyMode]);
+
+  const publicBoardApplicationsForView = useMemo(() => {
+    if (!isViewOnlyMode) return publicBoardApplications;
+    return publicBoardApplications.map((a) => ({ ...a, phone: maskPhone(a.phone) }));
+  }, [publicBoardApplications, isViewOnlyMode]);
 
   // --- Auth Listener ---
   useEffect(() => {
@@ -1349,12 +1377,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await deleteDoc(doc(db, 'subteach_allowed_users', normalizedEmail));
   };
 
-  const value = {
+  const valueBase: AppContextType = {
     currentUser,
-    teachers, records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents, 
-    semesters, activeSemesterId, subPool, substituteBusyBlocks, languagePayrolls, substituteApplications, publicBoardApplications, teacherLeaveRequests,
+    teachers: teachersForView,
+    records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents,
+    semesters, activeSemesterId, subPool, substituteBusyBlocks, languagePayrolls, substituteApplications, publicBoardApplications: publicBoardApplicationsForView, teacherLeaveRequests,
     loading,
-    notAllowed, subteachAllowedUsers, isSubteachAdmin, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser,
+    notAllowed, subteachAllowedUsers, isSubteachAdmin, isViewOnlyMode, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser,
     updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest,
     addTeacher, updateTeacher, setAllTeachers, deleteTeacher, renameTeacher, syncAllPublicTeacherSchedules, 
     addRecord, updateRecord, deleteRecord, updateOvertimeRecord, addActivity, updateActivity, deleteActivity, 
@@ -1367,6 +1396,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addLanguagePayroll, updateLanguagePayroll, deleteLanguagePayroll,
     loadFromGas, migrateToFirebase, syncToPublicBoard, releaseVacanciesToTier2, checkGasConnection,
   };
+
+  const viewOnlyRejected = async () => {
+    throw new Error('目前為參觀模式，僅可檢視，無法新增、修改或刪除資料。');
+  };
+
+  const value: AppContextType = isViewOnlyMode
+    ? {
+        ...valueBase,
+        addSubteachAllowedUser: viewOnlyRejected as AppContextType['addSubteachAllowedUser'],
+        updateSubteachAllowedUser: viewOnlyRejected as AppContextType['updateSubteachAllowedUser'],
+        removeSubteachAllowedUser: viewOnlyRejected as AppContextType['removeSubteachAllowedUser'],
+        updateTeacherLeaveRequestStatus: viewOnlyRejected as AppContextType['updateTeacherLeaveRequestStatus'],
+        deleteTeacherLeaveRequest: viewOnlyRejected as AppContextType['deleteTeacherLeaveRequest'],
+        deleteSubstituteApplication: viewOnlyRejected as AppContextType['deleteSubstituteApplication'],
+        deletePublicBoardApplication: viewOnlyRejected as AppContextType['deletePublicBoardApplication'],
+        approveSubstituteApplication: viewOnlyRejected as AppContextType['approveSubstituteApplication'],
+        addTeacher: viewOnlyRejected as AppContextType['addTeacher'],
+        updateTeacher: viewOnlyRejected as AppContextType['updateTeacher'],
+        setAllTeachers: viewOnlyRejected as AppContextType['setAllTeachers'],
+        deleteTeacher: viewOnlyRejected as AppContextType['deleteTeacher'],
+        renameTeacher: viewOnlyRejected as AppContextType['renameTeacher'],
+        syncAllPublicTeacherSchedules: viewOnlyRejected as AppContextType['syncAllPublicTeacherSchedules'],
+        addRecord: viewOnlyRejected as AppContextType['addRecord'],
+        updateRecord: viewOnlyRejected as AppContextType['updateRecord'],
+        deleteRecord: viewOnlyRejected as AppContextType['deleteRecord'],
+        updateOvertimeRecord: viewOnlyRejected as AppContextType['updateOvertimeRecord'],
+        addActivity: viewOnlyRejected as AppContextType['addActivity'],
+        updateActivity: viewOnlyRejected as AppContextType['updateActivity'],
+        deleteActivity: viewOnlyRejected as AppContextType['deleteActivity'],
+        updateFixedOvertimeConfig: viewOnlyRejected as AppContextType['updateFixedOvertimeConfig'],
+        removeFixedOvertimeConfig: viewOnlyRejected as AppContextType['removeFixedOvertimeConfig'],
+        addGradeEvent: viewOnlyRejected as AppContextType['addGradeEvent'],
+        removeGradeEvent: viewOnlyRejected as AppContextType['removeGradeEvent'],
+        addSemester: viewOnlyRejected as AppContextType['addSemester'],
+        updateSemester: viewOnlyRejected as AppContextType['updateSemester'],
+        removeSemester: viewOnlyRejected as AppContextType['removeSemester'],
+        setSemesterActive: viewOnlyRejected as AppContextType['setSemesterActive'],
+        updateSettings: viewOnlyRejected as AppContextType['updateSettings'],
+        upsertSalaryGrades: viewOnlyRejected as AppContextType['upsertSalaryGrades'],
+        seedSalaryGradesFromBuiltIn: viewOnlyRejected as AppContextType['seedSalaryGradesFromBuiltIn'],
+        addHoliday: viewOnlyRejected as AppContextType['addHoliday'],
+        removeHoliday: viewOnlyRejected as AppContextType['removeHoliday'],
+        addToSubPool: viewOnlyRejected as AppContextType['addToSubPool'],
+        removeFromSubPool: viewOnlyRejected as AppContextType['removeFromSubPool'],
+        updateSubPoolItem: viewOnlyRejected as AppContextType['updateSubPoolItem'],
+        addSubstituteBusyBlock: viewOnlyRejected as AppContextType['addSubstituteBusyBlock'],
+        deleteSubstituteBusyBlock: viewOnlyRejected as AppContextType['deleteSubstituteBusyBlock'],
+        addLanguagePayroll: viewOnlyRejected as AppContextType['addLanguagePayroll'],
+        updateLanguagePayroll: viewOnlyRejected as AppContextType['updateLanguagePayroll'],
+        deleteLanguagePayroll: viewOnlyRejected as AppContextType['deleteLanguagePayroll'],
+        loadFromGas: viewOnlyRejected as AppContextType['loadFromGas'],
+        migrateToFirebase: viewOnlyRejected as AppContextType['migrateToFirebase'],
+        syncToPublicBoard: viewOnlyRejected as AppContextType['syncToPublicBoard'],
+        releaseVacanciesToTier2: viewOnlyRejected as AppContextType['releaseVacanciesToTier2'],
+      }
+    : valueBase;
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

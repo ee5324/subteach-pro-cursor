@@ -3,10 +3,12 @@ import Sidebar from './components/Sidebar';
 import FloatingCalculator from './components/FloatingCalculator';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { useAppStore } from './store/AppContext';
 
 const Layout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const { isViewOnlyMode } = useAppStore();
   /** 教學組事務為內建側欄，隱藏主站 Sidebar，避免雙層選單 */
   const isEduTrackShell = location.pathname === '/edutrack';
   /** 薪水幹事查詢（#/teacher-portal）：精簡版面，隱藏主站 Sidebar */
@@ -74,6 +76,11 @@ const Layout: React.FC = () => {
             </Link>
             <span className="text-slate-300">|</span>
             <span className="text-slate-600">教學組事務（功能選單見左側）</span>
+          </div>
+        )}
+        {isViewOnlyMode && (
+          <div className="shrink-0 px-4 py-2 text-sm border-b border-amber-200 bg-amber-50 text-amber-900">
+            參觀模式：僅可檢視資料，無法新增、修改或刪除；電話等個資已遮蔽。
           </div>
         )}
         <div className="flex-1 min-h-0 overflow-auto w-full">
