@@ -1457,6 +1457,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-3 py-2 text-left">班級</th>
+                  <th className="px-3 py-2 text-left">提報人數</th>
                   <th className="px-3 py-2 text-left">最後送出</th>
                   <th className="px-3 py-2 text-left">送出者</th>
                   <th className="px-3 py-2 text-left">鎖定</th>
@@ -1471,6 +1472,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                     <React.Fragment key={s.id}>
                       <tr>
                         <td className="px-3 py-2 font-medium">{s.className}</td>
+                        <td className="px-3 py-2">{students.length}</td>
                         <td className="px-3 py-2 font-mono text-xs">{formatDateTimeInTaipei(s.submittedAt)}</td>
                         <td className="px-3 py-2 font-mono text-xs">{s.submittedByEmail}</td>
                         <td className="px-3 py-2">{s.locked ? '是' : '否'}</td>
@@ -1502,7 +1504,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                       </tr>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={5} className="px-3 py-3 bg-slate-50/60">
+                          <td colSpan={6} className="px-3 py-3 bg-slate-50/60">
                             {students.length === 0 ? (
                               <div className="text-xs text-slate-500">此班目前無學生提報明細。</div>
                             ) : (
@@ -1529,7 +1531,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                 })}
                 {submissions.length === 0 && (
                   <tr>
-                    <td className="px-3 py-3 text-slate-500 text-sm" colSpan={5}>
+                    <td className="px-3 py-3 text-slate-500 text-sm" colSpan={6}>
                       尚無提報資料
                     </td>
                   </tr>
