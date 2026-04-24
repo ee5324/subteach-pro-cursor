@@ -1468,6 +1468,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                 {submissionsByClass.map((s) => {
                   const isExpanded = expandedSubmissionId === s.id;
                   const students = [...(s.students ?? [])];
+                  const isLowSubmissionCount = students.length < 3;
                   return (
                     <React.Fragment key={s.id}>
                       <tr>
@@ -1485,6 +1486,9 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                             >
                               {isExpanded ? '收合名單' : '查看名單'}
                             </button>
+                            {isLowSubmissionCount && (
+                              <span className="text-xs text-red-600 font-medium">提報人數低於 3 人</span>
+                            )}
                             {isAdmin && s.locked && (
                               <button type="button" onClick={() => unlockOne(s.id)} className="px-2 py-1 rounded text-xs bg-amber-600 text-white hover:bg-amber-700 inline-flex items-center gap-1">
                                 <Unlock size={14} /> 解鎖
