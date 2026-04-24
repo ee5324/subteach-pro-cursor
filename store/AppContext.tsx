@@ -259,6 +259,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return publicBoardApplications.map((a) => ({ ...a, phone: maskPhone(a.phone) }));
   }, [publicBoardApplications, isViewOnlyMode]);
 
+  const substituteApplicationsForView = useMemo(() => {
+    if (!isViewOnlyMode) return substituteApplications;
+    return substituteApplications.map((a) => ({ ...a, phone: maskPhone(a.phone) }));
+  }, [substituteApplications, isViewOnlyMode]);
+
   // --- Auth Listener ---
   useEffect(() => {
     if (!auth) {
@@ -1381,7 +1386,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     currentUser,
     teachers: teachersForView,
     records, overtimeRecords, specialActivities, salaryGrades, settings, holidays, fixedOvertimeConfig, gradeEvents,
-    semesters, activeSemesterId, subPool, substituteBusyBlocks, languagePayrolls, substituteApplications, publicBoardApplications: publicBoardApplicationsForView, teacherLeaveRequests,
+    semesters, activeSemesterId, subPool, substituteBusyBlocks, languagePayrolls, substituteApplications: substituteApplicationsForView, publicBoardApplications: publicBoardApplicationsForView, teacherLeaveRequests,
     loading,
     notAllowed, subteachAllowedUsers, isSubteachAdmin, isViewOnlyMode, addSubteachAllowedUser, updateSubteachAllowedUser, removeSubteachAllowedUser,
     updateTeacherLeaveRequestStatus, deleteTeacherLeaveRequest,
