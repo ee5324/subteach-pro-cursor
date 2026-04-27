@@ -115,6 +115,14 @@ const LanguageElectiveRoster: React.FC = () => {
     return filteredByClass.filter(({ i }) => (snap[i]?.language ?? '') === languageFilter);
   }, [filteredByClass, languageFilter, filterSnapshot, students.length]);
 
+  /** 目前畫面可見列的原始索引（供全選與批次操作） */
+  const visibleIndices = useMemo(() => filteredByLanguage.map(({ i }) => i), [filteredByLanguage]);
+  const selectedVisibleCount = useMemo(
+    () => visibleIndices.filter((i) => selectedIds.has(i)).length,
+    [visibleIndices, selectedIds]
+  );
+  const allVisibleSelected = visibleIndices.length > 0 && selectedVisibleCount === visibleIndices.length;
+
   /** 依班級分區（以 filterSnapshot 之班級分區，顯示用 students[i]） */
   const groupedByClass = useMemo(() => {
     const snap = filterSnapshot.length === students.length ? filterSnapshot : students;
@@ -355,8 +363,23 @@ const LanguageElectiveRoster: React.FC = () => {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === students.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(students.map((_, i) => i)));
+    if (visibleIndices.length === 0) {
+      setSelectedIds(new Set());
+      return;
+    }
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIndices.forEach((i) => next.delete(i));
+        return next;
+      });
+      return;
+    }
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      visibleIndices.forEach((i) => next.add(i));
+      return next;
+    });
   };
 
   const applyBatchLanguage = () => {
@@ -522,6 +545,12 @@ const LanguageElectiveRoster: React.FC = () => {
         </div>
       </div>
 
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* 尚無名單時：可新增第一筆或引導至系統設定匯入 */}
       {!hasRoster && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -632,9 +661,11 @@ const LanguageElectiveRoster: React.FC = () => {
               onClick={selectAll}
               className="text-sm font-medium text-amber-800 hover:underline"
             >
-              {selectedIds.size === students.length ? '取消全選' : '全選'}
+              {allVisibleSelected ? '取消全選（目前篩選）' : '全選（目前篩選）'}
             </button>
-            <span className="text-amber-700 text-sm">已選 {selectedIds.size} 人</span>
+            <span className="text-amber-700 text-sm">
+              已選 {selectedIds.size} 人（目前篩選 {selectedVisibleCount}/{visibleIndices.length}）
+            </span>
             <select
               value={batchLanguage}
               onChange={(e) => setBatchLanguage(e.target.value)}

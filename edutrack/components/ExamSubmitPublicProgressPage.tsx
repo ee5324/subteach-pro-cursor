@@ -52,6 +52,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rows, setRows] = useState<ExamSubmitProgressRow[]>([]);
   const [rowsError, setRowsError] = useState<string | null>(null);
+  const [campaignHint, setCampaignHint] = useState<string | null>(null);
   const [expectedClassNames, setExpectedClassNames] = useState<string[]>([]);
   const [expectedClassHint, setExpectedClassHint] = useState<string | null>(null);
   const gradeSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -171,12 +172,24 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
   }, [userEmail]);
 
   useEffect(() => {
-    if (campaignFromUrl) setCampaignId(campaignFromUrl);
+    if (!campaignFromUrl) return;
+    setCampaignId(campaignFromUrl);
   }, [campaignFromUrl]);
 
   useEffect(() => {
-    if (campaignFromUrl) return;
-    if (campaigns.length === 0 || campaignId) return;
+    if (campaigns.length === 0) return;
+    if (campaignFromUrl) {
+      const exists = campaigns.some((c) => c.id === campaignFromUrl);
+      if (exists) {
+        setCampaignHint(null);
+        return;
+      }
+      const first = campaigns[0]?.id;
+      if (first && campaignId !== first) setCampaignId(first);
+      setCampaignHint('指定的活動連結不存在或已失效，已自動切換到最新活動。');
+      return;
+    }
+    if (campaignId) return;
     const first = campaigns[0]?.id;
     if (first) setCampaignId(first);
   }, [campaigns, campaignId, campaignFromUrl]);
@@ -226,6 +239,9 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
           {examMetaError && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{examMetaError}</div>
           )}
+          {campaignHint && (
+            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">{campaignHint}</div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
@@ -265,7 +281,7 @@ const ExamSubmitPublicProgressPage: React.FC = () => {
             <div className="flex items-center gap-2 text-slate-600 text-sm py-4">
               <Loader2 size={18} className="animate-spin" /> 讀取中…
             </div>
-          ) : rows.length === 0 ? (
+          ) : mergedRows.length === 0 ? (
             <p className="text-sm text-slate-500 py-2">
               所選活動尚無可顯示的提報紀錄。若教學組確認主檔已有舊資料，請於管理端「段考提報」按「同步進度列」補寫進度後再重新整理本頁。
             </p>
