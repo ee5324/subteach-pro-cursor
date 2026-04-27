@@ -43,8 +43,19 @@ function saveGlobalExternalLink(url: string): void {
   }
 }
 
-function isNewImmigrantLanguage(language: string): boolean {
-  return /新住民/.test(String(language ?? '').trim());
+const EXCLUDED_LANGUAGE_PATTERNS = [
+  /原住民語/,
+  /原民語/,
+  /族語/,
+  /手語/,
+  /客語/,
+  /閩南語/,
+];
+
+function isTargetLanguageForGrouping(language: string): boolean {
+  const lang = String(language ?? '').trim();
+  if (!lang) return false;
+  return !EXCLUDED_LANGUAGE_PATTERNS.some((re) => re.test(lang));
 }
 
 function isSixthGradeClass(className: string): boolean {
@@ -98,7 +109,7 @@ const NewImmigrantLanguageGroupingPage: React.FC = () => {
   const languageGroups = useMemo(() => {
     const map = new Map<string, LanguageElectiveStudent[]>();
     students
-      .filter((s) => isNewImmigrantLanguage(s.language) && !isSixthGradeClass(s.className))
+      .filter((s) => isTargetLanguageForGrouping(s.language) && !isSixthGradeClass(s.className))
       .forEach((s) => {
         const language = String(s.language ?? '').trim();
         if (!map.has(language)) map.set(language, []);
@@ -156,9 +167,9 @@ const NewImmigrantLanguageGroupingPage: React.FC = () => {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">新住民語能力分組</h2>
+            <h2 className="text-lg font-semibold text-slate-800">語言教師能力分組（非本土語）</h2>
             <p className="text-xs text-slate-500 mt-1">
-              依「選修語言」分群，供語言教師填寫能力分組與冊別。可設定各語言之外連分組網址，快速前往協作。
+              從學生名單排除原住民語／手語／客語／閩南語與六年級後，依「目前選修語言」分群，供對應語言教師填寫能力分組與冊別。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -172,7 +183,7 @@ const NewImmigrantLanguageGroupingPage: React.FC = () => {
           </div>
         </div>
         <div className="text-xs text-slate-600 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-          建議流程：先按語言別設定「外連分組頁」→ 語言教師於外部頁面完成能力分組討論 → 回到此頁填「能力分組／冊別」並儲存。
+          建議流程：先按語言別彙整名單（例如菲律賓語→菲律賓語教師）→ 需要時開啟外連分組頁討論 → 回到此頁填「能力分組／冊別」並儲存。
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
           <div className="text-sm font-medium text-slate-800">全頁外連分組頁</div>
@@ -228,7 +239,7 @@ const NewImmigrantLanguageGroupingPage: React.FC = () => {
             <Loader2 size={18} className="animate-spin" /> 載入名單中…
           </div>
         ) : languageGroups.length === 0 ? (
-          <p className="text-sm text-slate-500 py-4">此學年度目前沒有「新住民語」選修學生。</p>
+          <p className="text-sm text-slate-500 py-4">此學年度目前沒有符合條件的學生（已排除原住民語／手語／客語／閩南語與六年級）。</p>
         ) : (
           <div className="space-y-4">
             {languageGroups.map((group) => {
