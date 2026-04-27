@@ -6,6 +6,7 @@ import { getLanguageElectiveRoster, saveLanguageElectiveRoster } from '../servic
 type LanguageLinkMap = Record<string, string>;
 
 const EXTERNAL_LINKS_STORAGE_KEY = 'edutrack.newImmigrantLanguage.externalLinks.v1';
+const GLOBAL_EXTERNAL_LINK_STORAGE_KEY = 'edutrack.newImmigrantLanguage.externalLink.global.v1';
 
 function loadExternalLinks(): LanguageLinkMap {
   try {
@@ -21,6 +22,22 @@ function loadExternalLinks(): LanguageLinkMap {
 function saveExternalLinks(map: LanguageLinkMap): void {
   try {
     localStorage.setItem(EXTERNAL_LINKS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore localStorage errors
+  }
+}
+
+function loadGlobalExternalLink(): string {
+  try {
+    return String(localStorage.getItem(GLOBAL_EXTERNAL_LINK_STORAGE_KEY) ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function saveGlobalExternalLink(url: string): void {
+  try {
+    localStorage.setItem(GLOBAL_EXTERNAL_LINK_STORAGE_KEY, url);
   } catch {
     // ignore localStorage errors
   }
@@ -51,6 +68,7 @@ const NewImmigrantLanguageGroupingPage: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [externalLinks, setExternalLinks] = useState<LanguageLinkMap>(() => loadExternalLinks());
+  const [globalExternalLink, setGlobalExternalLink] = useState<string>(() => loadGlobalExternalLink());
   const [languageClassSettings, setLanguageClassSettings] = useState<any[] | undefined>(undefined);
 
   useEffect(() => {
@@ -155,6 +173,34 @@ const NewImmigrantLanguageGroupingPage: React.FC = () => {
         </div>
         <div className="text-xs text-slate-600 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           建議流程：先按語言別設定「外連分組頁」→ 語言教師於外部頁面完成能力分組討論 → 回到此頁填「能力分組／冊別」並儲存。
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+          <div className="text-sm font-medium text-slate-800">全頁外連分組頁</div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={globalExternalLink}
+              onChange={(e) => {
+                const v = e.target.value;
+                setGlobalExternalLink(v);
+                saveGlobalExternalLink(v);
+              }}
+              placeholder="可貼共用分組頁連結（如 Google Sheet）"
+              className="flex-1 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+            />
+            <a
+              href={globalExternalLink || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`px-3 py-1.5 rounded-lg text-sm inline-flex items-center justify-center gap-1.5 border ${
+                globalExternalLink
+                  ? 'bg-slate-800 border-slate-800 text-white hover:bg-slate-900'
+                  : 'bg-slate-100 border-slate-200 text-slate-400 pointer-events-none'
+              }`}
+            >
+              <ExternalLink size={14} />
+              開啟外連分組頁
+            </a>
+          </div>
         </div>
         {(message || error) && (
           <div className={`rounded-lg border px-3 py-2 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
