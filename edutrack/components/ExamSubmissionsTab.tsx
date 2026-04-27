@@ -159,6 +159,8 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   /** 提報總覽：刪除前 Modal 確認 */
   const [submissionToDelete, setSubmissionToDelete] = useState<ExamSubmission | null>(null);
+  /** 白名單：刪除前 Modal 確認 */
+  const [whitelistToDeleteEmail, setWhitelistToDeleteEmail] = useState<string | null>(null);
 
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -689,7 +691,6 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
 
   const removeWhitelist = async (email: string) => {
     if (!isAdmin) return;
-    if (!confirm(`確定從段考填報白名單刪除 ${email}？`)) return;
     setErr(null);
     setMsg(null);
     try {
@@ -700,6 +701,12 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
     } catch (e: any) {
       setErr(e?.message || '刪除失敗');
     }
+  };
+
+  const confirmDeleteWhitelistFromModal = () => {
+    const email = String(whitelistToDeleteEmail ?? '').trim();
+    if (!email) return;
+    return removeWhitelist(email);
   };
 
   const unlockOne = async (id: string) => {
@@ -1301,7 +1308,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                           )}
                           <button
                             type="button"
-                            onClick={() => void removeWhitelist(u.email)}
+                                onClick={() => setWhitelistToDeleteEmail(u.email)}
                             className="px-2 py-1 rounded text-xs bg-white border border-red-200 text-red-700 hover:bg-red-50 inline-flex items-center gap-1"
                             title="刪除"
                           >
@@ -1619,6 +1626,25 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
         cancelText="取消"
         onCancel={() => setSubmissionToDelete(null)}
         onConfirm={confirmDeleteSubmissionFromModal}
+      />
+      <Modal
+        isOpen={!!whitelistToDeleteEmail}
+        type="danger"
+        title="確定刪除此段考填報白名單？"
+        content={
+          whitelistToDeleteEmail ? (
+            <div className="space-y-2">
+              <p>
+                即將刪除白名單帳號 <strong className="text-red-700 font-mono">{whitelistToDeleteEmail}</strong>。
+              </p>
+              <p className="text-sm text-gray-600">刪除後此帳號將無法登入對外段考填報頁，需重新新增才可恢復。</p>
+            </div>
+          ) : null
+        }
+        confirmText="確定刪除"
+        cancelText="取消"
+        onCancel={() => setWhitelistToDeleteEmail(null)}
+        onConfirm={confirmDeleteWhitelistFromModal}
       />
     </div>
   );

@@ -164,6 +164,7 @@ const MobileQueryHub: React.FC = () => {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [salaryTeacherQuery, setSalaryTeacherQuery] = useState('');
   const [salaryTeacherId, setSalaryTeacherId] = useState('');
+  const [salaryOpenHint, setSalaryOpenHint] = useState('');
   const [salaryMonth, setSalaryMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -492,8 +493,12 @@ const MobileQueryHub: React.FC = () => {
 
   const openSalaryTab = () => {
     if (!selectedSalaryTeacher || !monthlyBreakdown) return;
+    setSalaryOpenHint('');
     const popup = window.open('', '_blank');
-    if (!popup) return;
+    if (!popup) {
+      setSalaryOpenHint('瀏覽器已阻擋新分頁，請允許彈出視窗後再試。');
+      return;
+    }
     const title = `${selectedSalaryTeacher.name} ${salaryMonth} 薪資整合`;
     const systemUrl = `${window.location.origin}${window.location.pathname}#/`;
     const detailCardsHtml = salaryDetails.length === 0
@@ -824,6 +829,11 @@ const MobileQueryHub: React.FC = () => {
               <ExternalLink size={14} /> 另開分頁顯示
             </button>
           </div>
+          {salaryOpenHint && (
+            <div className="mb-2 text-xs rounded-md px-2.5 py-2 bg-amber-50 border border-amber-200 text-amber-800">
+              {salaryOpenHint}
+            </div>
+          )}
           <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-lg mb-3">
             {filteredSalaryTeachers.map((t) => (
               <button
