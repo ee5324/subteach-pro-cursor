@@ -26,6 +26,8 @@ type YearSnap = {
   name: string;
   language: string;
   languageClass?: string | null;
+  proficiencyGroup?: string | null;
+  booklet?: string | null;
 };
 
 function trimStr(v: unknown): string {
@@ -74,6 +76,8 @@ function yearSnapFromStudent(s: LanguageElectiveStudent): YearSnap {
     name: trimStr(s.name),
     language: trimStr(s.language),
     languageClass: trimStr(s.languageClass) || null,
+    proficiencyGroup: trimStr(s.proficiencyGroup) || null,
+    booklet: trimStr(s.booklet) || null,
   };
 }
 
@@ -89,6 +93,8 @@ export function rowFromPlainProfile(id: string, data: Record<string, unknown>, y
       name: trimStr(y.name),
       language: trimStr(y.language),
       languageClass: trimStr(y.languageClass) || undefined,
+      proficiencyGroup: trimStr(y.proficiencyGroup) || undefined,
+      booklet: trimStr(y.booklet) || undefined,
       studentId: trimStr(data.studentId) || undefined,
       profileDocId: id,
     };
@@ -100,6 +106,8 @@ export function rowFromPlainProfile(id: string, data: Record<string, unknown>, y
       name: trimStr(data.name),
       language: trimStr(data.language),
       languageClass: trimStr(data.languageClass) || undefined,
+      proficiencyGroup: trimStr(data.proficiencyGroup) || undefined,
+      booklet: trimStr(data.booklet) || undefined,
       studentId: trimStr(data.studentId) || undefined,
       profileDocId: id,
     };
@@ -240,6 +248,8 @@ function cloneYears(data: Record<string, unknown> | undefined): Record<string, Y
         name: trimStr((v as YearSnap).name),
         language: trimStr((v as YearSnap).language),
         languageClass: trimStr((v as YearSnap).languageClass) || null,
+        proficiencyGroup: trimStr((v as YearSnap).proficiencyGroup) || null,
+        booklet: trimStr((v as YearSnap).booklet) || null,
       };
     }
   }
@@ -255,6 +265,8 @@ function promoteTopLevelToYears(data: Record<string, unknown>, years: Record<str
     name: trimStr(data.name),
     language: trimStr(data.language),
     languageClass: trimStr(data.languageClass) || null,
+    proficiencyGroup: trimStr(data.proficiencyGroup) || null,
+    booklet: trimStr(data.booklet) || null,
   };
   return years;
 }
@@ -267,6 +279,8 @@ function mergeYearSnapPreferSid(preSnap: YearSnap, sidSnap: YearSnap): YearSnap 
     name: trimStr(sidSnap.name) || trimStr(preSnap.name),
     language: trimStr(sidSnap.language) || trimStr(preSnap.language),
     languageClass: trimStr(sidSnap.languageClass) || trimStr(preSnap.languageClass) || null,
+    proficiencyGroup: trimStr(sidSnap.proficiencyGroup) || trimStr(preSnap.proficiencyGroup) || null,
+    booklet: trimStr(sidSnap.booklet) || trimStr(preSnap.booklet) || null,
   };
 }
 
@@ -276,6 +290,8 @@ const emptyYearSnap = (): YearSnap => ({
   name: "",
   language: "",
   languageClass: null,
+  proficiencyGroup: null,
+  booklet: null,
 });
 
 /**
@@ -318,6 +334,8 @@ export function mergeTwoProfileRawDatas(
     name: topFrom.name,
     language: topFrom.language,
     languageClass: topFrom.languageClass ?? null,
+    proficiencyGroup: topFrom.proficiencyGroup ?? null,
+    booklet: topFrom.booklet ?? null,
     years: mergedYears,
   };
 }
@@ -458,6 +476,8 @@ export async function saveLanguageElectiveRosterBackend(
       name: snap.name,
       language: snap.language,
       languageClass: snap.languageClass ?? null,
+      proficiencyGroup: snap.proficiencyGroup ?? null,
+      booklet: snap.booklet ?? null,
       years,
       updatedAt: serverTimestamp(),
     };
@@ -493,6 +513,8 @@ export async function saveLanguageElectiveRosterBackend(
           name: y0.name,
           language: y0.language,
           languageClass: y0.languageClass ?? null,
+          proficiencyGroup: y0.proficiencyGroup ?? null,
+          booklet: y0.booklet ?? null,
         }
       : {
           academicYear: "",
@@ -501,6 +523,8 @@ export async function saveLanguageElectiveRosterBackend(
           name: "",
           language: "",
           languageClass: null,
+          proficiencyGroup: null,
+          booklet: null,
         };
 
     ops.push((b) =>

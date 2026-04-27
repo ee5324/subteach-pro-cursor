@@ -794,7 +794,17 @@ export function sandboxGetAllLanguageElectiveRosters(): Promise<LanguageElective
 
 export function sandboxSaveLanguageElectiveRoster(
   academicYear: string,
-  students: { className: string; seat: string; name: string; language: string; languageClass?: string; studentId?: string; profileDocId?: string }[],
+  students: {
+    className: string;
+    seat: string;
+    name: string;
+    language: string;
+    languageClass?: string;
+    proficiencyGroup?: string;
+    booklet?: string;
+    studentId?: string;
+    profileDocId?: string;
+  }[],
   languageClassSettings?: LanguageClassSetting[]
 ): Promise<void> {
   applyLanguageElectiveSaveInMemory(store.languageElectiveProfiles, academicYear, students);

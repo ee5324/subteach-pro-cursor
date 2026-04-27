@@ -29,6 +29,10 @@ export interface LanguageElectiveStudent {
   language: string;
   /** 語言班別（對應語言班別設定之名稱） */
   languageClass?: string;
+  /** 新住民語能力分組（例：A組 / 基礎組） */
+  proficiencyGroup?: string;
+  /** 教材冊別（例：第一冊 / Book 2） */
+  booklet?: string;
   /** 學號（有則作為 Firestore 學生主檔 document id） */
   studentId?: string;
   /**

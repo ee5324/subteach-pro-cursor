@@ -55,6 +55,7 @@ const Layout: React.FC<LayoutProps> = ({
       children: [
         { id: 'language-dashboard', label: '語言選修儀表板' },
         { id: 'language-homeroom-notice', label: '導師通知' },
+        { id: 'new-immigrant-grouping', label: '新住民語能力分組' },
         { id: 'attendance', label: '點名單製作' },
       ],
     },

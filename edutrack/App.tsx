@@ -18,6 +18,7 @@ import ExamSubmitPublicPage from './components/ExamSubmitPublicPage';
 import ExamSubmitPublicProgressPage from './components/ExamSubmitPublicProgressPage';
 import { getPublicExamStandaloneMode } from './utils/publicExamRoutes';
 import LanguageHomeroomNotice from './components/LanguageHomeroomNotice';
+import NewImmigrantLanguageGroupingPage from './components/NewImmigrantLanguageGroupingPage';
 import { Settings, Database, CheckCircle, AlertTriangle, Loader2, Archive, Copy, ShieldCheck, KeyRound, BookOpen, Plus, Trash2, Upload, FileSpreadsheet, HelpCircle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -665,6 +666,8 @@ const App: React.FC<{ embedded?: boolean; mobileHub?: boolean }> = ({ embedded, 
         return <LanguageElectiveDashboard />;
       case 'language-homeroom-notice':
         return <LanguageHomeroomNotice />;
+      case 'new-immigrant-grouping':
+        return <NewImmigrantLanguageGroupingPage />;
       case 'attendance':
         return <AttendanceSheetPage />;
       case 'campus-map':
