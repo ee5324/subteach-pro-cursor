@@ -19,6 +19,7 @@ import ExamSubmitPublicProgressPage from './components/ExamSubmitPublicProgressP
 import { getPublicExamStandaloneMode } from './utils/publicExamRoutes';
 import LanguageHomeroomNotice from './components/LanguageHomeroomNotice';
 import NewImmigrantLanguageGroupingPage from './components/NewImmigrantLanguageGroupingPage';
+import VersionUpdatesPage from './components/VersionUpdatesPage';
 import { Settings, Database, CheckCircle, AlertTriangle, Loader2, Archive, Copy, ShieldCheck, KeyRound, BookOpen, Plus, Trash2, Upload, FileSpreadsheet, HelpCircle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -690,6 +691,8 @@ const App: React.FC<{ embedded?: boolean; mobileHub?: boolean }> = ({ embedded, 
         return <ArchiveManager onTasksChange={setArchiveCount} />;
       case 'settings':
         return <SettingsTab currentUser={user} currentAccess={accessUser} />;
+      case 'version-updates':
+        return <VersionUpdatesPage />;
       default:
         return <TodoCalendar />;
     }

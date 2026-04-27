@@ -73,6 +73,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'exam-papers', label: '考卷存檔', icon: FileText },
     { id: 'archive', label: '事項列檔', icon: Archive, badge: archiveCount },
     { id: 'settings', label: '系統設定', icon: Settings },
+    { id: 'version-updates', label: '版本更新', icon: FileText },
   ];
 
   /** 依 activeTab 取得目前頁面標題（含巢狀子項目） */
