@@ -236,6 +236,8 @@ service cloud.firestore {
     match /edutrack_exam_submissions/{id} {
       // 管理端與導師白名單可讀
       allow read: if isEduTrackAllowedUser() || isExamSubmitAllowedUser();
+      // 管理者可直接建立提報（供後臺更正資料）
+      allow create: if isEduTrackAdmin();
       // 導師送出：新建（預設鎖定）
       allow create: if isExamSubmitAllowedUser()
         && request.resource.data.submittedByEmail == request.auth.token.email
@@ -274,6 +276,8 @@ service cloud.firestore {
     // 段考提報進度（僅班級／時間；公開可讀，不含 students／不含提報主檔個資）
     match /edutrack_exam_submit_progress/{id} {
       allow read: if true;
+      // 管理者可直接維護進度列（供後臺更正資料）
+      allow create, update: if isEduTrackAdmin();
       allow create: if isExamSubmitAllowedUser()
         && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt'])
         && request.resource.data.campaignId is string
