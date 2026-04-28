@@ -15,7 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission } from '../types';
+import type { AllowedUser, ExamAwardsConfig, ExamCampaign, ExamSubmitAllowedUser, ExamSubmission, ExamSubmissionStudent, LanguageElectiveStudent } from '../types';
 import type { AwardStudent } from '../types';
 import ExamAwardSettingsEditor from './ExamAwardSettingsEditor';
 import Modal from './Modal';
@@ -27,7 +27,9 @@ import {
   getExamSubmitAllowedUsers,
   getExamSubmissions,
   getHomeroomTeachersForExamWhitelist,
+  getLanguageElectiveRoster,
   saveExamAwardsConfig,
+  saveExamSubmission,
   setExamSubmitAllowedUser,
   deleteExamSubmitAllowedUser,
   deleteExamSubmission,
@@ -35,6 +37,7 @@ import {
   updateExamCampaign,
   syncExamSubmitProgressFromSubmissions,
 } from '../services/api';
+import { awardKeyToDisplayLabel, dedupeAwardKeys, findAwardKeysWithMultipleStudents, findStudentCategoryMultiSelectConflicts } from '../utils/examAwardGrade';
 
 interface Props {
   currentAccess: AllowedUser | null;
@@ -80,6 +83,7 @@ function formatDateTimeInTaipei(value: string | undefined | null): string {
 }
 
 const normalizeExamClassKey = (s: string | undefined | null) => String(s ?? '').trim();
+const buildAwardKey = (categoryId: string, itemId: string) => `${categoryId}:${itemId}`;
 
 const EXAM_TO_AWARDS_DRAFT_KEY = 'edutrack.examSubmissions.awardsDraft';
 
@@ -157,6 +161,12 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
 
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [roster, setRoster] = useState<LanguageElectiveStudent[]>([]);
+  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null);
+  const [editSelected, setEditSelected] = useState<Record<string, ExamSubmissionStudent>>({});
+  const [editQuery, setEditQuery] = useState('');
+  const [savingCorrection, setSavingCorrection] = useState(false);
   /** 提報總覽：刪除前 Modal 確認 */
   const [submissionToDelete, setSubmissionToDelete] = useState<ExamSubmission | null>(null);
   /** 白名單：刪除前 Modal 確認 */
@@ -172,6 +182,39 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
       ),
     [submissions]
   );
+  const editingSubmission = useMemo(
+    () => submissionsByClass.find((s) => s.id === editingSubmissionId) ?? null,
+    [submissionsByClass, editingSubmissionId]
+  );
+  const editSelectedList = useMemo(
+    () =>
+      (Object.values(editSelected) as ExamSubmissionStudent[]).sort((a, b) =>
+        String(a.seat ?? '').localeCompare(String(b.seat ?? ''), undefined, { numeric: true })
+      ),
+    [editSelected]
+  );
+  const editAwardDuplicateConflicts = useMemo(
+    () => findAwardKeysWithMultipleStudents(editSelectedList),
+    [editSelectedList]
+  );
+  const editStudentCategoryConflicts = useMemo(
+    () => findStudentCategoryMultiSelectConflicts(editSelectedList),
+    [editSelectedList]
+  );
+  const editClassStudents = useMemo(() => {
+    const cls = String(editingSubmission?.className ?? '').trim();
+    if (!cls) return [];
+    return roster.filter((s) => String(s.className ?? '').trim() === cls);
+  }, [roster, editingSubmission?.className]);
+  const editSuggestions = useMemo(() => {
+    const q = editQuery.trim();
+    if (!q) return [];
+    const isSeat = /^\d+$/.test(q);
+    return editClassStudents
+      .filter((s) => (isSeat ? String(s.seat ?? '').includes(q) : String(s.name ?? '').includes(q)))
+      .slice(0, 20)
+      .map((s) => ({ className: s.className, seat: s.seat, name: s.name }));
+  }, [editClassStudents, editQuery]);
 
   /** 白名單應填班級 vs 實際提報：找出尚未送出或送出但無學生明細者 */
   const examSubmissionFillMonitor = useMemo(() => {
@@ -383,6 +426,19 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
   useEffect(() => {
     if (selectedCampaignId) reloadSubmissions(selectedCampaignId);
   }, [selectedCampaignId]);
+
+  useEffect(() => {
+    const year = String(selectedCampaign?.academicYear ?? '').trim();
+    if (!year) {
+      setRoster([]);
+      return;
+    }
+    setRosterLoading(true);
+    getLanguageElectiveRoster(year)
+      .then((doc) => setRoster(doc?.students ?? []))
+      .catch(() => setRoster([]))
+      .finally(() => setRosterLoading(false));
+  }, [selectedCampaign?.academicYear]);
 
   useEffect(() => {
     setFillMonitorExpanded(false);
@@ -748,6 +804,122 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
     const cat = awardsConfig.categories.find((c) => c.id === catId);
     const item = cat?.items?.find((it) => it.id === itemId);
     return `${cat?.label ?? catId}・${item?.label ?? itemId}`;
+  };
+
+  const startEditSubmission = (s: ExamSubmission) => {
+    const next: Record<string, ExamSubmissionStudent> = {};
+    for (const stu of s.students ?? []) {
+      const key = `${stu.className}_${stu.seat}`;
+      next[key] = {
+        className: String(stu.className ?? s.className ?? '').trim(),
+        seat: String(stu.seat ?? '').trim(),
+        name: String(stu.name ?? '').trim(),
+        awards: dedupeAwardKeys(Array.isArray(stu.awards) ? stu.awards : []),
+      };
+    }
+    setEditSelected(next);
+    setEditQuery('');
+    setEditingSubmissionId(s.id);
+    setErr(null);
+    setMsg(null);
+  };
+
+  const cancelEditSubmission = () => {
+    setEditingSubmissionId(null);
+    setEditSelected({});
+    setEditQuery('');
+  };
+
+  const addStudentToEdit = (s: { className: string; seat: string; name: string }) => {
+    const key = `${s.className}_${s.seat}`;
+    setEditSelected((prev) => {
+      if (prev[key]) return prev;
+      return {
+        ...prev,
+        [key]: { className: String(s.className ?? '').trim(), seat: String(s.seat ?? '').trim(), name: String(s.name ?? '').trim(), awards: [] },
+      };
+    });
+    setEditQuery('');
+  };
+
+  const removeStudentFromEdit = (stuKey: string) => {
+    setEditSelected((prev) => {
+      const next = { ...prev };
+      delete next[stuKey];
+      return next;
+    });
+  };
+
+  const toggleEditAward = (stuKey: string, awardKey: string) => {
+    setEditSelected((prev) => {
+      const row = prev[stuKey];
+      if (!row) return prev;
+      const has = row.awards.includes(awardKey);
+      if (has) return { ...prev, [stuKey]: { ...row, awards: row.awards.filter((x) => x !== awardKey) } };
+
+      for (const [k, stu] of Object.entries(prev) as [string, ExamSubmissionStudent][]) {
+        if (k === stuKey) continue;
+        if (stu.awards.includes(awardKey)) {
+          const label = awardKeyToDisplayLabel(awardKey, awardsConfig);
+          setErr(`「${label}」已由 ${stu.seat}號 ${stu.name} 勾選，同一細項僅限一位學生。`);
+          return prev;
+        }
+      }
+      const idx = awardKey.indexOf(':');
+      if (idx > 0) {
+        const catId = awardKey.slice(0, idx);
+        const existed = row.awards.find((k) => k.startsWith(`${catId}:`) && k !== awardKey);
+        if (existed) {
+          const catLabel = awardsConfig.categories.find((c) => c.id === catId)?.label ?? catId;
+          setErr(`同一學生在「${catLabel}」類別僅能勾選一項。`);
+          return prev;
+        }
+      }
+      return { ...prev, [stuKey]: { ...row, awards: [...row.awards, awardKey] } };
+    });
+  };
+
+  const saveSubmissionCorrection = async () => {
+    if (!isAdmin || !editingSubmission || !selectedCampaignId) return;
+    const cls = String(editingSubmission.className ?? '').trim();
+    if (!cls) return;
+
+    const studentsPayload = editSelectedList.map((stu) => ({
+      ...stu,
+      className: cls,
+      awards: dedupeAwardKeys(stu.awards),
+    }));
+    const dup = findAwardKeysWithMultipleStudents(studentsPayload);
+    if (dup.length > 0) {
+      setErr('同一獎項細項不可重複勾選於多位學生，請先調整。');
+      return;
+    }
+    const catDup = findStudentCategoryMultiSelectConflicts(studentsPayload);
+    if (catDup.length > 0) {
+      setErr('同一學生在同一類別僅能勾選一項，請先調整。');
+      return;
+    }
+
+    setSavingCorrection(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      await saveExamSubmission({
+        campaignId: selectedCampaignId,
+        className: cls,
+        students: studentsPayload,
+        locked: editingSubmission.locked === true,
+        submittedByEmail: currentUserEmail || 'admin',
+        submittedAt: new Date().toISOString(),
+      } as any);
+      await reloadSubmissions(selectedCampaignId);
+      setMsg(`已直接更正 ${cls} 提報資料`);
+      cancelEditSubmission();
+    } catch (e: any) {
+      setErr(e?.message || '儲存更正失敗');
+    } finally {
+      setSavingCorrection(false);
+    }
   };
 
   const aggregatedAwards = useMemo(() => {
@@ -1504,6 +1676,15 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                             {isAdmin && (
                               <button
                                 type="button"
+                                onClick={() => startEditSubmission(s)}
+                                className="px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700 inline-flex items-center gap-1"
+                              >
+                                <Pencil size={12} /> 直接修正
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button
+                                type="button"
                                 onClick={() => setSubmissionToDelete(s)}
                                 className="px-2 py-1 rounded text-xs bg-white border border-red-200 text-red-700 hover:bg-red-50 inline-flex items-center gap-1"
                               >
@@ -1550,6 +1731,102 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
               </tbody>
             </table>
           </div>
+          {isAdmin && editingSubmission && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-indigo-900">直接修正：{editingSubmission.className}</div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={saveSubmissionCorrection}
+                    disabled={savingCorrection || editAwardDuplicateConflicts.length > 0 || editStudentCategoryConflicts.length > 0}
+                    className="px-3 py-1.5 rounded text-sm bg-indigo-700 text-white hover:bg-indigo-800 disabled:opacity-60"
+                  >
+                    {savingCorrection ? '儲存中…' : '儲存更正'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEditSubmission}
+                    className="px-3 py-1.5 rounded text-sm border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+              <div className="text-xs text-slate-600">管理者可直接修正該班提報；學生名單來自本活動學年度主檔。</div>
+              <div className="space-y-2">
+                <input
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  value={editQuery}
+                  onChange={(e) => setEditQuery(e.target.value)}
+                  placeholder={rosterLoading ? '載入學生名單中…' : '加入學生（輸入座號或姓名）'}
+                  disabled={rosterLoading}
+                />
+                {editSuggestions.length > 0 && (
+                  <div className="border rounded bg-white max-h-48 overflow-y-auto">
+                    {editSuggestions.map((s) => (
+                      <button
+                        key={`${s.className}_${s.seat}`}
+                        type="button"
+                        onClick={() => addStudentToEdit(s)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
+                      >
+                        <span>
+                          <span className="font-mono mr-2">{s.seat}</span>
+                          <span>{s.name}</span>
+                        </span>
+                        <span className="text-slate-400">{s.className}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {editAwardDuplicateConflicts.length > 0 && (
+                <div className="rounded border border-red-200 bg-red-50 text-red-800 text-xs px-2 py-1">同一細項不可重複勾選於多位學生。</div>
+              )}
+              {editStudentCategoryConflicts.length > 0 && (
+                <div className="rounded border border-red-200 bg-red-50 text-red-800 text-xs px-2 py-1">同一學生於同一類別僅限一項。</div>
+              )}
+              <div className="space-y-2">
+                {editSelectedList.map((stu) => {
+                  const stuKey = `${stu.className}_${stu.seat}`;
+                  return (
+                    <div key={stuKey} className="border rounded bg-white p-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm">
+                          <span className="font-mono mr-2">{stu.seat}</span>
+                          <span className="font-medium">{stu.name}</span>
+                        </div>
+                        <button type="button" onClick={() => removeStudentFromEdit(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 hover:bg-slate-300">
+                          移除
+                        </button>
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {awardsConfig.categories.map((cat) => (
+                          <div key={cat.id} className="border rounded p-2">
+                            <div className="text-xs font-semibold text-slate-700 mb-1">{cat.label}</div>
+                            <div className="flex flex-wrap gap-2">
+                              {(cat.items ?? []).map((it) => {
+                                const key = buildAwardKey(cat.id, it.id);
+                                const checked = stu.awards.includes(key);
+                                return (
+                                  <label key={key} className="text-xs inline-flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={checked} onChange={() => toggleEditAward(stuKey, key)} />
+                                    <span>{it.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {editSelectedList.length === 0 && <div className="text-xs text-slate-500">尚未加入學生</div>}
+              </div>
+            </div>
+          )}
           </>
         )}
       </div>
