@@ -1646,6 +1646,7 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
               <tbody className="divide-y divide-slate-100">
                 {submissionsByClass.map((s) => {
                   const isExpanded = expandedSubmissionId === s.id;
+                  const isEditingThis = editingSubmissionId === s.id;
                   const students = [...(s.students ?? [])];
                   const isLowSubmissionCount = students.length < 3;
                   return (
@@ -1676,10 +1677,10 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                             {isAdmin && (
                               <button
                                 type="button"
-                                onClick={() => startEditSubmission(s)}
+                                onClick={() => (isEditingThis ? cancelEditSubmission() : startEditSubmission(s))}
                                 className="px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-700 inline-flex items-center gap-1"
                               >
-                                <Pencil size={12} /> 直接修正
+                                <Pencil size={12} /> {isEditingThis ? '收合修正' : '直接修正'}
                               </button>
                             )}
                             {isAdmin && (
@@ -1718,6 +1719,106 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
                           </td>
                         </tr>
                       )}
+                      {isAdmin && isEditingThis && (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-3 bg-indigo-50/50 border-t border-indigo-100">
+                            <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3 space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-semibold text-indigo-900">直接修正：{s.className}</div>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={saveSubmissionCorrection}
+                                    disabled={savingCorrection || editAwardDuplicateConflicts.length > 0 || editStudentCategoryConflicts.length > 0}
+                                    className="px-3 py-1.5 rounded text-sm bg-indigo-700 text-white hover:bg-indigo-800 disabled:opacity-60"
+                                  >
+                                    {savingCorrection ? '儲存中…' : '儲存更正'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditSubmission}
+                                    className="px-3 py-1.5 rounded text-sm border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="text-xs text-slate-600">管理者可直接修正該班提報；學生名單來自本活動學年度主檔。</div>
+                              <div className="space-y-2">
+                                <input
+                                  className="w-full border rounded px-3 py-2 text-sm"
+                                  value={editQuery}
+                                  onChange={(e) => setEditQuery(e.target.value)}
+                                  placeholder={rosterLoading ? '載入學生名單中…' : '加入學生（輸入座號或姓名）'}
+                                  disabled={rosterLoading}
+                                />
+                                {editSuggestions.length > 0 && (
+                                  <div className="border rounded bg-white max-h-48 overflow-y-auto">
+                                    {editSuggestions.map((sug) => (
+                                      <button
+                                        key={`${sug.className}_${sug.seat}`}
+                                        type="button"
+                                        onClick={() => addStudentToEdit(sug)}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
+                                      >
+                                        <span>
+                                          <span className="font-mono mr-2">{sug.seat}</span>
+                                          <span>{sug.name}</span>
+                                        </span>
+                                        <span className="text-slate-400">{sug.className}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              {editAwardDuplicateConflicts.length > 0 && (
+                                <div className="rounded border border-red-200 bg-red-50 text-red-800 text-xs px-2 py-1">同一細項不可重複勾選於多位學生。</div>
+                              )}
+                              {editStudentCategoryConflicts.length > 0 && (
+                                <div className="rounded border border-red-200 bg-red-50 text-red-800 text-xs px-2 py-1">同一學生於同一類別僅限一項。</div>
+                              )}
+                              <div className="space-y-2">
+                                {editSelectedList.map((stu) => {
+                                  const stuKey = `${stu.className}_${stu.seat}`;
+                                  return (
+                                    <div key={stuKey} className="border rounded bg-white p-2">
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-sm">
+                                          <span className="font-mono mr-2">{stu.seat}</span>
+                                          <span className="font-medium">{stu.name}</span>
+                                        </div>
+                                        <button type="button" onClick={() => removeStudentFromEdit(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 hover:bg-slate-300">
+                                          移除
+                                        </button>
+                                      </div>
+                                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {awardsConfig.categories.map((cat) => (
+                                          <div key={cat.id} className="border rounded p-2">
+                                            <div className="text-xs font-semibold text-slate-700 mb-1">{cat.label}</div>
+                                            <div className="flex flex-wrap gap-2">
+                                              {(cat.items ?? []).map((it) => {
+                                                const key = buildAwardKey(cat.id, it.id);
+                                                const checked = stu.awards.includes(key);
+                                                return (
+                                                  <label key={key} className="text-xs inline-flex items-center gap-1 cursor-pointer">
+                                                    <input type="checkbox" checked={checked} onChange={() => toggleEditAward(stuKey, key)} />
+                                                    <span>{it.label}</span>
+                                                  </label>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {editSelectedList.length === 0 && <div className="text-xs text-slate-500">尚未加入學生</div>}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </React.Fragment>
                   );
                 })}
@@ -1731,102 +1832,6 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
               </tbody>
             </table>
           </div>
-          {isAdmin && editingSubmission && (
-            <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-indigo-900">直接修正：{editingSubmission.className}</div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={saveSubmissionCorrection}
-                    disabled={savingCorrection || editAwardDuplicateConflicts.length > 0 || editStudentCategoryConflicts.length > 0}
-                    className="px-3 py-1.5 rounded text-sm bg-indigo-700 text-white hover:bg-indigo-800 disabled:opacity-60"
-                  >
-                    {savingCorrection ? '儲存中…' : '儲存更正'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEditSubmission}
-                    className="px-3 py-1.5 rounded text-sm border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-              <div className="text-xs text-slate-600">管理者可直接修正該班提報；學生名單來自本活動學年度主檔。</div>
-              <div className="space-y-2">
-                <input
-                  className="w-full border rounded px-3 py-2 text-sm"
-                  value={editQuery}
-                  onChange={(e) => setEditQuery(e.target.value)}
-                  placeholder={rosterLoading ? '載入學生名單中…' : '加入學生（輸入座號或姓名）'}
-                  disabled={rosterLoading}
-                />
-                {editSuggestions.length > 0 && (
-                  <div className="border rounded bg-white max-h-48 overflow-y-auto">
-                    {editSuggestions.map((s) => (
-                      <button
-                        key={`${s.className}_${s.seat}`}
-                        type="button"
-                        onClick={() => addStudentToEdit(s)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between"
-                      >
-                        <span>
-                          <span className="font-mono mr-2">{s.seat}</span>
-                          <span>{s.name}</span>
-                        </span>
-                        <span className="text-slate-400">{s.className}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {editAwardDuplicateConflicts.length > 0 && (
-                <div className="rounded border border-red-200 bg-red-50 text-red-800 text-xs px-2 py-1">同一細項不可重複勾選於多位學生。</div>
-              )}
-              {editStudentCategoryConflicts.length > 0 && (
-                <div className="rounded border border-red-200 bg-red-50 text-red-800 text-xs px-2 py-1">同一學生於同一類別僅限一項。</div>
-              )}
-              <div className="space-y-2">
-                {editSelectedList.map((stu) => {
-                  const stuKey = `${stu.className}_${stu.seat}`;
-                  return (
-                    <div key={stuKey} className="border rounded bg-white p-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm">
-                          <span className="font-mono mr-2">{stu.seat}</span>
-                          <span className="font-medium">{stu.name}</span>
-                        </div>
-                        <button type="button" onClick={() => removeStudentFromEdit(stuKey)} className="text-xs px-2 py-1 rounded bg-slate-200 hover:bg-slate-300">
-                          移除
-                        </button>
-                      </div>
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {awardsConfig.categories.map((cat) => (
-                          <div key={cat.id} className="border rounded p-2">
-                            <div className="text-xs font-semibold text-slate-700 mb-1">{cat.label}</div>
-                            <div className="flex flex-wrap gap-2">
-                              {(cat.items ?? []).map((it) => {
-                                const key = buildAwardKey(cat.id, it.id);
-                                const checked = stu.awards.includes(key);
-                                return (
-                                  <label key={key} className="text-xs inline-flex items-center gap-1 cursor-pointer">
-                                    <input type="checkbox" checked={checked} onChange={() => toggleEditAward(stuKey, key)} />
-                                    <span>{it.label}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {editSelectedList.length === 0 && <div className="text-xs text-slate-500">尚未加入學生</div>}
-              </div>
-            </div>
-          )}
           </>
         )}
       </div>
