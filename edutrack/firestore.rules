@@ -241,7 +241,15 @@ service cloud.firestore {
       allow update: if isEduTrackAdmin()
         && request.resource.data.campaignId == resource.data.campaignId
         && request.resource.data.className == resource.data.className;
-      // 公開填報免登入不允許更新既有資料，僅允許建立（避免匿名覆寫）
+      // 公開填報免登入：允許更新「原本就是 public 且未鎖定」的資料（避免匿名覆寫導師/管理者提報）
+      allow update: if isExamPublicSubmitEnabled()
+        && request.auth == null
+        && resource.data.submittedByEmail == 'public'
+        && request.resource.data.submittedByEmail == 'public'
+        && resource.data.locked == false
+        && request.resource.data.locked == examCampaignLockedByDefault(resource.data.campaignId)
+        && request.resource.data.campaignId == resource.data.campaignId
+        && request.resource.data.className == resource.data.className;
       allow delete: if isEduTrackAdmin();
     }
     // 段考提報進度（僅班級／時間；公開可讀，不含 students／不含提報主檔個資）
