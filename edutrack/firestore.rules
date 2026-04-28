@@ -273,6 +273,11 @@ service cloud.firestore {
         && request.resource.data.className is string
         && request.resource.data.campaignId.size() > 0
         && request.resource.data.className.size() > 0;
+      allow update: if isExamPublicSubmitEnabled()
+        && request.auth == null
+        && resource.data.campaignId == request.resource.data.campaignId
+        && resource.data.className == request.resource.data.className
+        && request.resource.data.keys().hasOnly(['campaignId', 'className', 'lastSubmittedAt']);
       allow update: if isExamSubmitAllowedUser()
         && resource.data.campaignId == request.resource.data.campaignId
         && resource.data.className == request.resource.data.className
