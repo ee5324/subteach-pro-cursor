@@ -27,6 +27,7 @@ import type {
   BudgetPlanLedgerKind,
   BudgetPlanLedgerPaymentStatus,
   MonthlyRecurringTodoRule,
+  SchoolYearMeetingRecord,
 } from '../types';
 import { DEFAULT_LANGUAGE_OPTIONS } from '../utils/languageOptions';
 import {
@@ -144,6 +145,7 @@ const store = {
   examAwardsConfig: { categories: [] } as ExamAwardsConfig,
   examSubmitAllowedUsers: {} as Record<string, ExamSubmitAllowedUser>,
   examSubmissions: {} as Record<string, ExamSubmission>,
+  schoolYearMeetings: [] as SchoolYearMeetingRecord[],
   budgetPlans: [
     {
       id: 'sandbox-bp-1',
@@ -911,6 +913,48 @@ export function sandboxUnlockExamSubmission(id: string, unlockedByEmail: string)
 
 export function sandboxDeleteExamSubmission(id: string): Promise<void> {
   delete store.examSubmissions[id];
+  return Promise.resolve();
+}
+
+// --- 學年會議 ---
+export function sandboxGetSchoolYearMeetings(): Promise<SchoolYearMeetingRecord[]> {
+  const list = [...store.schoolYearMeetings].sort((a, b) => {
+    const byDate = (b.meetingDate ?? '').localeCompare(a.meetingDate ?? '');
+    if (byDate !== 0) return byDate;
+    return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+  });
+  return Promise.resolve(list);
+}
+
+export function sandboxAddSchoolYearMeeting(
+  payload: Omit<SchoolYearMeetingRecord, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<SchoolYearMeetingRecord> {
+  const now = new Date().toISOString();
+  const row: SchoolYearMeetingRecord = {
+    id: uid(),
+    meetingDate: payload.meetingDate,
+    academicYear: payload.academicYear ?? '',
+    title: payload.title,
+    notes: payload.notes ?? '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  store.schoolYearMeetings.unshift(row);
+  return Promise.resolve(row);
+}
+
+export function sandboxUpdateSchoolYearMeeting(
+  id: string,
+  patch: Partial<Pick<SchoolYearMeetingRecord, 'meetingDate' | 'academicYear' | 'title' | 'notes'>>
+): Promise<void> {
+  store.schoolYearMeetings = store.schoolYearMeetings.map((row) =>
+    row.id === id ? { ...row, ...patch, id, updatedAt: new Date().toISOString() } : row
+  );
+  return Promise.resolve();
+}
+
+export function sandboxDeleteSchoolYearMeeting(id: string): Promise<void> {
+  store.schoolYearMeetings = store.schoolYearMeetings.filter((row) => row.id !== id);
   return Promise.resolve();
 }
 

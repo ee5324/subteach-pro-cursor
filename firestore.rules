@@ -199,6 +199,9 @@ service cloud.firestore {
     match /edutrack_archive/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }
+    match /edutrack_school_year_meetings/{id} {
+      allow read, write: if isEduTrackAllowedUser();
+    }
     match /edutrack_todos/{id} {
       allow read, write: if isEduTrackAllowedUser();
     }

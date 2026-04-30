@@ -201,6 +201,21 @@ export interface ExamSubmitProgressRow {
   lastSubmittedAt: string;
 }
 
+/** 學年會議紀錄（教學組事務） */
+export interface SchoolYearMeetingRecord {
+  id: string;
+  /** 會議日期（YYYY-MM-DD） */
+  meetingDate: string;
+  /** 學年（例：114） */
+  academicYear?: string;
+  /** 標題（例：114學年上學期第一次學年會議） */
+  title: string;
+  /** 內容／決議 */
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // 聯絡人資訊
 export interface Contact {
   name: string;

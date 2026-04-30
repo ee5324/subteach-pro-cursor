@@ -117,10 +117,14 @@ import {
   sandboxUnlockExamSubmission,
   sandboxDeleteExamSubmission,
   sandboxGetExamSubmitProgress,
+  sandboxGetSchoolYearMeetings,
+  sandboxAddSchoolYearMeeting,
+  sandboxUpdateSchoolYearMeeting,
+  sandboxDeleteSchoolYearMeeting,
   sandboxGetSchoolTeacherNames,
   sandboxGetHomeroomTeachersForExamWhitelist,
 } from './sandboxStore';
-import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission, ExamSubmitProgressRow } from '../types';
+import type { ExamCampaign, ExamAwardsConfig, ExamSubmitAllowedUser, ExamSubmission, ExamSubmitProgressRow, SchoolYearMeetingRecord } from '../types';
 import { normalizeExamAwardsConfig } from '../utils/examAwardGrade';
 import { stripUndefinedDeep } from '../utils/stripUndefinedDeep';
 
@@ -1563,6 +1567,64 @@ export async function getCalendarSettings(academicYear: string, semester: string
     endDate,
     holidays,
   };
+}
+
+// --- 學年會議 ---
+export async function getSchoolYearMeetings(): Promise<SchoolYearMeetingRecord[]> {
+  if (isSandbox()) return sandboxGetSchoolYearMeetings();
+  const db = getDb();
+  if (!db) return [];
+  const snap = await getDocs(query(collection(db, COLLECTIONS.SCHOOL_YEAR_MEETINGS), orderBy('meetingDate', 'desc')));
+  return snap.docs.map((d) => {
+    const data = d.data() as any;
+    return {
+      id: d.id,
+      meetingDate: String(data.meetingDate ?? ''),
+      academicYear: String(data.academicYear ?? ''),
+      title: String(data.title ?? ''),
+      notes: String(data.notes ?? ''),
+      createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt,
+      updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() ?? data.updatedAt,
+    } as SchoolYearMeetingRecord;
+  });
+}
+
+export async function addSchoolYearMeeting(
+  payload: Omit<SchoolYearMeetingRecord, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<SchoolYearMeetingRecord> {
+  if (isSandbox()) return sandboxAddSchoolYearMeeting(payload);
+  const db = getDb();
+  if (!db) throw new Error('Firebase 未初始化');
+  const ref = doc(collection(db, COLLECTIONS.SCHOOL_YEAR_MEETINGS));
+  await setDoc(ref, {
+    meetingDate: String(payload.meetingDate ?? ''),
+    academicYear: String(payload.academicYear ?? ''),
+    title: String(payload.title ?? ''),
+    notes: String(payload.notes ?? ''),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return { id: ref.id, ...payload };
+}
+
+export async function updateSchoolYearMeeting(
+  id: string,
+  patch: Partial<Pick<SchoolYearMeetingRecord, 'meetingDate' | 'academicYear' | 'title' | 'notes'>>
+): Promise<void> {
+  if (isSandbox()) return sandboxUpdateSchoolYearMeeting(id, patch);
+  const db = getDb();
+  if (!db) throw new Error('Firebase 未初始化');
+  await updateDoc(doc(db, COLLECTIONS.SCHOOL_YEAR_MEETINGS, id), {
+    ...patch,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteSchoolYearMeeting(id: string): Promise<void> {
+  if (isSandbox()) return sandboxDeleteSchoolYearMeeting(id);
+  const db = getDb();
+  if (!db) throw new Error('Firebase 未初始化');
+  await deleteDoc(doc(db, COLLECTIONS.SCHOOL_YEAR_MEETINGS, id));
 }
 
 // --- 段考提報（活動/獎項/白名單/提報）---
