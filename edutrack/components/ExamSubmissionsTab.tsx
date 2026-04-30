@@ -65,6 +65,32 @@ function classNumericFromClassName(className: string | undefined | null): number
   return d ? parseInt(d, 10) : 0;
 }
 
+function toChineseNumber(n: number): string {
+  const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n < 10) return digits[n];
+  if (n === 10) return '十';
+  if (n < 20) return `十${digits[n % 10]}`;
+  if (n < 100) {
+    const tens = Math.floor(n / 10);
+    const ones = n % 10;
+    return ones === 0 ? `${digits[tens]}十` : `${digits[tens]}十${digits[ones]}`;
+  }
+  return String(n);
+}
+
+function splitClassCodeForExcel(classCode: string | undefined | null): { yearLabel: string; classLabel: string } {
+  const raw = String(classCode ?? '').trim();
+  const m = raw.match(/^(\d{1,2})(\d{2})$/);
+  if (!m) return { yearLabel: '', classLabel: raw };
+  const yearNum = parseInt(m[1], 10);
+  const classNum = parseInt(m[2], 10);
+  return {
+    yearLabel: toChineseNumber(yearNum),
+    classLabel: toChineseNumber(classNum),
+  };
+}
+
 function formatDateTimeInTaipei(value: string | undefined | null): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '-';
@@ -949,9 +975,11 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
       .flatMap((submission) =>
         (submission.students ?? []).flatMap((stu) => {
           const awards = Array.isArray(stu.awards) && stu.awards.length > 0 ? stu.awards : [''];
+          const cls = splitClassCodeForExcel(stu.className || submission.className || '');
           return awards.map((key) => ({
             活動: selectedCampaign?.title || '',
-            班級: stu.className || submission.className || '',
+            年級: cls.yearLabel,
+            班級: cls.classLabel,
             座號: stu.seat ?? '',
             姓名: stu.name ?? '',
             獎項分類細項: key ? formatAwardLabel(key) : '未勾選獎項',
@@ -962,13 +990,17 @@ const ExamSubmissionsTab: React.FC<Props> = ({ currentAccess, currentUserEmail, 
         })
       );
     const summaryRows = aggregatedAwards.flatMap((g) =>
-      g.rows.map((r, idx) => ({
-        獎項分類細項: g.awardLabel,
-        人數: idx === 0 ? g.count : '',
-        班級: r.className,
-        座號: r.seat ?? '',
-        姓名: r.name,
-      }))
+      g.rows.map((r, idx) => {
+        const cls = splitClassCodeForExcel(r.className);
+        return {
+          獎項分類細項: g.awardLabel,
+          人數: idx === 0 ? g.count : '',
+          年級: cls.yearLabel,
+          班級: cls.classLabel,
+          座號: r.seat ?? '',
+          姓名: r.name,
+        };
+      })
     );
     const wsDetail = XLSX.utils.json_to_sheet(detailRows);
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
